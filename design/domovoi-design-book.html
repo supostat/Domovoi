@@ -1,0 +1,1148 @@
+<title>DOMOVOI Design Book</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ruslan+Display&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Изба ночью: индиговая сажа, воск свечи, лён. Слева оглавление, справа колонка до 1040px. */
+:root{
+  --bg:#11141D; --bg-2:#161A25; --surface:#1C2130; --surface-2:#242A3B; --line:#30374B; --line-soft:#232838;
+  --text:#ECE6D6; --mute:#A4A8B7; --dim:#6E7489;
+  --wax:#E3AE52; --wax-ink:#1A1408; --wax-soft:rgba(227,174,82,.14);
+  --berry:#C9566E; --on-cat:#10131B;
+  --c-apps:#5E93C9; --c-dev:#C9566E; --c-media:#82A85E; --c-docs:#BBA878; --c-cache:#9C7FC6;
+  --c-system:#767D93; --c-hidden:#4F566C; --c-model:#E3AE52; --c-home:#A9B0C2;
+  --ok:#7DBA72; --warn:#DFA944; --risk:#E46E62;
+  --ok-soft:rgba(125,186,114,.15); --warn-soft:rgba(223,169,68,.15); --risk-soft:rgba(228,110,98,.15);
+  --shadow:0 22px 60px rgba(0,0,0,.5);
+  --tl-r:#FF5F57; --tl-y:#FEBC2E; --tl-g:#28C840;
+  --f-display:"Ruslan Display",Georgia,"Times New Roman",serif;
+  --f-ui:"Onest",-apple-system,"Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r-s:6px; --r-m:10px; --r-l:14px;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#ECEEF3; --bg-2:#E3E6ED; --surface:#FFFFFF; --surface-2:#F4F5F9; --line:#D2D7E2; --line-soft:#E3E6EE;
+    --text:#1B1F2C; --mute:#535A6F; --dim:#7C8297;
+    --wax:#A66C10; --wax-ink:#FFFFFF; --wax-soft:rgba(166,108,16,.12);
+    --berry:#A8394F; --on-cat:#FFFFFF;
+    --c-apps:#3B72AB; --c-dev:#AE3D56; --c-media:#5A873A; --c-docs:#8C7B48; --c-cache:#7558A8;
+    --c-system:#626A80; --c-hidden:#9EA4B6; --c-model:#B07714; --c-home:#7D859B;
+    --ok:#3C8738; --warn:#A5710B; --risk:#BE4338;
+    --ok-soft:rgba(60,135,56,.12); --warn-soft:rgba(165,113,11,.12); --risk-soft:rgba(190,67,56,.12);
+    --shadow:0 18px 44px rgba(30,36,56,.16);
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#ECEEF3; --bg-2:#E3E6ED; --surface:#FFFFFF; --surface-2:#F4F5F9; --line:#D2D7E2; --line-soft:#E3E6EE;
+  --text:#1B1F2C; --mute:#535A6F; --dim:#7C8297;
+  --wax:#A66C10; --wax-ink:#FFFFFF; --wax-soft:rgba(166,108,16,.12);
+  --berry:#A8394F; --on-cat:#FFFFFF;
+  --c-apps:#3B72AB; --c-dev:#AE3D56; --c-media:#5A873A; --c-docs:#8C7B48; --c-cache:#7558A8;
+  --c-system:#626A80; --c-hidden:#9EA4B6; --c-model:#B07714; --c-home:#7D859B;
+  --ok:#3C8738; --warn:#A5710B; --risk:#BE4338;
+  --ok-soft:rgba(60,135,56,.12); --warn-soft:rgba(165,113,11,.12); --risk-soft:rgba(190,67,56,.12);
+  --shadow:0 18px 44px rgba(30,36,56,.16);
+  color-scheme:light;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important}}
+body{background:var(--bg);color:var(--text);font:400 15px/1.6 var(--f-ui);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+p{margin:0}
+:focus-visible{outline:2px solid var(--wax);outline-offset:2px;border-radius:4px}
+
+/* оглавление */
+.toc{position:fixed;inset:0 auto 0 0;width:240px;padding-block:32px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:20px;border-right:1px solid var(--line-soft);overflow-y:auto;background:var(--bg);z-index:5}
+.toc-brand{font:400 22px/1 var(--f-display);letter-spacing:.06em;color:var(--wax)}
+.toc-sub{font:400 12px/1.5 var(--f-ui);color:var(--dim);margin:10px 0 26px}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.toc a{display:grid;grid-template-columns:40px 1fr;padding:6px 8px;border-radius:var(--r-s);text-decoration:none;color:var(--mute);font-size:14px}
+.toc a span{font:500 12px/1.9 var(--f-mono);color:var(--dim)}
+.toc a:hover,.toc a.on{background:var(--surface);color:var(--text)}
+.toc a.on span{color:var(--wax)}
+.toc-foot{margin-top:28px;font:400 11px/1.6 var(--f-mono);color:var(--dim)}
+
+main{margin-left:240px;padding-left:max(40px,env(safe-area-inset-left,0px));padding-right:max(40px,env(safe-area-inset-right,0px))}
+.col{max-width:1040px;margin:0 auto;padding-block:0 140px}
+@media (max-width:980px){
+  .toc{position:static;width:auto;border-right:0;border-bottom:1px solid var(--line-soft);padding-block:20px;padding-right:max(16px,env(safe-area-inset-right,0px));padding-left:max(16px,env(safe-area-inset-left,0px))}
+  .toc ol{display:flex;flex-wrap:wrap;gap:4px}
+  .toc a{display:flex;gap:6px;padding:4px 8px;font-size:13px}
+  .toc-sub,.toc-foot{display:none}
+  main{margin-left:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+
+/* обложка */
+.cover{padding-block:72px 40px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.wordmark{font:400 clamp(56px,10vw,108px)/1 var(--f-display);letter-spacing:.05em;color:var(--text);margin:22px 0 0}
+.wordmark b{font-weight:400;color:var(--wax)}
+.thesis{font-size:21px;line-height:1.5;max-width:30em;margin-top:26px;color:var(--text);text-wrap:balance}
+.thesis em{font-style:normal;color:var(--wax)}
+.meta{display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:30px;font:400 13px/1.4 var(--f-mono);color:var(--dim)}
+.meta b{color:var(--mute);font-weight:500}
+canvas.stitch{display:block;width:100%;margin-top:40px}
+canvas.stitch.small{margin:0 0 28px;opacity:.75}
+
+/* разделы */
+.sec{padding-top:96px;scroll-margin-top:12px}
+h2{display:flex;gap:16px;align-items:baseline;margin:0 0 18px;font:600 30px/1.15 var(--f-ui);letter-spacing:-.01em;text-wrap:balance}
+h2 .rn{font:500 15px/1 var(--f-mono);color:var(--wax);min-width:46px;letter-spacing:.04em}
+h3{margin:44px 0 14px;font:600 13px/1.3 var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.lead{display:grid;gap:12px;max-width:68ch;color:var(--mute);font-size:16px}
+.lead strong{color:var(--text);font-weight:600}
+.note{margin-top:20px;max-width:72ch;padding:12px 16px;border-left:2px solid var(--wax);background:var(--wax-soft);border-radius:0 var(--r-s) var(--r-s) 0;font-size:14px;color:var(--text)}
+.note.open{border-left-color:var(--berry);background:var(--risk-soft)}
+
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.principle{padding:20px;border:1px solid var(--line-soft);border-radius:var(--r-m);background:var(--bg-2)}
+.principle h4{margin:0 0 8px;font:600 16px/1.3 var(--f-ui)}
+.principle p{color:var(--mute);font-size:14px}
+.principle .k{font:500 11px/1 var(--f-mono);color:var(--wax);letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px;display:block}
+
+/* палитра */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.sw{border:1px solid var(--line-soft);border-radius:var(--r-m);overflow:hidden;background:var(--bg-2)}
+.sw i{display:block;height:64px}
+.sw div{padding:10px 12px}
+.sw b{display:block;font-size:14px;font-weight:600}
+.sw code{color:var(--dim);font-size:11px}
+.sw small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+
+/* типографика */
+.type-row{display:grid;grid-template-columns:180px 1fr;gap:24px;padding:22px 0;border-top:1px solid var(--line-soft);align-items:baseline}
+.type-row .lbl{font:400 12px/1.5 var(--f-mono);color:var(--dim)}
+.type-row .lbl b{display:block;color:var(--mute);font-weight:500}
+.t-display{font:400 46px/1.05 var(--f-display);letter-spacing:.04em}
+.t-ui{font:600 22px/1.3 var(--f-ui)}
+.t-body{font:400 15px/1.6 var(--f-ui);color:var(--mute);max-width:60ch}
+.t-mono{font:400 14px/1.6 var(--f-mono);color:var(--mute)}
+@media (max-width:640px){.type-row{grid-template-columns:1fr;gap:8px}}
+
+/* компоненты */
+.board{padding:24px;border:1px solid var(--line-soft);border-radius:var(--r-l);background:var(--bg-2);display:grid;gap:18px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{font:600 13px/1 var(--f-ui);padding:10px 16px;border-radius:8px;border:1px solid transparent;cursor:pointer;color:var(--text);background:var(--surface-2);border-color:var(--line)}
+.btn:hover{border-color:var(--dim)}
+.btn.primary{background:var(--wax);color:var(--wax-ink);border-color:var(--wax)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--mute)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.sm{padding:7px 11px;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:6px;font:600 11px/1 var(--f-ui);letter-spacing:.03em;padding:5px 9px;border-radius:999px;white-space:nowrap}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.b-safe{color:var(--ok);background:var(--ok-soft)}
+.b-recover{color:var(--warn);background:var(--warn-soft)}
+.b-check{color:var(--risk);background:var(--risk-soft)}
+.prov{display:inline-flex;gap:6px;align-items:center;font:500 11px/1 var(--f-mono);padding:5px 8px;border-radius:5px;border:1px solid var(--line);color:var(--mute)}
+.prov.model{border-style:dashed;border-color:var(--wax);color:var(--wax)}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;background:var(--surface);border:1px solid var(--line-soft);font-size:13px}
+.chip i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.chip span{color:var(--dim);font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums}
+.seg-ctl{display:inline-flex;padding:3px;border-radius:9px;background:var(--surface);border:1px solid var(--line-soft)}
+.seg-ctl button{font:500 13px/1 var(--f-ui);padding:8px 14px;border:0;border-radius:7px;background:transparent;color:var(--mute);cursor:pointer}
+.seg-ctl button[aria-pressed="true"]{background:var(--surface-2);color:var(--text);box-shadow:0 1px 0 var(--line)}
+.switch{display:inline-flex;align-items:center;gap:10px;font-size:13px;color:var(--mute);cursor:pointer}
+.switch input{appearance:none;width:34px;height:20px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;margin:0;transition:background .15s}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--text);transition:transform .15s}
+.switch input:checked{background:var(--wax)}
+.switch input:checked::after{transform:translateX(14px);background:var(--wax-ink)}
+select.sel{font:500 13px var(--f-ui);padding:7px 10px;border-radius:7px;background:var(--surface);color:var(--text);border:1px solid var(--line)}
+
+/* строка размера */
+.sizes{display:grid;gap:2px}
+.srow{display:grid;grid-template-columns:12px minmax(0,1fr) auto;grid-template-areas:"dot nm sz" ". bar bar";gap:6px 12px;align-items:center;padding:9px 10px;border-radius:7px;cursor:pointer;font-size:13px}
+.srow:hover{background:var(--surface)}
+.srow i{grid-area:dot;width:10px;height:10px;border-radius:3px}
+.srow .nm{grid-area:nm;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow .sz{grid-area:sz}
+.srow .bar{grid-area:bar;height:5px;border-radius:3px;background:var(--line-soft);overflow:hidden}
+.srow .bar b{display:block;height:100%;border-radius:3px}
+.srow .sz{text-align:right;font:500 12px var(--f-mono);font-variant-numeric:tabular-nums;color:var(--mute)}
+
+/* карточка рекомендации */
+.rec{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px 16px;padding:16px 18px;border:1px solid var(--line-soft);border-radius:var(--r-m);background:var(--surface);align-items:start}
+.rec input[type=checkbox]{margin-top:3px;accent-color:var(--wax);width:16px;height:16px}
+.rec h5{margin:0;font:600 15px/1.3 var(--f-ui)}
+.rec .path{font:400 11.5px/1.4 var(--f-mono);color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.rec .why{color:var(--mute);font-size:13.5px;margin-top:8px;max-width:60ch}
+.rec .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rec .amt{font:600 17px/1.2 var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.rec.hyp{border-style:dashed;border-color:var(--wax)}
+
+/* прогресс */
+.prog{height:8px;border-radius:4px;background:var(--line-soft);overflow:hidden}
+.prog b{display:block;height:100%;background:var(--wax);border-radius:4px}
+.dl{padding:16px 18px;border:1px solid var(--line-soft);border-radius:var(--r-m);background:var(--surface);display:grid;gap:10px}
+.dl-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.dl-top b{font-weight:600}
+.dl-meta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font:400 12px var(--f-mono);color:var(--dim);font-variant-numeric:tabular-nums}
+
+/* визуализация */
+.viz-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:13px;color:var(--dim)}
+.crumbs button{font:500 13px var(--f-ui);border:0;background:transparent;color:var(--mute);padding:4px 6px;border-radius:5px;cursor:pointer}
+.crumbs button:hover{background:var(--surface);color:var(--text)}
+.crumbs button:last-child{color:var(--text)}
+.viz{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;padding:20px;border:1px solid var(--line-soft);border-radius:var(--r-l);background:var(--bg-2)}
+.viz.one{grid-template-columns:minmax(0,1fr)}
+.viz.one #viz-sb{max-width:520px;margin:0 auto;width:100%}
+.viz-hover{grid-column:1/-1;min-height:22px;font:400 12.5px var(--f-mono);color:var(--mute);overflow-wrap:anywhere}
+.viz-hover b{color:var(--text);font-weight:500}
+@media (max-width:820px){.viz{grid-template-columns:minmax(0,1fr)}}
+svg.sb,svg.tm{display:block;width:100%;height:auto}
+svg .seg{cursor:pointer;transition:opacity .12s}
+svg.sb.hovering .seg,svg.tm.hovering .seg{opacity:.45}
+svg .seg.hot{opacity:1!important}
+svg text{pointer-events:none}
+.sb-t0{fill:var(--dim);font-family:var(--f-ui);font-weight:500}
+.sb-t1{fill:var(--text);font-family:var(--f-ui);font-weight:600}
+.sb-t2{fill:var(--wax);font-family:var(--f-mono);font-weight:500}
+.sb-center{cursor:default}
+.tm-h{fill:var(--text);font:600 11.5px var(--f-ui)}
+.tm-l{fill:var(--on-cat);font:600 11.5px var(--f-ui)}
+.tm-s{fill:var(--on-cat);font:400 10.5px var(--f-mono);opacity:.8}
+.viz-list{margin-top:18px}
+
+.cmp{width:100%;border-collapse:collapse;font-size:14px;min-width:620px}
+.cmp th,.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.cmp th{font:600 12px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.cmp td:first-child{color:var(--mute);width:28%}
+.cmp .win-mark{color:var(--ok);font-weight:600}
+.scroll-x{overflow-x:auto}
+
+/* окна-макеты */
+.screen{margin-top:44px}
+.screen-cap{display:flex;gap:14px;align-items:baseline;margin-bottom:14px}
+.screen-cap .n{font:500 12px var(--f-mono);color:var(--wax)}
+.screen-cap h4{margin:0;font:600 18px/1.3 var(--f-ui)}
+.screen-cap p{color:var(--dim);font-size:13px;margin-left:auto;max-width:44ch;text-align:right}
+@media (max-width:760px){.screen-cap{flex-wrap:wrap}.screen-cap p{margin-left:0;text-align:left}}
+.mock{overflow-x:auto;padding:4px 4px 28px}
+.win{min-width:760px;border-radius:12px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden}
+.win.narrow{min-width:0;max-width:560px;margin:0 auto}
+.win-bar{display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-bottom:1px solid var(--line-soft);background:var(--surface-2)}
+.win-bar i{width:12px;height:12px;border-radius:50%}
+.win-bar i:nth-child(1){background:var(--tl-r)}.win-bar i:nth-child(2){background:var(--tl-y)}.win-bar i:nth-child(3){background:var(--tl-g)}
+.win-bar .ttl{flex:1;text-align:center;font:600 13px var(--f-ui);color:var(--mute);margin-right:52px}
+.win-body{display:grid;grid-template-columns:200px minmax(0,1fr)}
+.side{border-right:1px solid var(--line-soft);padding:14px 10px;background:var(--bg-2);display:grid;align-content:start;gap:2px;font-size:13px}
+.side .grp{font:600 10.5px var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding:12px 10px 6px}
+.side a{display:flex;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:7px;text-decoration:none;color:var(--mute)}
+.side a.on{background:var(--surface-2);color:var(--text)}
+.side a span{font:400 11.5px var(--f-mono);color:var(--dim);font-variant-numeric:tabular-nums}
+.side .disk{padding:10px;margin-top:14px;border-top:1px solid var(--line-soft)}
+.side .disk small{display:block;color:var(--dim);font-size:11.5px;margin-top:6px;font-family:var(--f-mono)}
+.pane{padding:20px 22px;min-width:0}
+.pane-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.pane-head h5{margin:0;font:600 17px/1.2 var(--f-ui)}
+.pane-head small{color:var(--dim);font-size:12.5px}
+.main-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+.win-body.fixed{height:600px}
+.win-body.fixed>.side{overflow-y:auto}
+.win-body.fixed>.pane{overflow-y:auto;padding-top:0;overscroll-behavior:contain}
+.win-body.fixed>.pane>.pane-head{position:sticky;top:0;z-index:2;background:var(--surface);margin:0 -22px 14px;padding:18px 22px 14px;border-bottom:1px solid var(--line-soft)}
+.chatcol{display:flex;flex-direction:column;min-width:0;min-height:0}
+.chatcol .chat{flex:1;min-height:0;overflow-y:auto;max-width:none;align-content:start;overscroll-behavior:contain}
+.chatcol .chat-in{margin-top:14px}
+
+/* онбординг */
+.onb{padding:36px 40px;display:grid;gap:22px;justify-items:start}
+.onb h5{margin:0;font:600 22px/1.25 var(--f-ui);text-wrap:balance}
+.onb p{color:var(--mute);max-width:52ch}
+.steps{display:grid;gap:10px;counter-reset:s;width:100%}
+.steps div{display:grid;grid-template-columns:28px 1fr;gap:12px;align-items:start;font-size:14px;color:var(--mute)}
+.steps div::before{counter-increment:s;content:counter(s);width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:600 12px var(--f-mono);background:var(--wax-soft);color:var(--wax)}
+.steps code{color:var(--text)}
+
+/* чат */
+.chat{display:grid;gap:14px;padding:22px;max-width:680px}
+.msg{max-width:88%;padding:11px 14px;border-radius:12px;font-size:14px}
+.msg.me{justify-self:end;background:var(--wax-soft);border:1px solid var(--line-soft)}
+.msg.ai{background:var(--surface-2);border:1px solid var(--line-soft)}
+.msg ul{margin:8px 0 0;padding-left:18px;color:var(--mute)}
+.msg ul b{color:var(--text);font-family:var(--f-mono);font-weight:500;font-variant-numeric:tabular-nums}
+.tool{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font:400 12px var(--f-mono);color:var(--dim);padding:8px 12px;border:1px dashed var(--line);border-radius:8px;max-width:88%}
+.tool b{color:var(--mute);font-weight:500}
+.chat-in{display:flex;gap:10px;margin:0 22px 22px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-2);color:var(--dim);font-size:14px;align-items:center;justify-content:space-between}
+.chat-foot{font:400 11.5px var(--f-mono);color:var(--dim);padding:0 22px 16px}
+
+/* дубликаты */
+.dup{border:1px solid var(--line-soft);border-radius:var(--r-m);background:var(--surface);overflow:hidden}
+.dup-h{display:flex;justify-content:space-between;gap:12px;padding:12px 16px;background:var(--surface-2);align-items:center;flex-wrap:wrap}
+.dup-h b{font-weight:600}
+.dup-h span{font:500 12px var(--f-mono);color:var(--mute)}
+.dup-r{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:10px;padding:9px 16px;border-top:1px solid var(--line-soft);font-size:13px;align-items:center}
+.dup-r code{color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dup-r input{accent-color:var(--wax)}
+.keep{font:600 10.5px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+
+/* корзина */
+.tray-row{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px;align-items:center}
+.tray-row i{width:10px;height:10px;border-radius:3px}
+.tray-row span{font:500 12.5px var(--f-mono);color:var(--mute);font-variant-numeric:tabular-nums}
+.tray-total{display:flex;justify-content:space-between;align-items:baseline;padding-top:16px;gap:12px;flex-wrap:wrap}
+.tray-total b{font:600 26px var(--f-mono);font-variant-numeric:tabular-nums;color:var(--wax)}
+
+/* таблицы */
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th,.tbl td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.tbl th{font:600 12px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.tbl td:first-child{color:var(--dim);font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
+.tbl td.say{color:var(--text)}
+.tbl td.no{color:var(--dim);text-decoration:line-through;text-decoration-color:var(--risk)}
+
+/* архитектура */
+.arch{padding:20px;border:1px solid var(--line-soft);border-radius:var(--r-l);background:var(--bg-2)}
+.arch svg{display:block;width:100%;min-width:760px;height:auto}
+.a-box{fill:var(--surface);stroke:var(--line)}
+.a-proc{fill:none;stroke:var(--wax);stroke-dasharray:6 5}
+.a-xpc{fill:none;stroke:var(--berry);stroke-dasharray:6 5}
+.a-fs{fill:none;stroke:var(--line)}
+.a-t{fill:var(--text);font:600 13px var(--f-ui)}
+.a-s{fill:var(--dim);font:400 11px var(--f-mono)}
+.a-cap{fill:var(--wax);font:600 11px var(--f-mono);letter-spacing:.08em}
+.a-cap.x{fill:var(--berry)}
+.a-cap.f{fill:var(--mute)}
+.a-ln{stroke:var(--mute);stroke-width:1.3;fill:none}
+.a-lbl{fill:var(--mute);font:400 10.5px var(--f-mono)}
+
+.tr{display:grid;gap:16px}
+.tr-row{display:grid;gap:6px;min-width:0}
+.tr-lbl{font:500 11px var(--f-mono);color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
+.tr-box{display:flex;justify-content:space-between;gap:12px;max-width:100%;padding:8px 10px;border:1px dashed var(--line);border-radius:6px;background:var(--surface);white-space:nowrap;overflow:hidden}
+.tr-box .p{font:400 12.5px var(--f-mono);color:var(--mute)}
+.tr-box .n{font:500 14px var(--f-ui)}
+.tr-box .s{font:500 12.5px var(--f-mono);color:var(--mute);flex:none;font-variant-numeric:tabular-nums}
+input[type=range]{accent-color:var(--wax);width:min(320px,60vw)}
+.who{display:inline-block;font:600 11px/1 var(--f-mono);padding:4px 7px;border-radius:5px;white-space:nowrap}
+.who.ak{color:var(--c-apps);background:var(--surface-2)}
+.who.mt{color:var(--wax);background:var(--wax-soft)}
+.who.cg{color:var(--mute);background:var(--surface-2)}
+.rules{counter-reset:r;display:grid;gap:0;border-top:1px solid var(--line-soft)}
+.rules div{display:grid;grid-template-columns:44px minmax(0,1fr);gap:16px;padding:12px 0;border-bottom:1px solid var(--line-soft);font-size:14px;color:var(--mute)}
+.rules div::before{counter-increment:r;content:counter(r);font:500 12px/1.9 var(--f-mono);color:var(--wax)}
+.rules b{color:var(--text);font-weight:600}
+pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-radius:var(--r-m);background:var(--bg-2);overflow-x:auto;font:400 12.5px/1.7 var(--f-mono);color:var(--mute)}
+.dec{counter-reset:d;display:grid;gap:0;border-top:1px solid var(--line-soft)}
+.dec div{display:grid;grid-template-columns:44px 180px minmax(0,1fr);gap:16px;padding:12px 0;border-bottom:1px solid var(--line-soft);font-size:14px}
+.dec div::before{counter-increment:d;content:counter(d,decimal-leading-zero);font:500 12px/1.9 var(--f-mono);color:var(--wax)}
+.dec b{font-weight:600}
+.dec span{color:var(--mute)}
+@media (max-width:640px){.dec div{grid-template-columns:36px minmax(0,1fr)}.dec div span{grid-column:2}}
+.foot{margin-top:96px;padding-top:24px;border-top:1px solid var(--line-soft);font:400 12px var(--f-mono);color:var(--dim);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+</style>
+
+<nav class="toc" aria-label="Оглавление">
+  <div class="toc-brand">DOMOVOI</div>
+  <div class="toc-sub">Дизайн-книга · хранитель диска для macOS</div>
+  <ol id="toc-list">
+    <li><a href="#concept"><span>I</span>Концепция</a></li>
+    <li><a href="#palette"><span>II</span>Палитра</a></li>
+    <li><a href="#type"><span>III</span>Типографика</a></li>
+    <li><a href="#ornament"><span>IV</span>Узор и движение</a></li>
+    <li><a href="#viz"><span>V</span>Визуализация</a></li>
+    <li><a href="#components"><span>VI</span>Компоненты</a></li>
+    <li><a href="#screens"><span>VII</span>Экраны</a></li>
+    <li><a href="#voice"><span>VIII</span>Голос</a></li>
+    <li><a href="#arch"><span>IX</span>Архитектура</a></li>
+    <li><a href="#render"><span>X</span>Рендер</a></li>
+    <li><a href="#tokens"><span>XI</span>Токены</a></li>
+  </ol>
+  <div class="toc-foot">Rust · objc2 · Metal<br>llama.cpp в XPC<br>редакция 16.10.2026</div>
+</nav>
+
+<main>
+<div class="col">
+
+<header class="cover">
+  <div class="eyebrow">Дизайн-книга · редакция 1</div>
+  <h1 class="wordmark">DOMOV<b>O</b>I</h1>
+  <p class="thesis">Домовой знает каждый угол дома. Показывает, <em>где лежит место</em>, объясняет, что можно убрать, и ничего не выносит без спроса.</p>
+  <div class="meta">
+    <span>Платформа <b>macOS 15+</b></span>
+    <span>Язык <b>Rust</b></span>
+    <span>Графика <b>Metal</b></span>
+    <span>Модель <b>llama.cpp · локально</b></span>
+    <span>Том <b>только системный</b></span>
+  </div>
+  <canvas class="stitch" id="cover-stitch" aria-hidden="true"></canvas>
+</header>
+
+<!-- I -->
+<section class="sec" id="concept">
+  <h2><span class="rn">I</span>Концепция</h2>
+  <div class="lead">
+    <p>В народном поверье домовой живёт за печью, его не видно, но он помнит, где что лежит, и держит порядок. Если с ним ладить, дом в порядке. Это и есть роль приложения: <strong>знать диск целиком и следить за порядком, не трогая ничего самовольно</strong>.</p>
+    <p>Визуальный мир собран из избы ночью. Индиговая сажа вместо чистого чёрного, воск свечи как единственный акцент, лён для текста. Орнамент берём из вышивки: ромб «засеянное поле», узор плодородия. Он появляется дозированно, на обложке и у разделов, и никогда не мешает данным.</p>
+  </div>
+  <h3>Принципы</h3>
+  <div class="grid-3">
+    <div class="principle"><span class="k">Честные числа</span><h4>Показываем только то, что измерили</h4><p>Размер на диске, а не логический. Hard links считаются один раз. APFS-клоны помечены. Скрытое место (purgeable, снапшоты) показано отдельно и не смешано с файлами.</p></div>
+    <div class="principle"><span class="k">Правила решают</span><h4>Модель объясняет, правила действуют</h4><p>Что безопасно удалять, решает детерминированный движок правил. Модель классифицирует незнакомое и отвечает на вопросы. Её выводы всегда помечены как гипотеза.</p></div>
+    <div class="principle"><span class="k">Ничего без спроса</span><h4>Только в Корзину и только по подтверждению</h4><p>Удаление идёт через Корзину Finder. Системные пути, SIP и активные приложения закрыты denylist. Перед действием всё собирается в Корзину Домового.</p></div>
+    <div class="principle"><span class="k">Ничего наружу</span><h4>Модель видит только метаданные</h4><p>Путь, размер, даты, тип, последнее открытие по Spotlight. Содержимое файлов и URL скачивания не читаются. Процесс инференса не имеет доступа к сети.</p></div>
+    <div class="principle"><span class="k">Приложение без модели</span><h4>Полностью работает и без AI</h4><p>Скан, диаграмма, правила, дубликаты и очистка доступны сразу. Модель качается отдельно, по желанию, и видна на диаграмме как занятое место.</p></div>
+    <div class="principle"><span class="k">Своё место</span><h4>Модель тоже лежит на диске</h4><p>Приложение для очистки, которое качает гигабайты, обязано это показать. Модель отмечена воском на диаграмме и удаляется в один клик.</p></div>
+  </div>
+</section>
+
+<!-- II -->
+<section class="sec" id="palette">
+  <h2><span class="rn">II</span>Палитра</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead"><p>Основа интерфейса — нейтрали с индиговым оттенком. Воск (accent) отдан действиям и модели. Категории файлов различаются по тону и светлоте, поэтому соседние сегменты читаются и при дальтонизме. Цвета безопасности отделены от категорий и встречаются только на бейджах.</p></div>
+  <h3>Поверхности и акцент</h3>
+  <div class="swatches" id="sw-base"></div>
+  <h3>Категории файлов</h3>
+  <div class="swatches" id="sw-cat"></div>
+  <h3>Безопасность действия</h3>
+  <div class="swatches" id="sw-safe"></div>
+</section>
+
+<!-- III -->
+<section class="sec" id="type">
+  <h2><span class="rn">III</span>Типографика</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead"><p>Три гарнитуры со строго разделёнными ролями. Ruslan Display — только для имени продукта и обложек, в интерфейсе приложения её нет. Onest — весь UI и текст. JetBrains Mono — размеры, пути и всё, что выравнивается по разрядам. Цифры везде табличные.</p></div>
+  <div style="margin-top:20px">
+    <div class="type-row"><div class="lbl"><b>Ruslan Display</b>бренд · 46/1.05</div><div class="t-display">Домовой · DOMOVOI</div></div>
+    <div class="type-row"><div class="lbl"><b>Onest 600</b>заголовки · 22/1.3</div><div class="t-ui">Можно освободить 222,1 ГБ</div></div>
+    <div class="type-row"><div class="lbl"><b>Onest 400</b>текст · 15/1.6</div><div class="t-body">Промежуточные результаты сборки Xcode. Пересоздаются при следующей сборке, проекты не пострадают.</div></div>
+    <div class="type-row"><div class="lbl"><b>JetBrains Mono</b>данные · 14/1.6</div><div class="t-mono">~/Library/Developer/Xcode/DerivedData &nbsp; 38,2 ГБ &nbsp; 1 284 112 файлов</div></div>
+  </div>
+  <div class="note">Размеры пишем по-русски: десятичная запятая, неразрывный пробел перед единицей, «ГБ» и «МБ». Объём считаем в десятичных единицах, как Finder: 1 ГБ = 10⁹ байт. Иначе цифры разойдутся с тем, что показывает система.</div>
+</section>
+
+<!-- IV -->
+<section class="sec" id="ornament">
+  <h2><span class="rn">IV</span>Узор и движение</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead">
+    <p><strong>Орнамент</strong> строится процедурно, крестиком по сетке. Мотив — ромб «засеянное поле»: воск по контуру, клюква внутри, лён в центре. В приложении он появляется в двух местах: в пустых состояниях и на экране завершения очистки. На данных и в списках узора нет.</p>
+    <p><strong>Движение</strong> честное, без декоративных спиннеров. Кольца диаграммы во время скана растут ровно настолько, насколько дерево реально обойдено. Переход между уровнями — радиальный зум 220 мс. Загрузка модели показывает байты и проверку SHA-256, а не бегущую полосу. При <code>prefers-reduced-motion</code> зум заменяется сменой кадра.</p>
+  </div>
+  <h3>Бюджет движения</h3>
+  <div class="scroll-x"><table class="tbl" style="min-width:560px">
+    <tr><th>Событие</th><th>Движение</th><th>Длительность</th></tr>
+    <tr><td>скан</td><td class="say">Сектор прироста по мере обхода дерева</td><td>фактическая</td></tr>
+    <tr><td>зум уровня</td><td class="say">Радиальная интерполяция углов и радиусов на GPU</td><td>220 мс</td></tr>
+    <tr><td>наведение</td><td class="say">Приглушение остальных сегментов до 45%</td><td>120 мс</td></tr>
+    <tr><td>в корзину</td><td class="say">Сегмент сжимается к центру, остальные перераспределяются</td><td>320 мс</td></tr>
+    <tr><td>очистка готова</td><td class="say">Вышивка «зашивается» слева направо, один раз</td><td>1 400 мс</td></tr>
+  </table></div>
+</section>
+
+<!-- V -->
+<section class="sec" id="viz">
+  <h2><span class="rn">V</span>Визуализация</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead"><p>Обе раскладки построены на одной модели дерева, с общим фокусом, наведением и hit-testing. Различаются только раскладка и шейдер сегмента. Нажатие на сегмент открывает уровень в обеих диаграммах, центр солнца или крошки возвращают наверх. Данные — пример типичного Mac разработчика.</p></div>
+  <div class="note open">Решение открыто: sunburst, treemap или оба режима с переключателем. Ниже их можно сравнить на одних данных.</div>
+  <div style="margin-top:26px">
+    <div class="viz-bar">
+      <div class="crumbs" id="viz-crumbs"></div>
+      <div class="seg-ctl" role="group" aria-label="Режим диаграммы">
+        <button id="m-sb" aria-pressed="false">Sunburst</button>
+        <button id="m-tm" aria-pressed="false">Treemap</button>
+        <button id="m-both" aria-pressed="true">Оба</button>
+      </div>
+    </div>
+    <div class="viz" id="viz-wrap">
+      <div id="viz-sb"></div>
+      <div id="viz-tm"></div>
+      <div class="viz-hover" id="viz-hover">Наведите на сегмент.</div>
+    </div>
+    <div class="sizes viz-list" id="viz-list"></div>
+  </div>
+  <h3>Сравнение</h3>
+  <div class="scroll-x"><table class="cmp">
+    <tr><th>Критерий</th><th>Sunburst</th><th>Treemap</th></tr>
+    <tr><td>Иерархия</td><td class="win-mark">Видна сразу: кольцо — уровень</td><td>Читается по вложенным рамкам, хуже на 3+ уровнях</td></tr>
+    <tr><td>Точность пропорций</td><td>Площадь внешних колец искажена радиусом</td><td class="win-mark">Площадь пропорциональна размеру</td></tr>
+    <tr><td>Мелкие файлы</td><td>Внешние кольца становятся нитями</td><td class="win-mark">Видны как плитки, пока есть площадь</td></tr>
+    <tr><td>Подписи</td><td>Только в центре и по наведению</td><td class="win-mark">Помещаются прямо в плитки</td></tr>
+    <tr><td>Узнаваемость</td><td class="win-mark">Визитная карточка жанра, близко к DaisyDisk</td><td>Привычно по WinDirStat и GrandPerspective</td></tr>
+    <tr><td>Анимация зума</td><td class="win-mark">Естественная радиальная</td><td>Масштабирование прямоугольника, менее наглядно</td></tr>
+    <tr><td>Цена в Metal</td><td>SDF-дуги одним инстансингом</td><td>Прямоугольники, проще шейдер</td></tr>
+  </table></div>
+</section>
+
+<!-- VI -->
+<section class="sec" id="components">
+  <h2><span class="rn">VI</span>Компоненты</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead"><p>Нативные элементы AppKit оформляются этими токенами, а диаграмма рисуется в Metal. Ниже — живые образцы.</p></div>
+
+  <h3>Кнопки и переключатели</h3>
+  <div class="board">
+    <div class="row">
+      <button class="btn primary">Переместить в Корзину</button>
+      <button class="btn">Показать в Finder</button>
+      <button class="btn ghost">Отмена</button>
+      <button class="btn" disabled>Сканирование…</button>
+    </div>
+    <div class="row">
+      <div class="seg-ctl" role="group" aria-label="Пример"><button aria-pressed="true">Размер</button><button aria-pressed="false">Имя</button><button aria-pressed="false">Дата</button></div>
+      <label class="switch"><input type="checkbox" id="sw-dup" checked> Искать дубликаты</label>
+      <label class="switch"><input type="checkbox" id="sw-ai"> Домовой (AI)</label>
+    </div>
+  </div>
+
+  <h3>Бейджи безопасности и происхождения</h3>
+  <div class="board">
+    <div class="row">
+      <span class="badge b-safe">Безопасно</span>
+      <span class="badge b-recover">Восстановимо</span>
+      <span class="badge b-check">Проверьте сами</span>
+    </div>
+    <div class="row">
+      <span class="prov">правило · xcode.derived-data</span>
+      <span class="prov model">гипотеза модели</span>
+    </div>
+    <p style="color:var(--mute);font-size:13.5px;max-width:66ch">Безопасность определяет только правило. У гипотезы модели безопасности нет: она всегда попадает в «Проверьте сами» и выделена пунктирной рамкой.</p>
+  </div>
+
+  <h3>Категории</h3>
+  <div class="board"><div class="row" id="legend"></div></div>
+
+  <h3>Строка размера</h3>
+  <div class="board"><div class="sizes" id="sample-rows"></div></div>
+
+  <h3>Рекомендация</h3>
+  <div style="display:grid;gap:12px" id="sample-recs"></div>
+
+  <h3>Загрузка модели</h3>
+  <div class="dl">
+    <div class="dl-top"><b>Стандартная · 7–8B · Q4</b><span class="badge b-recover">Загрузка</span></div>
+    <div class="prog"><b style="width:41%"></b></div>
+    <div class="dl-meta"><span>2,0 из 4,9 ГБ · 11,4 МБ/с · осталось ~4 мин</span><span>докачка поддерживается</span></div>
+    <div class="row"><button class="btn sm">Пауза</button><button class="btn sm ghost">Отменить</button></div>
+  </div>
+  <div class="dl" style="margin-top:12px">
+    <div class="dl-top"><b>Стандартная · 7–8B · Q4</b><span class="badge b-safe">Готова</span></div>
+    <div class="dl-meta"><span>SHA-256 совпадает · 4,9 ГБ · ~/Library/Application Support/Domovoi/models</span></div>
+  </div>
+</section>
+
+<!-- VII -->
+<section class="sec" id="screens">
+  <h2><span class="rn">VII</span>Экраны</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead"><p>Восемь экранов полного продукта. Окно одно, разделы в сайдбаре. Диаграммы в макетах живые.</p></div>
+
+  <div class="screen">
+    <div class="screen-cap"><span class="n">01</span><h4>Первый запуск: доступ к диску</h4><p>Без Full Disk Access закрыты Library, Mail и Safari, и картина будет неполной.</p></div>
+    <div class="mock"><div class="win narrow">
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">DOMOVOI</div></div>
+      <div class="onb">
+        <canvas class="stitch" data-cell="5" style="margin:0" aria-hidden="true"></canvas>
+        <h5>Домовому нужен доступ ко всему диску</h5>
+        <p>Иначе macOS скроет от него папки Library, почту и данные приложений, и часть места останется неучтённой. Файлы не открываются и никуда не отправляются.</p>
+        <div class="steps">
+          <div><span>Откройте <code>Настройки → Конфиденциальность → Полный доступ к диску</code>.</span></div>
+          <div><span>Включите <code>DOMOVOI</code> в списке.</span></div>
+          <div><span>Вернитесь сюда, доступ проверится сам.</span></div>
+        </div>
+        <div class="row"><button class="btn primary">Открыть Настройки</button><button class="btn ghost">Сканировать без доступа</button></div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-cap"><span class="n">02</span><h4>Сканирование</h4><p>Сектор растёт по мере обхода. Повторное открытие — из кэша и FSEvents, мгновенно.</p></div>
+    <div class="mock"><div class="win">
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Macintosh HD</div></div>
+      <div class="win-body">
+        <div class="side" id="side-scan"></div>
+        <div class="pane">
+          <div class="pane-head"><h5>Сканирование Macintosh HD</h5><button class="btn sm">Остановить</button></div>
+          <div style="max-width:380px;margin:0 auto" id="scan-sb"></div>
+          <div class="dl-meta" style="justify-content:center;gap:28px;margin-top:10px"><span>getattrlistbulk · 8 потоков</span><span>~/Library/Containers/com.docker…</span></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-cap"><span class="n">03</span><h4>Главное окно</h4><p>Диаграмма, список уровня и Корзина Домового. Сегменты кликабельны.</p></div>
+    <div class="mock"><div class="win">
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Macintosh HD</div></div>
+      <div class="win-body">
+        <div class="side" id="side-main"></div>
+        <div class="pane">
+          <div class="pane-head"><div class="crumbs" id="mw-crumbs"></div><small id="mw-free"></small></div>
+          <div class="main-grid">
+            <div id="mw-sb"></div>
+            <div class="sizes" id="mw-list"></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-cap"><span class="n">04</span><h4>Рекомендации</h4><p>Сначала итог, потом детали. Безопасное отмечено заранее, остальное — по выбору.</p></div>
+    <div class="mock"><div class="win">
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Рекомендации</div></div>
+      <div class="win-body fixed">
+        <div class="side" id="side-recs"></div>
+        <div class="pane">
+          <div class="pane-head"><div><h5 id="recs-total"></h5><small id="recs-split"></small></div><button class="btn primary" id="recs-btn">В Корзину Домового</button></div>
+          <div style="display:grid;gap:10px" id="recs"></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-cap"><span class="n">05</span><h4>Домовой: вопросы к диску</h4><p>Модель ходит по индексу через tools. Каждый вызов виден, каждая гипотеза помечена.</p></div>
+    <div class="mock"><div class="win">
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Домовой</div></div>
+      <div class="win-body fixed">
+        <div class="side" id="side-ai"></div>
+        <div class="chatcol">
+          <div class="chat" id="chat">
+            <div class="msg me">Что из разработки можно убрать, не ломая проекты?</div>
+            <div class="tool"><b>query_index</b> category: "dev", safety: ["safe"] <span>→ 7 узлов</span></div>
+            <div class="msg ai">Без последствий для проектов можно убрать 80,8 ГБ. Всё это пересоздаётся при следующей сборке:
+              <ul>
+                <li>Xcode DerivedData — <b>38,2 ГБ</b></li>
+                <li>каталоги <code>target/</code> в engram и quartz — <b>24,0 ГБ</b></li>
+                <li>iOS DeviceSupport — <b>11,4 ГБ</b></li>
+                <li><code>node_modules</code> в boss и clavis — <b>3,8 ГБ</b></li>
+                <li><code>zig-cache</code> в facet — <b>3,4 ГБ</b></li>
+              </ul>
+              <p style="margin-top:8px;color:var(--mute)">Docker (48 ГБ) я не трогаю: внутри образы и тома. Их лучше чистить средствами самого Docker.</p>
+              <div class="row" style="margin-top:12px"><button class="btn sm primary">Добавить в Корзину · 80,8 ГБ</button></div>
+            </div>
+            <div class="msg me">А что за com.tinyapp.helper?</div>
+            <div class="tool"><b>inspect_node</b> path: "~/Library/Application Support/com.tinyapp.helper"</div>
+            <div class="msg ai"><span class="prov model">гипотеза модели</span>
+              <p style="margin-top:8px">Похоже на остаток удалённого приложения TinyApp: в Программах его нет, последнее обращение 14 месяцев назад, 1,7 ГБ. Проверьте содержимое перед удалением, правила за этот путь не отвечают.</p>
+            </div>
+          </div>
+          <div class="chat-in"><span>Спросите о своём диске…</span><span class="mono" style="font-size:11.5px">⏎</span></div>
+          <div class="chat-foot">модель видит пути, размеры и даты · содержимое файлов не читается</div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-cap"><span class="n">06</span><h4>Дубликаты</h4><p>Отдельный проход по запросу: размер → частичный хэш → BLAKE3. Клоны APFS распознаются.</p></div>
+    <div class="mock"><div class="win">
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Дубликаты</div></div>
+      <div class="win-body fixed">
+        <div class="side" id="side-dup"></div>
+        <div class="pane">
+          <div class="pane-head"><div><h5>3 группы · освободится 4,3 ГБ</h5><small>проверено 18 406 кандидатов · 2 мин 14 с</small></div>
+            <div class="seg-ctl" role="group" aria-label="Действие"><button aria-pressed="true">В Корзину</button><button aria-pressed="false">Заменить клоном</button></div></div>
+          <div style="display:grid;gap:12px">
+            <div class="dup">
+              <div class="dup-h"><b>IMG_4471.MOV</b><span>3 копии · 2,1 ГБ каждая · освободит 4,2 ГБ</span></div>
+              <div class="dup-r"><span class="keep">оставить</span><code>~/Movies/Записи/IMG_4471.MOV</code><span class="mono">2,1 ГБ</span></div>
+              <div class="dup-r"><input type="checkbox" checked aria-label="Удалить копию"><code>~/Downloads/IMG_4471.MOV</code><span class="mono">2,1 ГБ</span></div>
+              <div class="dup-r"><input type="checkbox" checked aria-label="Удалить копию"><code>~/Downloads/AirDrop/IMG_4471.MOV</code><span class="mono">2,1 ГБ</span></div>
+            </div>
+            <div class="dup">
+              <div class="dup-h"><b>ubuntu-24.04-desktop-arm64.iso</b><span>2 копии · освободит 0 Б</span></div>
+              <div class="dup-r"><span class="keep">оставить</span><code>~/Downloads/ubuntu-24.04-desktop-arm64.iso</code><span class="mono">2,8 ГБ</span></div>
+              <div class="dup-r"><input type="checkbox" disabled aria-label="Клон APFS"><code>~/VMs/iso/ubuntu-24.04-desktop-arm64.iso</code><span class="badge b-recover">клон APFS</span></div>
+            </div>
+            <div class="dup">
+              <div class="dup-h"><b>thesis-final-v3.pdf</b><span>4 копии · освободит 46 МБ</span></div>
+              <div class="dup-r"><span class="keep">оставить</span><code>~/Documents/Учёба/thesis-final-v3.pdf</code><span class="mono">15 МБ</span></div>
+              <div class="dup-r"><input type="checkbox" checked aria-label="Удалить копию"><code>~/Downloads/thesis-final-v3.pdf</code><span class="mono">15 МБ</span></div>
+            </div>
+          </div>
+          <div class="note open" style="margin-top:16px">Решение открыто: удалять копии в Корзину, заменять их клонами APFS или давать выбор, как в этом макете.</div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-cap"><span class="n">07</span><h4>Модель</h4><p>Каталог зашит в версию приложения. Источник загрузки настраивается, файл проверяется по SHA-256.</p></div>
+    <div class="mock"><div class="win">
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Настройки · Модель</div></div>
+      <div class="win-body">
+        <div class="side" id="side-model"></div>
+        <div class="pane" style="display:grid;gap:14px">
+          <div class="pane-head" style="margin:0"><div><h5>Локальная модель</h5><small>Этот Mac: 32 ГБ общей памяти · подходит любая из каталога</small></div></div>
+          <div class="dl"><div class="dl-top"><b>Компактная · 3–4B · Q4</b><button class="btn sm">Скачать · 2,4 ГБ</button></div><div class="dl-meta"><span>от 8 ГБ памяти · быстрые ответы, проще формулировки</span></div></div>
+          <div class="dl" style="border-color:var(--wax)"><div class="dl-top"><b>Стандартная · 7–8B · Q4</b><span class="badge b-safe">Активна</span></div><div class="dl-meta"><span>от 16 ГБ памяти · SHA-256 совпадает · 4,9 ГБ</span><button class="btn sm ghost">Удалить</button></div></div>
+          <div class="dl"><div class="dl-top"><b>Расширенная · 12–14B · Q4</b><span class="badge b-recover">41%</span></div><div class="prog"><b style="width:41%"></b></div><div class="dl-meta"><span>3,5 из 8,6 ГБ · 11,4 МБ/с</span><span><button class="btn sm">Пауза</button></span></div></div>
+          <div class="board" style="padding:16px;gap:12px">
+            <div class="row" style="justify-content:space-between"><span>Выгружать модель из памяти после простоя</span>
+              <select class="sel" id="unload" aria-label="Таймаут выгрузки"><option>сразу</option><option selected>через 5 минут</option><option>через 15 минут</option><option>через 60 минут</option><option>никогда</option></select></div>
+            <div class="row" style="justify-content:space-between"><span>Источник загрузки</span><span class="mono" style="color:var(--mute)">huggingface.co &nbsp;<button class="btn sm ghost">Изменить</button></span></div>
+          </div>
+          <div class="note open" style="margin:0">Конкретные модели каталога ещё не выбраны. Классы и размеры здесь условные.</div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-cap"><span class="n">08</span><h4>Корзина Домового</h4><p>Последний шаг перед действием. Всё собрано в одном месте, всё возвращается из Корзины Finder.</p></div>
+    <div class="mock"><div class="win narrow">
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Корзина Домового</div></div>
+      <div class="pane">
+        <div id="tray"></div>
+        <div class="tray-total"><span style="color:var(--mute)">Будет перемещено в Корзину</span><b id="tray-sum"></b></div>
+        <p style="color:var(--dim);font-size:13px;margin-top:10px">Файлы можно вернуть из Корзины Finder, пока она не очищена. Место освободится после очистки Корзины.</p>
+        <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost">Отмена</button><button class="btn primary">Переместить в Корзину</button></div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<!-- VIII -->
+<section class="sec" id="voice">
+  <h2><span class="rn">VIII</span>Голос</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead"><p>Домовой говорит спокойно и по делу, как мастер, который знает дом. Без шуток про мусор, без восклицаний, без «ой». Называет вещи так, как их видит человек в Finder, а не так, как они устроены внутри.</p></div>
+  <div class="scroll-x" style="margin-top:20px"><table class="tbl" style="min-width:640px">
+    <tr><th>Ситуация</th><th>Пишем</th><th>Не пишем</th></tr>
+    <tr><td>итог</td><td class="say">Можно освободить 222,1 ГБ</td><td class="no">Ура! Найдено целых 222 ГБ мусора!</td></tr>
+    <tr><td>безопасно</td><td class="say">Пересоздаётся при следующей сборке</td><td class="no">Это просто кэш, удаляйте смело</td></tr>
+    <tr><td>проверьте</td><td class="say">Внутри образы и тома. Лучше чистить средствами Docker</td><td class="no">Осторожно! Опасно!</td></tr>
+    <tr><td>гипотеза</td><td class="say">Похоже на остаток удалённого приложения</td><td class="no">Это остаток удалённого приложения</td></tr>
+    <tr><td>нет доступа</td><td class="say">macOS скрыла 3 папки. Дайте полный доступ к диску, чтобы учесть их</td><td class="no">Ошибка доступа EPERM</td></tr>
+    <tr><td>скрытое</td><td class="say">macOS удалит снапшоты сама, когда место понадобится</td><td class="no">Неизвестное системное пространство</td></tr>
+    <tr><td>после очистки</td><td class="say">Перемещено в Корзину: 80,8 ГБ</td><td class="no">Готово! Ваш Mac теперь летает</td></tr>
+    <tr><td>модель</td><td class="say">Модель занимает 4,9 ГБ. Удалить можно здесь же</td><td class="no">Скачиваем AI…</td></tr>
+  </table></div>
+</section>
+
+<!-- IX -->
+<section class="sec" id="arch">
+  <h2><span class="rn">IX</span>Архитектура</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead"><p>Один бинарный артефакт: приложение и XPC-сервис инференса внутри бандла. Сеть есть только у загрузчика моделей. Инференс изолирован: его падение не роняет интерфейс, а гигабайты весов не живут в процессе UI.</p></div>
+  <div class="arch scroll-x" style="margin-top:20px">
+    <svg viewBox="0 0 920 440" role="img" aria-label="Схема процессов DOMOVOI">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--mute)"/></marker></defs>
+      <rect class="a-proc" x="10" y="20" width="580" height="400" rx="14"/>
+      <text class="a-cap" x="28" y="44">DOMOVOI.APP · ОСНОВНОЙ ПРОЦЕСС</text>
+      <rect class="a-box" x="30" y="64" width="260" height="62" rx="8"/><text class="a-t" x="46" y="90">Интерфейс</text><text class="a-s" x="46" y="110">AppKit через objc2</text>
+      <rect class="a-box" x="310" y="64" width="260" height="62" rx="8"/><text class="a-t" x="326" y="90">Диаграмма</text><text class="a-s" x="326" y="110">Metal · SDF-сегменты · атлас глифов</text>
+      <rect class="a-box" x="30" y="168" width="260" height="62" rx="8"/><text class="a-t" x="46" y="194">Индекс скана</text><text class="a-s" x="46" y="214">дерево · кэш на диске · дельты</text>
+      <rect class="a-box" x="310" y="168" width="260" height="62" rx="8"/><text class="a-t" x="326" y="194">Движок правил</text><text class="a-s" x="326" y="214">безопасность · denylist · Корзина</text>
+      <rect class="a-box" x="30" y="272" width="260" height="62" rx="8"/><text class="a-t" x="46" y="298">Загрузчик моделей</text><text class="a-s" x="46" y="318">HTTP Range · SHA-256 · каталог</text>
+      <rect class="a-box" x="310" y="272" width="260" height="62" rx="8"/><text class="a-t" x="326" y="298">Агентный цикл</text><text class="a-s" x="326" y="318">tools → запросы к индексу</text>
+      <rect class="a-box" x="30" y="356" width="260" height="46" rx="8"/><text class="a-s" x="46" y="384">~/Library/Application Support/Domovoi/models</text>
+
+      <rect class="a-xpc" x="630" y="20" width="280" height="190" rx="14"/>
+      <text class="a-cap x" x="648" y="44">DOMOVOIINFERENCE.XPC</text>
+      <rect class="a-box" x="650" y="64" width="240" height="56" rx="8"/><text class="a-t" x="666" y="88">llama.cpp · Metal</text><text class="a-s" x="666" y="107">запиненный коммит · mmap</text>
+      <rect class="a-box" x="650" y="132" width="240" height="56" rx="8"/><text class="a-t" x="666" y="156">Грамматика GBNF</text><text class="a-s" x="666" y="175">tool call | ответ · без сети</text>
+
+      <rect class="a-fs" x="630" y="240" width="280" height="180" rx="14"/>
+      <text class="a-cap f" x="648" y="264">MACOS · APFS</text>
+      <text class="a-s" x="650" y="292">getattrlistbulk · обход</text>
+      <text class="a-s" x="650" y="314">FSEvents · дельты</text>
+      <text class="a-s" x="650" y="336">Spotlight · kMDItemLastUsedDate</text>
+      <text class="a-s" x="650" y="358">APFS · purgeable, снапшоты</text>
+      <text class="a-s" x="650" y="380">NSFileManager · trashItem</text>
+      <text class="a-s" x="650" y="402">clonefile · клоны</text>
+
+      <path class="a-ln" d="M160 126V168" marker-end="url(#ar)" marker-start="url(#ar)"/>
+      <path class="a-ln" d="M290 199H310" marker-end="url(#ar)"/>
+      <path class="a-ln" d="M440 168V126" marker-end="url(#ar)"/>
+      <path class="a-ln" d="M440 272V230" marker-end="url(#ar)"/>
+      <path class="a-ln" d="M290 210C300 250 300 280 310 295" marker-end="url(#ar)"/>
+      <path class="a-ln" d="M160 334V356" marker-end="url(#ar)"/>
+      <path class="a-ln" d="M570 303H600V160H650" marker-end="url(#ar)" marker-start="url(#ar)"/>
+      <text class="a-lbl" x="604" y="240">libxpc</text>
+      <path class="a-ln" d="M290 379H618V100H650" marker-end="url(#ar)"/>
+      <text class="a-lbl" x="420" y="372">mmap весов</text>
+    </svg>
+  </div>
+
+  <h3>Принятые решения</h3>
+  <div class="dec">
+    <div><b>Сканер</b><span>Только системный том, getattrlistbulk, размер на диске, дедупликация hard links, кэш скана и FSEvents.</span></div>
+    <div><b>Дубликаты</b><span>Отдельная опция и отдельный проход: размер → частичный хэш → BLAKE3. Клоны APFS распознаются.</span></div>
+    <div><b>Рекомендации</b><span>Решают детерминированные правила. Модель объясняет, классифицирует и отвечает на вопросы. Удаление только в Корзину, с denylist.</span></div>
+    <div><b>Данные для модели</b><span>Только метаданные. Без содержимого файлов и без kMDItemWhereFroms.</span></div>
+    <div><b>Рантайм</b><span>llama.cpp на запиненном коммите, свои биндинги через bindgen, Metal-бэкенд со встроенной metallib.</span></div>
+    <div><b>Инференс</b><span>XPC-сервис в бандле через libxpc, без сети. Выгрузка по таймауту из настроек.</span></div>
+    <div><b>Формат ответов</b><span>Structured output и tool calling через грамматику GBNF. Шаблоны промптов свои для каждого семейства.</span></div>
+    <div><b>Загрузка моделей</b><span>Свой загрузчик: докачка, пауза, отмена, SHA-256. Источник настраивается.</span></div>
+    <div><b>Каталог</b><span>Зашит в версию приложения, новые модели приходят с релизами.</span></div>
+    <div><b>Интерфейс</b><span>AppKit через objc2 для окна, списков и чата. Metal только для диаграммы.</span></div>
+    <div><b>Дистрибуция</b><span>Вне Mac App Store: Developer ID, notarization, обновления через Sparkle.</span></div>
+  </div>
+  <h3>Открыто</h3>
+  <div class="dec">
+    <div><b>Визуализация</b><span>Sunburst, treemap или оба режима (раздел V).</span></div>
+    <div><b>Действие над дубликатом</b><span>В Корзину, замена клоном APFS или выбор пользователя (экран 06).</span></div>
+    <div><b>Состав каталога</b><span>Конкретные модели под 8, 16 и 32+ ГБ: качество tool use и лицензии весов.</span></div>
+  </div>
+</section>
+
+<!-- X -->
+<section class="sec" id="render">
+  <h2><span class="rn">X</span>Рендер</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead">
+    <p>Окно, списки, карточки, чат и настройки делаются на <strong>AppKit</strong> через objc2. Прокрутка, ввод с IME, выделение текста, VoiceOver и обрезка строк достаются от системы. <strong>Metal</strong> рисует только диаграмму: сегменты, анимации и подписи внутри неё.</p>
+    <p><code>MTKView</code> работает по запросу: кадр рисуется только при изменении данных, наведении или анимации. Во время анимаций частота поднимается до 120 Гц на ProMotion, в покое GPU не работает.</p>
+  </div>
+
+  <h3>Что чем рисуется</h3>
+  <div class="scroll-x"><table class="tbl" style="min-width:760px">
+    <tr><th>Элемент</th><th>Слой</th><th>Реализация</th><th>Текст</th></tr>
+    <tr><td>окно, сайдбар</td><td><span class="who ak">AppKit</span></td><td class="say">NSSplitViewController, source list на NSOutlineView</td><td class="say">имя в конце, счётчик не режется</td></tr>
+    <tr><td>крошки</td><td><span class="who ak">AppKit</span></td><td class="say">NSStackView из кнопок</td><td class="say">средние уровни сворачиваются в «…» с меню</td></tr>
+    <tr><td>список уровня</td><td><span class="who ak">AppKit</span></td><td class="say">NSTableView, view-based, переиспользование ячеек</td><td class="say">имя в конце, размер никогда</td></tr>
+    <tr><td>рекомендации</td><td><span class="who ak">AppKit</span></td><td class="say">NSCollectionView в NSScrollView, закреплённая шапка</td><td class="say">заголовок до 2 строк, путь в середине, пояснение переносится</td></tr>
+    <tr><td>дубликаты</td><td><span class="who ak">AppKit</span></td><td class="say">NSOutlineView с группами</td><td class="say">путь в середине</td></tr>
+    <tr><td>чат</td><td><span class="who ak">AppKit</span></td><td class="say">NSScrollView с сообщениями, NSTextView для ввода</td><td class="say">перенос, без обрезки, выделение</td></tr>
+    <tr><td>настройки модели</td><td><span class="who ak">AppKit</span></td><td class="say">NSGridView, свой NSView прогресса</td><td class="say">перенос</td></tr>
+    <tr><td>тултип наведения</td><td><span class="who ak">AppKit</span></td><td class="say">лёгкая NSPanel над диаграммой</td><td class="say">путь в середине</td></tr>
+    <tr><td>сегменты</td><td><span class="who mt">Metal</span></td><td class="say">инстансы: SDF-дуга или прямоугольник, один draw call</td><td>—</td></tr>
+    <tr><td>центр солнца</td><td><span class="who mt">Metal</span></td><td class="say">атлас глифов, строка раскладывается через CTLine</td><td class="say">по хорде: уменьшение, затем многоточие</td></tr>
+    <tr><td>подписи treemap</td><td><span class="who mt">Metal</span></td><td class="say">тот же атлас, SDF для чёткости при зуме</td><td class="say">только при плитке больше порога, в конце</td></tr>
+    <tr><td>вышивка</td><td><span class="who cg">Core Graphics</span></td><td class="say">растеризуется один раз и кэшируется на масштаб экрана</td><td>—</td></tr>
+  </table></div>
+
+  <h3>Правила обрезки текста</h3>
+  <div class="rules">
+    <div><span><b>Размеры и счётчики не режутся никогда.</b> Место уступает имя.</span></div>
+    <div><span><b>Пути режутся в середине.</b> Начало и имя файла остаются видны, как в Finder. Имени отдаётся большая часть.</span></div>
+    <div><span><b>Имена режутся в конце.</b> Полный текст есть в подсказке и в метке VoiceOver.</span></div>
+    <div><span><b>В круге сначала меньше, потом короче.</b> Ширина берётся по хорде на высоте строки. Шрифт уменьшается до минимума, и только потом появляется многоточие.</span></div>
+    <div><span><b>Многострочный текст переносится.</b> Пояснения и чат не обрезаются, окно прокручивается.</span></div>
+    <div><span><b>Подпись без места не рисуется.</b> В плитке treemap меньше порога имя доступно только по наведению.</span></div>
+  </div>
+
+  <h3>Обрезка вживую</h3>
+  <div class="board">
+    <label class="row" for="trw" style="color:var(--mute);font-size:13px">Ширина колонки <input type="range" id="trw" min="140" max="560" value="300"> <span id="trw-v" class="mono"></span></label>
+    <div class="tr">
+      <div class="tr-row"><span class="tr-lbl">путь · середина</span><div class="tr-box"><span class="p" id="tr1"></span></div></div>
+      <div class="tr-row"><span class="tr-lbl">имя · конец</span><div class="tr-box"><span class="n" id="tr2"></span></div></div>
+      <div class="tr-row"><span class="tr-lbl">имя + размер · размер не режется</span><div class="tr-box"><span class="n" id="tr3n"></span><span class="s" id="tr3s"></span></div></div>
+    </div>
+  </div>
+  <div class="note">В AppKit первые три случая задаются свойством <code>lineBreakMode</code> у NSTextField. В Metal та же логика делается через <code>CTLineCreateTruncatedLine</code>: он умеет резать в конце, в начале и в середине, а готовая строка раскладывается по атласу глифов.</div>
+</section>
+
+<section class="sec" id="tokens">
+  <h2><span class="rn">XI</span>Токены</h2>
+  <canvas class="stitch small" aria-hidden="true"></canvas>
+  <div class="lead"><p>Единый источник для этой книги и для Rust-кода. Из этого блока генерируется модуль <code>theme.rs</code> с цветами для Metal-шейдеров и NSColor для AppKit, в двух вариантах: тёмном и светлом.</p></div>
+  <pre class="tokens" id="tok" style="margin-top:20px"></pre>
+  <div class="foot"><span>DOMOVOI · дизайн-книга · редакция 1</span><span>16.10.2026</span></div>
+</section>
+
+</div>
+</main>
+
+<script>
+(function(){
+const NS='http://www.w3.org/2000/svg';
+const $=(s,r=document)=>r.querySelector(s);
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+const CAT={apps:'Приложения',dev:'Разработка',media:'Медиа',docs:'Документы',cache:'Кэши',system:'Система',hidden:'Скрытое',model:'Модель',home:'Дом'};
+const catColor=c=>`var(--c-${c||'home'})`;
+function fmt(g){
+  if(g<1) return Math.round(g*1000).toLocaleString('ru-RU')+' МБ';
+  const d=g<100?1:0;
+  return g.toLocaleString('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d})+' ГБ';
+}
+const trunc=(s,n)=>s.length>n?s.slice(0,Math.max(1,n-1))+'…':s;
+
+/* ---------- данные (пример) ---------- */
+function N(name,cat,x,extra){return Object.assign(Array.isArray(x)?{name,cat,children:x}:{name,cat,size:x},extra||{});}
+const ROOT=N('Macintosh HD','home',[
+  N('Пользователи · igor','home',[
+    N('Library','home',[
+      N('Developer','dev',[N('Xcode · DerivedData','dev',38.2),N('CoreSimulator · Devices','dev',22.6),N('iOS DeviceSupport','dev',11.4),N('Xcode · Archives','dev',6.1)]),
+      N('Containers','apps',[N('Docker','dev',48.0),N('Telegram','apps',8.7),N('Mail','apps',6.3),N('Прочие контейнеры','apps',4.2)]),
+      N('Application Support','apps',[N('MobileSync · Backup','docs',31.5),N('Domovoi · models','model',4.9),N('Slack','apps',3.1),N('Code','apps',2.4),N('com.tinyapp.helper','apps',1.7)]),
+      N('Caches','cache',[N('Homebrew','cache',5.8),N('com.spotify.client','cache',4.4),N('org.swift.swiftpm','cache',3.2),N('Yarn','cache',2.9),N('Safari','cache',2.1)])
+    ]),
+    N('Pictures','media',[N('Photos Library','media',58.3),N('Прочие изображения','media',3.4)]),
+    N('Projects','dev',[N('engram · target','dev',14.2),N('quartz · target','dev',9.8),N('Исходники','dev',4.1),N('facet · zig-cache','dev',3.4),N('boss · node_modules','dev',2.2),N('clavis · node_modules','dev',1.6)]),
+    N('Movies','media',[N('Final Cut · библиотека','media',29.5),N('Записи экрана','media',12.5)]),
+    N('Downloads','docs',[N('Установщики .dmg и .pkg','docs',14.7),N('Архивы .zip','docs',6.3),N('Разное','docs',3.8)]),
+    N('Documents','docs',12.6),
+    N('Music','media',9.2)
+  ]),
+  N('Applications','apps',[N('Остальные программы','apps',18.9),N('Xcode','apps',12.1),N('Final Cut Pro','apps',6.4),N('Logic Pro','apps',2.3)]),
+  N('Скрытое','hidden',[N('Purgeable','hidden',12.4),N('Системные данные','hidden',9.6),N('Снапшоты Time Machine','hidden',8.1)]),
+  N('System','system',16.8),
+  N('Library','system',[N('Audio · Apple Loops','system',6.8),N('Прочее','system',7.4)])
+]);
+const DISK=994.7; // ГБ, ёмкость тома в примере
+const BY={};
+(function prep(n,p,d){n.parent=p;n.depth=d;
+  if(n.children){n.children.forEach(c=>prep(c,n,d+1));n.size=n.children.reduce((s,c)=>s+c.size,0);n.children.sort((a,b)=>b.size-a.size);}
+  if(!BY[n.name]) BY[n.name]=n;
+})(ROOT,null,0);
+const crumbsOf=n=>{const a=[];for(let x=n;x;x=x.parent)a.unshift(x);return a;};
+const pathOf=n=>crumbsOf(n).slice(1).map(x=>x.name).join(' › ');
+
+/* ---------- геометрия ---------- */
+function arcPath(c,r0,r1,a0,a1){
+  if(a1-a0>=2*Math.PI-1e-4) a1=a0+2*Math.PI-1e-3;
+  const L=(a1-a0)>Math.PI?1:0, p=(r,a)=>[(c+r*Math.sin(a)).toFixed(2),(c-r*Math.cos(a)).toFixed(2)];
+  const [x0,y0]=p(r1,a0),[x1,y1]=p(r1,a1),[x2,y2]=p(r0,a1),[x3,y3]=p(r0,a0);
+  return `M${x0} ${y0}A${r1} ${r1} 0 ${L} 1 ${x1} ${y1}L${x2} ${y2}A${r0} ${r0} 0 ${L} 0 ${x3} ${y3}Z`;
+}
+function squarify(items,x,y,w,h){
+  const out=[];const total=items.reduce((s,i)=>s+i.v,0);
+  if(total<=0||w<=0||h<=0) return out;
+  const k=w*h/total;const rest=items.map(i=>Object.assign({},i,{a:i.v*k}));let row=[];
+  const worst=(r,len)=>{const s=r.reduce((a,q)=>a+q.a,0);let mx=0,mn=Infinity;r.forEach(q=>{mx=Math.max(mx,q.a);mn=Math.min(mn,q.a);});return Math.max(len*len*mx/(s*s),(s*s)/(len*len*mn));};
+  function lay(){const s=row.reduce((a,q)=>a+q.a,0);
+    if(w>=h){const rw=s/h;let yy=y;row.forEach(q=>{const rh=q.a/rw;out.push(Object.assign(q,{x,y:yy,w:rw,h:rh}));yy+=rh;});x+=rw;w-=rw;}
+    else{const rh=s/w;let xx=x;row.forEach(q=>{const rw=q.a/rh;out.push(Object.assign(q,{x:xx,y,w:rw,h:rh}));xx+=rw;});y+=rh;h-=rh;}
+    row=[];}
+  while(rest.length){const len=Math.min(w,h),c=rest[0];
+    if(!row.length||worst(row.concat([c]),len)<=worst(row,len)){row.push(c);rest.shift();}else lay();}
+  if(row.length) lay();
+  return out;
+}
+
+/* ---------- sunburst ---------- */
+function sunburst(host,o){
+  const S=o.size||440,c=S/2,depth=o.depth||4,rIn=S*0.19,ringW=(c-rIn-4)/depth,focus=o.focus;
+  const maxA=(o.sweep==null?1:o.sweep)*2*Math.PI;
+  host.innerHTML='';
+  const svg=el('svg',{viewBox:`0 0 ${S} ${S}`,class:'sb',role:'img','aria-label':'Диаграмма занятого места: '+focus.name},host);
+  const g=el('g',{},svg);
+  (function walk(n,a0,a1,d){
+    if(!n.children) return; let a=a0;
+    for(const ch of n.children){
+      const span=(a1-a0)*ch.size/n.size,b=a+span;
+      if(span>0.006&&a<maxA){
+        const e=Math.min(b,maxA),pad=span>0.025?0.004:0.001;
+        const p=el('path',{d:arcPath(c,rIn+d*ringW+1.5,rIn+(d+1)*ringW-1.5,a+pad,e-pad),fill:catColor(ch.cat),'fill-opacity':(1-d*0.16).toFixed(2),class:'seg'},g);
+        if(ch.cat==='hidden'){p.setAttribute('stroke','var(--dim)');p.setAttribute('stroke-dasharray','3 3');}
+        p.__n=ch;
+        if(d+1<depth) walk(ch,a,b,d+1);
+      }
+      a=b;
+    }
+  })(focus,0,2*Math.PI,0);
+  const cg=el('g',{class:'sb-center'},svg);
+  el('circle',{cx:c,cy:c,r:rIn-5,fill:'var(--surface-2)',stroke:'var(--line)'},cg);
+  const t0=el('text',{x:c,y:c-S*0.05,'text-anchor':'middle',class:'sb-t0','font-size':S*0.03},cg);
+  const t1=el('text',{x:c,y:c+S*0.008,'text-anchor':'middle',class:'sb-t1','font-size':S*0.042},cg);
+  const t2=el('text',{x:c,y:c+S*0.06,'text-anchor':'middle',class:'sb-t2','font-size':S*0.036},cg);
+  const R=rIn-5,chord=dy=>2*Math.sqrt(Math.max(0,R*R-dy*dy))-S*0.035;
+  function fit(t,maxW,base,min){
+    t.setAttribute('font-size',base.toFixed(1));const full=t.textContent;if(!full)return;
+    let w=t.getComputedTextLength();if(!w||w<=maxW)return;
+    t.setAttribute('font-size',Math.max(min,base*maxW/w).toFixed(1));w=t.getComputedTextLength();
+    let s=full;while(w>maxW&&s.length>2){s=s.slice(0,-1).trimEnd();t.textContent=s+'…';w=t.getComputedTextLength();}
+    if(t.textContent!==full){const tt=el('title',{},t);tt.textContent=full;}
+  }
+  const fitAll=()=>{fit(t0,chord(S*0.07),S*0.03,S*0.022);fit(t1,chord(S*0.02),S*0.042,S*0.026);fit(t2,chord(S*0.062),S*0.036,S*0.024);};
+  const show=(n,l)=>{t0.textContent=l||'';t1.textContent=n.name;t2.textContent=fmt(n.size);fitAll();};
+  const idle=()=>{ if(o.center){o.center(t0,t1,t2);fitAll();} else show(focus,focus.parent?'↑ наверх':'занято'); };
+  idle();
+  if(o.interactive===false) return;
+  g.addEventListener('mouseover',e=>{const n=e.target.__n;if(!n)return;show(n,CAT[n.cat]);svg.classList.add('hovering');e.target.classList.add('hot');o.onHover&&o.onHover(n);});
+  g.addEventListener('mouseout',e=>{if(!e.target.__n)return;e.target.classList.remove('hot');svg.classList.remove('hovering');idle();o.onHover&&o.onHover(null);});
+  g.addEventListener('click',e=>{const n=e.target.__n;if(n&&n.children&&o.onFocus)o.onFocus(n);});
+  if(focus.parent){cg.style.cursor='pointer';cg.addEventListener('click',()=>o.onFocus&&o.onFocus(focus.parent));}
+}
+
+/* ---------- treemap ---------- */
+function treemap(host,o){
+  const W=o.w||820,H=o.h||480,focus=o.focus;host.innerHTML='';
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,class:'tm',role:'img','aria-label':'Карта занятого места: '+focus.name},host);
+  function label(g,x,y,name,size,maxW,head){
+    const chars=Math.floor(maxW/(head?7:6.8));if(chars<3)return;
+    const t=el('text',{x,y,class:head?'tm-h':'tm-l'},g);
+    if(head){t.textContent=trunc(name+' · '+size,chars);return;}
+    t.textContent=trunc(name,chars);el('text',{x,y:y+14,class:'tm-s'},g).textContent=size;
+  }
+  const kids=focus.children||[focus];
+  squarify(kids.map(n=>({n,v:n.size})),0,0,W,H).forEach(r=>{
+    const n=r.n,g=el('g',{},svg),x=r.x+2,y=r.y+2,w=r.w-4,h=r.h-4;if(w<2||h<2)return;
+    if(n.children&&w>50&&h>46){
+      const box=el('rect',{x,y,width:w,height:h,rx:5,fill:catColor(n.cat),'fill-opacity':0.15,stroke:catColor(n.cat),'stroke-opacity':0.55,class:'seg'},g);box.__n=n;
+      label(g,x+7,y+14,n.name,fmt(n.size),w-14,true);
+      squarify(n.children.map(m=>({n:m,v:m.size})),x+3,y+21,w-6,h-24).forEach(q=>{
+        const qx=q.x+1,qy=q.y+1,qw=q.w-2,qh=q.h-2;if(qw<1||qh<1)return;
+        const rr=el('rect',{x:qx,y:qy,width:qw,height:qh,rx:3,fill:catColor(q.n.cat),'fill-opacity':0.82,class:'seg'},g);rr.__n=q.n;
+        if(q.n.cat==='hidden'){rr.setAttribute('stroke','var(--dim)');rr.setAttribute('stroke-dasharray','3 3');}
+        if(qw>58&&qh>34) label(g,qx+6,qy+15,q.n.name,fmt(q.n.size),qw-10,false);
+      });
+    } else {
+      const rr=el('rect',{x,y,width:w,height:h,rx:5,fill:catColor(n.cat),'fill-opacity':0.82,class:'seg'},g);rr.__n=n;
+      if(n.cat==='hidden'){rr.setAttribute('stroke','var(--dim)');rr.setAttribute('stroke-dasharray','3 3');}
+      if(w>58&&h>34) label(g,x+7,y+16,n.name,fmt(n.size),w-12,false);
+    }
+  });
+  svg.addEventListener('mouseover',e=>{const n=e.target.__n;if(!n)return;svg.classList.add('hovering');e.target.classList.add('hot');o.onHover&&o.onHover(n);});
+  svg.addEventListener('mouseout',e=>{if(!e.target.__n)return;e.target.classList.remove('hot');svg.classList.remove('hovering');o.onHover&&o.onHover(null);});
+  svg.addEventListener('click',e=>{const n=e.target.__n;if(!n||!o.onFocus)return;
+    if(n.children) o.onFocus(n); else if(n.parent&&n.parent!==focus) o.onFocus(n.parent);});
+}
+
+/* ---------- список и крошки ---------- */
+function sizeList(host,focus,onFocus,limit){
+  host.innerHTML='';const kids=(focus.children||[]).slice(0,limit||99);const mx=kids.length?kids[0].size:1;
+  kids.forEach(n=>{const r=document.createElement('div');r.className='srow';r.tabIndex=0;
+    r.innerHTML=`<i style="background:${catColor(n.cat)}"></i><span class="nm" title="${n.name}">${n.name}</span><span class="bar"><b style="width:${(n.size/mx*100).toFixed(1)}%;background:${catColor(n.cat)}"></b></span><span class="sz">${fmt(n.size)}</span>`;
+    if(n.children&&onFocus){r.addEventListener('click',()=>onFocus(n));r.addEventListener('keydown',e=>{if(e.key==='Enter')onFocus(n);});} else r.style.cursor='default';
+    host.appendChild(r);});
+}
+function crumbs(host,focus,onFocus){
+  host.innerHTML='';crumbsOf(focus).forEach((n,i)=>{
+    if(i){const s=document.createElement('span');s.textContent='›';host.appendChild(s);}
+    const b=document.createElement('button');b.textContent=n.name;b.addEventListener('click',()=>onFocus(n));host.appendChild(b);});
+}
+
+/* ---------- раздел V ---------- */
+const viz={focus:ROOT,mode:'both'};
+function hov(n){$('#viz-hover').innerHTML=n?`${pathOf(n)} — <b>${fmt(n.size)}</b> · ${CAT[n.cat]}`:'Наведите на сегмент.';}
+function setVizFocus(n){viz.focus=n;renderViz();}
+function renderViz(){
+  const wrap=$('#viz-wrap');wrap.classList.toggle('one',viz.mode!=='both');
+  $('#viz-sb').hidden=viz.mode==='tm';$('#viz-tm').hidden=viz.mode==='sb';
+  if(viz.mode!=='tm') sunburst($('#viz-sb'),{focus:viz.focus,size:460,onFocus:setVizFocus,onHover:hov});
+  if(viz.mode!=='sb') treemap($('#viz-tm'),{focus:viz.focus,w:viz.mode==='tm'?960:760,h:viz.mode==='tm'?520:560,onFocus:setVizFocus,onHover:hov});
+  crumbs($('#viz-crumbs'),viz.focus,setVizFocus);
+  sizeList($('#viz-list'),viz.focus,setVizFocus);
+  hov(null);
+}
+[['m-sb','sb'],['m-tm','tm'],['m-both','both']].forEach(([id,m])=>{
+  $('#'+id).addEventListener('click',()=>{viz.mode=m;document.querySelectorAll('#viz .seg-ctl button').forEach(b=>b.setAttribute('aria-pressed',String(b.id===id)));renderViz();});
+});
+renderViz();
+
+/* ---------- палитра ---------- */
+function swatches(host,list){list.forEach(([tok,name,note])=>{const d=document.createElement('div');d.className='sw';
+  d.innerHTML=`<i style="background:var(${tok})"></i><div><b>${name}</b><code>${tok}</code>${note?`<small>${note}</small>`:''}</div>`;host.appendChild(d);});}
+swatches($('#sw-base'),[['--bg','Сажа','фон окна'],['--surface','Печь','поверхности'],['--surface-2','Полок','приподнятое'],['--line','Брус','границы'],['--text','Лён','основной текст'],['--mute','Зола','вторичный текст'],['--wax','Воск','акцент и модель'],['--berry','Клюква','орнамент, открытые решения']]);
+swatches($('#sw-cat'),Object.keys(CAT).map(k=>['--c-'+k,CAT[k],'']));
+swatches($('#sw-safe'),[['--ok','Безопасно','пересоздаётся само'],['--warn','Восстановимо','можно скачать заново'],['--risk','Проверьте сами','могут быть данные']]);
+
+/* ---------- компоненты ---------- */
+const leaves=[];(function w(n){if(n.children)n.children.forEach(w);else leaves.push(n);})(ROOT);
+const byCat={};leaves.forEach(n=>{byCat[n.cat]=(byCat[n.cat]||0)+n.size;});
+Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]).forEach(k=>{const s=document.createElement('span');s.className='chip';
+  s.innerHTML=`<i style="background:${catColor(k)}"></i>${CAT[k]} <span>${fmt(byCat[k])}</span>`;$('#legend').appendChild(s);});
+sizeList($('#sample-rows'),BY['Developer'].parent,null,4);
+
+const RULES=[
+  {id:'xcode.derived-data',t:'Xcode · DerivedData',nodes:['Xcode · DerivedData'],s:'safe',p:'~/Library/Developer/Xcode/DerivedData',why:'Промежуточные результаты сборки. Xcode пересоздаст их при следующей сборке.'},
+  {id:'cargo.target',t:'Каталоги target/ (Rust)',nodes:['engram · target','quartz · target'],s:'safe',p:'~/Projects/*/target',why:'Артефакты сборки cargo. Восстанавливаются командой cargo build.'},
+  {id:'downloads.installers',t:'Установщики в Загрузках',nodes:['Установщики .dmg и .pkg'],s:'safe',p:'~/Downloads/*.dmg, *.pkg',why:'Установщики программ, которые уже установлены.'},
+  {id:'xcode.device-support',t:'iOS DeviceSupport',nodes:['iOS DeviceSupport'],s:'safe',p:'~/Library/Developer/Xcode/iOS DeviceSupport',why:'Символы для отладки на устройствах. Загрузятся снова при подключении устройства.'},
+  {id:'caches.user',t:'Кэши приложений',nodes:['Homebrew','com.spotify.client','org.swift.swiftpm','Yarn','Safari'],s:'safe',p:'~/Library/Caches',why:'Приложения пересоздадут кэши сами. Первый запуск может быть медленнее.'},
+  {id:'dev.deps',t:'node_modules и zig-cache',nodes:['boss · node_modules','clavis · node_modules','facet · zig-cache'],s:'safe',p:'~/Projects/*/node_modules, zig-cache',why:'Зависимости и кэш сборки. Восстанавливаются bun install и zig build.'},
+  {id:'xcode.simulators',t:'Симуляторы Xcode',nodes:['CoreSimulator · Devices'],s:'recover',p:'~/Library/Developer/CoreSimulator/Devices',why:'Симуляторы скачиваются заново, но данные приложений внутри них пропадут.'},
+  {id:'docker.vm',t:'Диск Docker',nodes:['Docker'],s:'check',p:'~/Library/Containers/com.docker.docker',why:'Внутри все образы и тома. Лучше чистить средствами Docker.'},
+  {id:'ios.backups',t:'Резервные копии iPhone и iPad',nodes:['MobileSync · Backup'],s:'check',p:'~/Library/Application Support/MobileSync/Backup',why:'Удаляйте, только если есть копия в iCloud.'},
+  {id:'xcode.archives',t:'Архивы Xcode',nodes:['Xcode · Archives'],s:'check',p:'~/Library/Developer/Xcode/Archives',why:'Выпущенные сборки с символами для разбора падений.'}
+];
+RULES.forEach(r=>{r.size=r.nodes.reduce((s,n)=>s+BY[n].size,0);r.cat=BY[r.nodes[0]].cat;});
+const SL={safe:['b-safe','Безопасно'],recover:['b-recover','Восстановимо'],check:['b-check','Проверьте сами']};
+function recCard(r,checked){const d=document.createElement('div');d.className='rec';
+  d.innerHTML=`<input type="checkbox" ${checked?'checked':''} aria-label="Выбрать ${r.t}"><div style="min-width:0"><h5>${r.t}</h5><div class="path">${r.p}</div><p class="why">${r.why}</p><div class="tags"><span class="badge ${SL[r.s][0]}">${SL[r.s][1]}</span><span class="prov">правило · ${r.id}</span></div></div><div class="amt">${fmt(r.size)}</div>`;return d;}
+function hypCard(){const n=BY['com.tinyapp.helper'];const d=document.createElement('div');d.className='rec hyp';
+  d.innerHTML=`<input type="checkbox" aria-label="Выбрать com.tinyapp.helper"><div style="min-width:0"><h5>com.tinyapp.helper</h5><div class="path">~/Library/Application Support/com.tinyapp.helper</div><p class="why">Похоже на остаток удалённого приложения TinyApp. Последнее обращение 14 месяцев назад.</p><div class="tags"><span class="badge b-check">Проверьте сами</span><span class="prov model">гипотеза модели</span></div></div><div class="amt">${fmt(n.size)}</div>`;return d;}
+$('#sample-recs').append(recCard(RULES[0],true),hypCard());
+
+const recHost=$('#recs');
+RULES.forEach(r=>recHost.appendChild(recCard(r,r.s==='safe')));recHost.appendChild(hypCard());
+const tot={safe:0,recover:0,check:0};RULES.forEach(r=>tot[r.s]+=r.size);
+const all=tot.safe+tot.recover+tot.check;
+$('#recs-total').textContent='Можно освободить '+fmt(all);
+$('#recs-split').textContent=`безопасно ${fmt(tot.safe)} · восстановимо ${fmt(tot.recover)} · проверьте ${fmt(tot.check)}`;
+$('#recs-btn').textContent='В Корзину Домового · '+fmt(tot.safe);
+
+const tray=$('#tray');RULES.filter(r=>r.s==='safe').forEach(r=>{const d=document.createElement('div');d.className='tray-row';
+  d.innerHTML=`<i style="background:${catColor(r.cat)}"></i><span style="color:var(--text);font-family:var(--f-ui);font-size:13.5px">${r.t}</span><span>${fmt(r.size)}</span>`;tray.appendChild(d);});
+$('#tray-sum').textContent=fmt(tot.safe);
+
+/* ---------- сайдбары макетов ---------- */
+const used=ROOT.size,free=DISK-used;
+function side(id,on){$(id).innerHTML=`<div class="grp">Диск</div><a href="#screens" class="${on==='disk'?'on':''}">Macintosh HD <span>${fmt(used)}</span></a>
+<div class="grp">Порядок</div><a href="#screens" class="${on==='recs'?'on':''}">Рекомендации <span>${fmt(all)}</span></a><a href="#screens" class="${on==='dup'?'on':''}">Дубликаты <span>4,3&nbsp;ГБ</span></a><a href="#screens" class="${on==='ai'?'on':''}">Домовой <span>AI</span></a>
+<div class="grp">Настройки</div><a href="#screens" class="${on==='model'?'on':''}">Модель <span>4,9&nbsp;ГБ</span></a>
+<div class="disk"><div class="prog"><b style="width:${(used/DISK*100).toFixed(1)}%"></b></div><small>свободно ${fmt(free)} из ${fmt(DISK)}</small></div>`;
+  $(id).querySelectorAll('a').forEach(a=>a.addEventListener('click',e=>e.preventDefault()));}
+side('#side-scan','disk');side('#side-main','disk');side('#side-recs','recs');side('#side-ai','ai');side('#side-dup','dup');side('#side-model','model');
+
+/* скан */
+function renderScan(){sunburst($('#scan-sb'),{focus:ROOT,size:380,depth:3,sweep:0.62,interactive:false,center:(t0,t1,t2)=>{t0.textContent='обойдено';t1.textContent='286,4 ГБ';t2.textContent='1,28 млн файлов';}});}
+renderScan();
+const mctx=document.createElement('canvas').getContext('2d');
+const meas=(f,t)=>{mctx.font=f;return mctx.measureText(t).width;};
+function truncEnd(t,f,max){if(meas(f,t)<=max)return t;let lo=0,hi=t.length;while(lo<hi){const m=(lo+hi+1)>>1;if(meas(f,t.slice(0,m).trimEnd()+'…')<=max)lo=m;else hi=m-1;}return t.slice(0,lo).trimEnd()+'…';}
+function truncMid(t,f,max){if(meas(f,t)<=max)return t;const cut=k=>{const tail=Math.ceil(k*0.6);return t.slice(0,k-tail)+'…'+t.slice(t.length-tail);};let lo=0,hi=t.length;while(lo<hi){const m=(lo+hi+1)>>1;if(meas(f,cut(m))<=max)lo=m;else hi=m-1;}return cut(lo);}
+const TP='~/Library/Application Support/MobileSync/Backup/00008110-001A2C3E4F56/Manifest.db';
+const TN='com.apple.dt.Xcode.DerivedData.Facet-gxkqzjwbvdemafbtyhlu';
+const TN3='Final Cut · библиотека проекта «Отпуск в Карелии 2026»';
+function renderTrunc(){const r=$('#trw');if(!r)return;const W=+r.value;$('#trw-v').textContent=W+' px';
+  document.querySelectorAll('.tr-box').forEach(b=>b.style.width=W+'px');const inner=W-22;
+  const fp='400 12.5px "JetBrains Mono", ui-monospace, monospace',fn='500 14px Onest, system-ui, sans-serif',fs='500 12.5px "JetBrains Mono", ui-monospace, monospace';
+  const a=$('#tr1'),b=$('#tr2'),c=$('#tr3n');
+  a.textContent=truncMid(TP,fp,inner);a.title=TP;b.textContent=truncEnd(TN,fn,inner);b.title=TN;
+  const sz='29,5 ГБ';$('#tr3s').textContent=sz;c.textContent=truncEnd(TN3,fn,inner-meas(fs,sz)-12);c.title=TN3;}
+$('#trw').addEventListener('input',renderTrunc);
+renderTrunc();
+const chatEl=$('#chat');if(chatEl) chatEl.scrollTop=chatEl.scrollHeight;
+
+/* главное окно */
+const mw={focus:ROOT};
+function setMw(n){mw.focus=n;renderMw();}
+function renderMw(){sunburst($('#mw-sb'),{focus:mw.focus,size:420,onFocus:setMw});crumbs($('#mw-crumbs'),mw.focus,setMw);sizeList($('#mw-list'),mw.focus,setMw,10);}
+$('#mw-free').textContent=`свободно ${fmt(free)}`;
+renderMw();
+
+/* ---------- вышивка ---------- */
+const MOTIF=["....x....","...x.x...","..x.o.x..",".x.o.o.x.","x.o.w.o.x",".x.o.o.x.","..x.o.x..","...x.x...","....x...."];
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function stitch(cv,animate){
+  const cs=getComputedStyle(document.documentElement),v=k=>cs.getPropertyValue(k).trim();
+  const col={x:v('--wax'),o:v('--berry'),w:v('--text'),'-':v('--berry')};
+  const cell=+(cv.dataset.cell||(cv.classList.contains('small')?4:7));
+  const W=cv.clientWidth||cv.parentElement.clientWidth;if(!W)return;
+  const rows=MOTIF.length,H=rows*cell,dpr=window.devicePixelRatio||1;
+  cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);cv.style.height=H+'px';
+  const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  ctx.lineWidth=Math.max(1,cell*0.24);ctx.lineCap='round';
+  const tw=MOTIF[0].length+1,cols=Math.floor(W/cell),tiles=Math.max(1,Math.floor((cols+1)/tw)),used=tiles*tw-1,off=Math.max(0,(W-used*cell)/2),st=[];
+  for(let cx=0;cx<used;cx++){const mx=cx%tw;for(let r=0;r<rows;r++){const ch=mx<tw-1?MOTIF[r][mx]:(r===4?'-':'.');if(ch!=='.')st.push([cx,r,col[ch]]);}}
+  const one=([cx,r,c])=>{const x=off+cx*cell,y=r*cell,i=cell*0.2;ctx.strokeStyle=c;ctx.beginPath();ctx.moveTo(x+i,y+i);ctx.lineTo(x+cell-i,y+cell-i);ctx.moveTo(x+cell-i,y+i);ctx.lineTo(x+i,y+cell-i);ctx.stroke();};
+  if(!animate||reduce){st.forEach(one);return;}
+  let i=0;const t0=performance.now();
+  (function f(t){const k=Math.min(1,(t-t0)/1400),target=Math.floor(k*st.length);while(i<target)one(st[i++]);if(k<1)requestAnimationFrame(f);else while(i<st.length)one(st[i++]);})(t0);
+}
+function allStitches(first){document.querySelectorAll('canvas.stitch').forEach(cv=>stitch(cv,first&&cv.id==='cover-stitch'));}
+const go=()=>{allStitches(true);renderViz();renderMw();renderScan();renderTrunc();};
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(go); else go();
+let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>allStitches(false),120);});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>allStitches(false));
+new MutationObserver(()=>allStitches(false)).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+/* ---------- токены ---------- */
+const css=[...document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
+const m=css.match(/:root\{[\s\S]*?\n\}/);
+$('#tok').textContent=m?m[0].replace(/;\s*/g,';\n  ').replace(/\{\s*/,'{\n  ').replace(/\n\s*\}$/,'\n}'):'';
+
+/* ---------- оглавление ---------- */
+const links=[...document.querySelectorAll('#toc-list a')];
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id));}});},{rootMargin:'-30% 0px -60% 0px'});
+document.querySelectorAll('section.sec').forEach(s=>io.observe(s));
+})();
+</script>
