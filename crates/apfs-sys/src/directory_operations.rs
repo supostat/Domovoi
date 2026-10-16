@@ -1,5 +1,6 @@
 use std::ffi::OsStr;
 use std::io;
+use std::mem::MaybeUninit;
 use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 
 use crate::c_string::c_string;
@@ -21,6 +22,20 @@ pub fn open_at(directory: BorrowedFd<'_>, name: &OsStr, flags: libc::c_int, mode
 
 pub fn open_search(directory: BorrowedFd<'_>, name: &OsStr) -> io::Result<OwnedFd> {
     open_at(directory, name, libc::O_SEARCH | libc::O_NOFOLLOW, 0)
+}
+
+pub fn stat_at(directory: BorrowedFd<'_>, name: &OsStr) -> io::Result<libc::stat> {
+    let name = c_string(name)?;
+    let mut status = MaybeUninit::<libc::stat>::uninit();
+    check(unsafe {
+        libc::fstatat(
+            directory.as_raw_fd(),
+            name.as_ptr(),
+            status.as_mut_ptr(),
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    })?;
+    Ok(unsafe { status.assume_init() })
 }
 
 pub fn mkdir_at(directory: BorrowedFd<'_>, name: &OsStr, mode: libc::mode_t) -> io::Result<()> {

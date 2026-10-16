@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use domovoi_apfs_sys::sys::{EF_NO_XATTRS, EF_SHARES_ALL_BLOCKS, UF_HIDDEN};
 use domovoi_apfs_sys::{
-    BulkListing, EntryAttributes, ObjectKind, PrivateSize, chflags, clone_at, copy_metadata, ftruncate,
+    AttributeSet, BulkListing, EntryAttributes, ObjectKind, chflags, clone_at, copy_metadata, ftruncate,
     last_used_xattr, mkdir_at, mmap_readonly, open_at, pwrite_at, real_dev, rename_swap, set_last_used_xattr,
     set_nocache, set_xattr,
 };
@@ -30,8 +30,8 @@ fn create_file(directory: BorrowedFd<'_>, name: &str, content: &[u8]) -> OwnedFd
     file
 }
 
-fn listing(directory: BorrowedFd<'_>, private_size: PrivateSize) -> BTreeMap<OsString, EntryAttributes> {
-    BulkListing::new(directory, private_size)
+fn listing(directory: BorrowedFd<'_>, attributes: AttributeSet) -> BTreeMap<OsString, EntryAttributes> {
+    BulkListing::new(directory, attributes)
         .map(|entry| {
             let entry = entry.expect("entry parses");
             (entry.name, entry.attributes.expect("entry has attributes"))
@@ -50,7 +50,7 @@ fn lists_names_kinds_sizes_and_identity_of_a_temp_tree() {
     let sparse = create_file(root.as_fd(), "sparse.bin", b"");
     ftruncate(sparse.as_fd(), SPARSE_LENGTH).expect("sparse file is extended");
 
-    let entries = listing(root.as_fd(), PrivateSize::Skip);
+    let entries = listing(root.as_fd(), AttributeSet::Extended);
     let names: Vec<_> = entries.keys().cloned().collect();
     assert_eq!(names, ["file.txt", "link", "sparse.bin", "subdir"].map(OsString::from));
 
@@ -80,7 +80,7 @@ fn reports_clones_and_hard_links_through_extended_attributes() {
     clone_at(root.as_fd(), OsStr::new("original"), root.as_fd(), OsStr::new("clone")).expect("file is cloned");
     fs::hard_link(temp.path().join("original"), temp.path().join("hardlink")).expect("hard link is created");
 
-    let entries = listing(root.as_fd(), PrivateSize::Include);
+    let entries = listing(root.as_fd(), AttributeSet::ExtendedWithPrivateSize);
     let original = &entries[OsStr::new("original")];
     let clone = &entries[OsStr::new("clone")];
     let hardlink = &entries[OsStr::new("hardlink")];
@@ -105,7 +105,7 @@ fn keeps_a_name_of_255_utf16_units() {
     let root = temp.open();
     let name = "Ж".repeat(255);
     mkdir_at(root.as_fd(), OsStr::new(&name), 0o755).expect("directory with a long name is created");
-    let entries = listing(root.as_fd(), PrivateSize::Skip);
+    let entries = listing(root.as_fd(), AttributeSet::Extended);
     assert_eq!(entries.keys().cloned().collect::<Vec<_>>(), vec![OsString::from(name)]);
 }
 
@@ -124,7 +124,7 @@ fn writes_metadata_that_the_listing_and_readers_see() {
         last_used_xattr(file.as_fd()).expect("last used date is read"),
         Some(opened_at)
     );
-    let marked = &listing(root.as_fd(), PrivateSize::Skip)[OsStr::new("marked")];
+    let marked = &listing(root.as_fd(), AttributeSet::Extended)[OsStr::new("marked")];
     assert_ne!(marked.flags & UF_HIDDEN, 0);
     assert!(
         marked

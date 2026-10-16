@@ -31,6 +31,14 @@ cargo fmt --all -- --check
 | `cargo xtask theme` | Генерирует `crates/theme/src/generated.rs` из токенов раздела XI книги. |
 | `cargo xtask theme --check` | Падает, если сгенерированный модуль расходится с книгой. |
 
+## Переменные тестов и бенчей
+
+| Переменная | Что делает |
+|---|---|
+| `DOMOVOI_TEST_TIMEOUT_SECS` | Таймаут ожиданий в тестах (отсоединение образа, события FSEvents, история событий); по умолчанию 10 с. |
+| `DOMOVOI_IMAGE_BACKEND` | Бэкенд образов testkit: `hdiutil` (по умолчанию) или `diskutil`. Корень тома `diskutil image` принадлежит root, поэтому этот бэкенд монтирует с `noowners`. |
+| `DOMOVOI_BENCH_PURGE` | `1` — бенч `full_scan` сбрасывает кэш через `purge` перед первым проходом (нужен root). |
+
 ## Шрифты
 
 Onest 2.001 и JetBrains Mono 2.304 лежат в `assets/fonts/` вместе с лицензиями OFL 1.1. Манифест `assets/fonts/fonts.toml` хранит источник и SHA-256 каждого файла; тест `typography` сверяет файлы с манифестом. В приложение шрифты подключаются ключом `ATSApplicationFontsPath`.

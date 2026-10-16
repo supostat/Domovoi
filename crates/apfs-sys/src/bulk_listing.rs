@@ -2,8 +2,8 @@ use std::io;
 use std::os::fd::{AsRawFd, BorrowedFd};
 
 use crate::attribute_reader::packed_group;
+use crate::attribute_set::AttributeSet;
 use crate::bulk_entry::BulkEntry;
-use crate::private_size::PrivateSize;
 use crate::sys::{
     ATTR_BIT_MAP_COUNT, ATTR_CMN_ADDEDTIME, ATTR_CMN_CRTIME, ATTR_CMN_ERROR, ATTR_CMN_FILEID, ATTR_CMN_FLAGS,
     ATTR_CMN_MODTIME, ATTR_CMN_NAME, ATTR_CMN_OBJTYPE, ATTR_CMN_RETURNED_ATTRS, ATTR_CMNEXT_CLONE_REFCNT,
@@ -13,12 +13,14 @@ use crate::sys::{
 };
 
 const INITIAL_CAPACITY: usize = 256 * 1024;
+const EXTENDED_ATTRIBUTES: u32 =
+    ATTR_CMNEXT_REALDEVID | ATTR_CMNEXT_LINKID | ATTR_CMNEXT_CLONEID | ATTR_CMNEXT_EXT_FLAGS | ATTR_CMNEXT_CLONE_REFCNT;
 const MAXIMUM_CAPACITY: usize = 16 * 1024 * 1024;
 
 #[derive(Debug)]
 pub struct BulkListing<'directory> {
     directory: BorrowedFd<'directory>,
-    private_size: PrivateSize,
+    attributes: AttributeSet,
     buffer: Vec<u8>,
     position: usize,
     entries_left: u32,
@@ -26,14 +28,14 @@ pub struct BulkListing<'directory> {
 }
 
 impl<'directory> BulkListing<'directory> {
-    pub fn new(directory: BorrowedFd<'directory>, private_size: PrivateSize) -> Self {
-        Self::with_capacity(directory, private_size, INITIAL_CAPACITY)
+    pub fn new(directory: BorrowedFd<'directory>, attributes: AttributeSet) -> Self {
+        Self::with_capacity(directory, attributes, INITIAL_CAPACITY)
     }
 
-    fn with_capacity(directory: BorrowedFd<'directory>, private_size: PrivateSize, capacity: usize) -> Self {
+    fn with_capacity(directory: BorrowedFd<'directory>, attributes: AttributeSet, capacity: usize) -> Self {
         Self {
             directory,
-            private_size,
+            attributes,
             buffer: vec![0; capacity],
             position: 0,
             entries_left: 0,
@@ -43,7 +45,7 @@ impl<'directory> BulkListing<'directory> {
 
     fn fill(&mut self) -> io::Result<bool> {
         loop {
-            let mut request = request(self.private_size);
+            let mut request = request(self.attributes);
             let count = unsafe {
                 libc::getattrlistbulk(
                     self.directory.as_raw_fd(),
@@ -105,10 +107,11 @@ impl Iterator for BulkListing<'_> {
     }
 }
 
-fn request(private_size: PrivateSize) -> libc::attrlist {
-    let private_size_attribute = match private_size {
-        PrivateSize::Skip => 0,
-        PrivateSize::Include => ATTR_CMNEXT_PRIVATESIZE,
+fn request(attributes: AttributeSet) -> libc::attrlist {
+    let extended = match attributes {
+        AttributeSet::Base => 0,
+        AttributeSet::Extended => EXTENDED_ATTRIBUTES,
+        AttributeSet::ExtendedWithPrivateSize => EXTENDED_ATTRIBUTES | ATTR_CMNEXT_PRIVATESIZE,
     };
     libc::attrlist {
         bitmapcount: u16::try_from(ATTR_BIT_MAP_COUNT).expect("the bitmap count fits in u16"),
@@ -125,12 +128,7 @@ fn request(private_size: PrivateSize) -> libc::attrlist {
         volattr: 0,
         dirattr: ATTR_DIR_MOUNTSTATUS,
         fileattr: ATTR_FILE_LINKCOUNT | ATTR_FILE_TOTALSIZE | ATTR_FILE_ALLOCSIZE | ATTR_FILE_DATAALLOCSIZE,
-        forkattr: ATTR_CMNEXT_REALDEVID
-            | ATTR_CMNEXT_LINKID
-            | ATTR_CMNEXT_CLONEID
-            | ATTR_CMNEXT_EXT_FLAGS
-            | ATTR_CMNEXT_CLONE_REFCNT
-            | private_size_attribute,
+        forkattr: extended,
     }
 }
 
@@ -140,7 +138,7 @@ mod tests {
     use std::os::fd::AsFd;
 
     use super::BulkListing;
-    use crate::private_size::PrivateSize;
+    use crate::attribute_set::AttributeSet;
 
     #[test]
     fn grows_a_buffer_too_small_for_one_entry() {
@@ -148,7 +146,7 @@ mod tests {
         fs::create_dir_all(&directory).expect("temp directory is created");
         fs::write(directory.join("a".repeat(200)), b"content").expect("file is written");
         let handle = File::open(&directory).expect("directory opens");
-        let names: Vec<_> = BulkListing::with_capacity(handle.as_fd(), PrivateSize::Skip, 16)
+        let names: Vec<_> = BulkListing::with_capacity(handle.as_fd(), AttributeSet::Extended, 16)
             .map(|entry| entry.expect("entry parses").name)
             .collect();
         fs::remove_dir_all(&directory).expect("temp directory is removed");

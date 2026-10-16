@@ -9,7 +9,7 @@ use std::process::Command;
 
 use domovoi_apfs_sys::sys::IOPOL_UTILITY;
 use domovoi_apfs_sys::{
-    AccessError, BulkListing, PrivateSize, container_capacity, data_volume, firmlinks, gen_count, mkdir_at, open_at,
+    AccessError, AttributeSet, BulkListing, container_capacity, data_volume, firmlinks, gen_count, mkdir_at, open_at,
     open_search, pids_with_open, private_size, process_path, raise_nofile_limit, real_dev, running_bundle_roots,
     set_thread_disk_policy_utility, set_vfs_policies, snapshots, thread_disk_policy, volume_capabilities, volume_used,
 };
@@ -128,7 +128,7 @@ fn search_only_directory_opens_for_search_but_refuses_listing() {
         0,
     );
     let searchable = open_search(root.as_fd(), name).expect("search-only directory opens for search");
-    let first = BulkListing::new(searchable.as_fd(), PrivateSize::Skip).next();
+    let first = BulkListing::new(searchable.as_fd(), AttributeSet::Extended).next();
     fs::set_permissions(temp.path().join(name), fs::Permissions::from_mode(0o755)).expect("permissions are restored");
 
     assert!(matches!(
