@@ -1,0 +1,84 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: sccache
+  CMAKE_C_COMPILER_LAUNCHER: sccache
+  CMAKE_CXX_COMPILER_LAUNCHER: sccache
+
+jobs:
+  check:
+    name: check (${{ matrix.runner }})
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-26]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Metal Toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/DVTDownloads
+          key: metal-toolchain-${{ matrix.runner }}
+      - run: xcodebuild -downloadComponent metalToolchain
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup show
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo xtask check-comments
+      - run: cargo xtask check-tokens
+      - run: cargo xtask check-sources
+
+  hdiutil-canary:
+    name: hdiutil canary (${{ matrix.runner }})
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-26]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: create, attach and detach an APFS image with retry
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          hdiutil create -fs APFS -size 50m -volname canary "$work/canary.dmg"
+          mkdir "$work/mnt"
+          hdiutil attach -nobrowse -owners on -mountpoint "$work/mnt" "$work/canary.dmg"
+          echo probe > "$work/mnt/probe.txt"
+          sync
+          for attempt in 1 2 3 4 5; do
+            if hdiutil detach "$work/mnt"; then exit 0; fi
+            sleep $((attempt * 2))
+          done
+          hdiutil detach -force "$work/mnt"
+
+  nightly:
+    name: nightly (self-hosted Metal)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, macOS, ARM64]
+    continue-on-error: true
+    env:
+      DOMOVOI_GOLDEN_EXACT: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: cargo test --workspace -- --ignored
+      - run: cargo bench --workspace
+      - run: cargo xtask eval

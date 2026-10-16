@@ -445,7 +445,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   <h2><span class="rn">V</span>Визуализация</h2>
   <canvas class="stitch small" aria-hidden="true"></canvas>
   <div class="lead"><p>Обе раскладки построены на одной модели дерева, с общим фокусом, наведением и hit-testing. Различаются только раскладка и шейдер сегмента. Нажатие на сегмент открывает уровень в обеих диаграммах, центр солнца или крошки возвращают наверх. Данные — пример типичного Mac разработчика.</p></div>
-  <div class="note open">Решение открыто: sunburst, treemap или оба режима с переключателем. Ниже их можно сравнить на одних данных.</div>
+  <div class="note">Решено: оба режима с переключателем, по умолчанию sunburst. Ниже их можно сравнить на одних данных.</div>
   <div style="margin-top:26px">
     <div class="viz-bar">
       <div class="crumbs" id="viz-crumbs"></div>
@@ -521,14 +521,14 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
 
   <h3>Загрузка модели</h3>
   <div class="dl">
-    <div class="dl-top"><b>Стандартная · 7–8B · Q4</b><span class="badge b-recover">Загрузка</span></div>
+    <div class="dl-top"><b>Стандартная · T-lite-it-2.1 · Q4</b><span class="badge b-recover">Загрузка</span></div>
     <div class="prog"><b style="width:41%"></b></div>
-    <div class="dl-meta"><span>2,0 из 4,9 ГБ · 11,4 МБ/с · осталось ~4 мин</span><span>докачка поддерживается</span></div>
+    <div class="dl-meta"><span>2,1 из 5,0 ГБ · 11,4 МБ/с · осталось ~4 мин</span><span>докачка поддерживается</span></div>
     <div class="row"><button class="btn sm">Пауза</button><button class="btn sm ghost">Отменить</button></div>
   </div>
   <div class="dl" style="margin-top:12px">
-    <div class="dl-top"><b>Стандартная · 7–8B · Q4</b><span class="badge b-safe">Готова</span></div>
-    <div class="dl-meta"><span>SHA-256 совпадает · 4,9 ГБ · ~/Library/Application Support/Domovoi/models</span></div>
+    <div class="dl-top"><b>Стандартная · T-lite-it-2.1 · Q4</b><span class="badge b-safe">Готова</span></div>
+    <div class="dl-meta"><span>SHA-256 совпадает · 5,0 ГБ · ~/Library/Application Support/Domovoi/models</span></div>
   </div>
 </section>
 
@@ -663,7 +663,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
               <div class="dup-r"><input type="checkbox" checked aria-label="Удалить копию"><code>~/Downloads/thesis-final-v3.pdf</code><span class="mono">15 МБ</span></div>
             </div>
           </div>
-          <div class="note open" style="margin-top:16px">Решение открыто: удалять копии в Корзину, заменять их клонами APFS или давать выбор, как в этом макете.</div>
+          <div class="note" style="margin-top:16px">По умолчанию копии уходят в Корзину. «Заменить клоном» — явное действие для группы: доступно, когда копия одна на своём иноде, принадлежит вам, не открыта и не лежит в пакете или облачной папке.</div>
         </div>
       </div>
     </div></div>
@@ -677,15 +677,15 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
         <div class="side" id="side-model"></div>
         <div class="pane" style="display:grid;gap:14px">
           <div class="pane-head" style="margin:0"><div><h5>Локальная модель</h5><small>Этот Mac: 32 ГБ общей памяти · подходит любая из каталога</small></div></div>
-          <div class="dl"><div class="dl-top"><b>Компактная · 3–4B · Q4</b><button class="btn sm">Скачать · 2,4 ГБ</button></div><div class="dl-meta"><span>от 8 ГБ памяти · быстрые ответы, проще формулировки</span></div></div>
-          <div class="dl" style="border-color:var(--wax)"><div class="dl-top"><b>Стандартная · 7–8B · Q4</b><span class="badge b-safe">Активна</span></div><div class="dl-meta"><span>от 16 ГБ памяти · SHA-256 совпадает · 4,9 ГБ</span><button class="btn sm ghost">Удалить</button></div></div>
-          <div class="dl"><div class="dl-top"><b>Расширенная · 12–14B · Q4</b><span class="badge b-recover">41%</span></div><div class="prog"><b style="width:41%"></b></div><div class="dl-meta"><span>3,5 из 8,6 ГБ · 11,4 МБ/с</span><span><button class="btn sm">Пауза</button></span></div></div>
+          <div class="dl"><div class="dl-top"><b>Компактная · Qwen3.5-4B · Q4</b><button class="btn sm">Скачать · 2,7 ГБ</button></div><div class="dl-meta"><span>от 8 ГБ памяти · быстрые ответы, проще формулировки</span></div></div>
+          <div class="dl" style="border-color:var(--wax)"><div class="dl-top"><b>Стандартная · T-lite-it-2.1 · Q4</b><span class="badge b-safe">Активна</span></div><div class="dl-meta"><span>от 16 ГБ памяти · SHA-256 совпадает · 5,0 ГБ</span><button class="btn sm ghost">Удалить</button></div></div>
+          <div class="dl"><div class="dl-top"><b>Расширенная · Qwen3-14B · Q4</b><span class="badge b-recover">41%</span></div><div class="prog"><b style="width:41%"></b></div><div class="dl-meta"><span>3,7 из 9,0 ГБ · 11,4 МБ/с</span><span><button class="btn sm">Пауза</button></span></div></div>
           <div class="board" style="padding:16px;gap:12px">
             <div class="row" style="justify-content:space-between"><span>Выгружать модель из памяти после простоя</span>
               <select class="sel" id="unload" aria-label="Таймаут выгрузки"><option>сразу</option><option selected>через 5 минут</option><option>через 15 минут</option><option>через 60 минут</option><option>никогда</option></select></div>
             <div class="row" style="justify-content:space-between"><span>Источник загрузки</span><span class="mono" style="color:var(--mute)">huggingface.co &nbsp;<button class="btn sm ghost">Изменить</button></span></div>
           </div>
-          <div class="note open" style="margin:0">Конкретные модели каталога ещё не выбраны. Классы и размеры здесь условные.</div>
+          <div class="note" style="margin:0">Каталог — семейство ChatML, веса Apache-2.0: компактная Qwen3.5-4B, стандартная T-lite-it-2.1, расширенная Qwen3-14B.</div>
         </div>
       </div>
     </div></div>
@@ -719,7 +719,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
     <tr><td>нет доступа</td><td class="say">macOS скрыла 3 папки. Дайте полный доступ к диску, чтобы учесть их</td><td class="no">Ошибка доступа EPERM</td></tr>
     <tr><td>скрытое</td><td class="say">macOS удалит снапшоты сама, когда место понадобится</td><td class="no">Неизвестное системное пространство</td></tr>
     <tr><td>после очистки</td><td class="say">Перемещено в Корзину: 80,8 ГБ</td><td class="no">Готово! Ваш Mac теперь летает</td></tr>
-    <tr><td>модель</td><td class="say">Модель занимает 4,9 ГБ. Удалить можно здесь же</td><td class="no">Скачиваем AI…</td></tr>
+    <tr><td>модель</td><td class="say">Модель занимает 5,0 ГБ. Удалить можно здесь же</td><td class="no">Скачиваем AI…</td></tr>
   </table></div>
 </section>
 
@@ -774,7 +774,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
     <div><b>Дубликаты</b><span>Отдельная опция и отдельный проход: размер → частичный хэш → BLAKE3. Клоны APFS распознаются.</span></div>
     <div><b>Рекомендации</b><span>Решают детерминированные правила. Модель объясняет, классифицирует и отвечает на вопросы. Удаление только в Корзину, с denylist.</span></div>
     <div><b>Данные для модели</b><span>Только метаданные. Без содержимого файлов и без kMDItemWhereFroms.</span></div>
-    <div><b>Рантайм</b><span>llama.cpp на запиненном коммите, свои биндинги через bindgen, Metal-бэкенд со встроенной metallib.</span></div>
+    <div><b>Рантайм</b><span>llama.cpp на запиненном коммите, свои биндинги через bindgen, Metal-бэкенд; предкомпилированные metallib лежат в бандле сервиса.</span></div>
     <div><b>Инференс</b><span>XPC-сервис в бандле через libxpc, без сети. Выгрузка по таймауту из настроек.</span></div>
     <div><b>Формат ответов</b><span>Structured output и tool calling через грамматику GBNF. Шаблоны промптов свои для каждого семейства.</span></div>
     <div><b>Загрузка моделей</b><span>Свой загрузчик: докачка, пауза, отмена, SHA-256. Источник настраивается.</span></div>
@@ -782,11 +782,11 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
     <div><b>Интерфейс</b><span>AppKit через objc2 для окна, списков и чата. Metal только для диаграммы.</span></div>
     <div><b>Дистрибуция</b><span>Вне Mac App Store: Developer ID, notarization, обновления через Sparkle.</span></div>
   </div>
-  <h3>Открыто</h3>
+  <h3>Решено при планировании</h3>
   <div class="dec">
-    <div><b>Визуализация</b><span>Sunburst, treemap или оба режима (раздел V).</span></div>
-    <div><b>Действие над дубликатом</b><span>В Корзину, замена клоном APFS или выбор пользователя (экран 06).</span></div>
-    <div><b>Состав каталога</b><span>Конкретные модели под 8, 16 и 32+ ГБ: качество tool use и лицензии весов.</span></div>
+    <div><b>Визуализация</b><span>Оба режима с переключателем, по умолчанию sunburst (раздел V).</span></div>
+    <div><b>Действие над дубликатом</b><span>По умолчанию в Корзину; замена клоном APFS — явное действие для группы (экран 06).</span></div>
+    <div><b>Состав каталога</b><span>Семейство ChatML, Apache-2.0: Qwen3.5-4B, T-lite-it-2.1, Qwen3-14B (экран 07).</span></div>
   </div>
 </section>
 
@@ -812,7 +812,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
     <tr><td>тултип наведения</td><td><span class="who ak">AppKit</span></td><td class="say">лёгкая NSPanel над диаграммой</td><td class="say">путь в середине</td></tr>
     <tr><td>сегменты</td><td><span class="who mt">Metal</span></td><td class="say">инстансы: SDF-дуга или прямоугольник, один draw call</td><td>—</td></tr>
     <tr><td>центр солнца</td><td><span class="who mt">Metal</span></td><td class="say">атлас глифов, строка раскладывается через CTLine</td><td class="say">по хорде: уменьшение, затем многоточие</td></tr>
-    <tr><td>подписи treemap</td><td><span class="who mt">Metal</span></td><td class="say">тот же атлас, SDF для чёткости при зуме</td><td class="say">только при плитке больше порога, в конце</td></tr>
+    <tr><td>подписи treemap</td><td><span class="who mt">Metal</span></td><td class="say">растровый атлас на точный размер, при зуме масштабируется битмап до финального кадра</td><td class="say">только при плитке больше порога, в конце</td></tr>
     <tr><td>вышивка</td><td><span class="who cg">Core Graphics</span></td><td class="say">растеризуется один раз и кэшируется на масштаб экрана</td><td>—</td></tr>
   </table></div>
 
@@ -870,7 +870,7 @@ const ROOT=N('Macintosh HD','home',[
     N('Library','home',[
       N('Developer','dev',[N('Xcode · DerivedData','dev',38.2),N('CoreSimulator · Devices','dev',22.6),N('iOS DeviceSupport','dev',11.4),N('Xcode · Archives','dev',6.1)]),
       N('Containers','apps',[N('Docker','dev',48.0),N('Telegram','apps',8.7),N('Mail','apps',6.3),N('Прочие контейнеры','apps',4.2)]),
-      N('Application Support','apps',[N('MobileSync · Backup','docs',31.5),N('Domovoi · models','model',4.9),N('Slack','apps',3.1),N('Code','apps',2.4),N('com.tinyapp.helper','apps',1.7)]),
+      N('Application Support','apps',[N('MobileSync · Backup','docs',31.5),N('Domovoi · models','model',5.0),N('Slack','apps',3.1),N('Code','apps',2.4),N('com.tinyapp.helper','apps',1.7)]),
       N('Caches','cache',[N('Homebrew','cache',5.8),N('com.spotify.client','cache',4.4),N('org.swift.swiftpm','cache',3.2),N('Yarn','cache',2.9),N('Safari','cache',2.1)])
     ]),
     N('Pictures','media',[N('Photos Library','media',58.3),N('Прочие изображения','media',3.4)]),
@@ -1044,11 +1044,11 @@ sizeList($('#sample-rows'),BY['Developer'].parent,null,4);
 const RULES=[
   {id:'xcode.derived-data',t:'Xcode · DerivedData',nodes:['Xcode · DerivedData'],s:'safe',p:'~/Library/Developer/Xcode/DerivedData',why:'Промежуточные результаты сборки. Xcode пересоздаст их при следующей сборке.'},
   {id:'cargo.target',t:'Каталоги target/ (Rust)',nodes:['engram · target','quartz · target'],s:'safe',p:'~/Projects/*/target',why:'Артефакты сборки cargo. Восстанавливаются командой cargo build.'},
-  {id:'downloads.installers',t:'Установщики в Загрузках',nodes:['Установщики .dmg и .pkg'],s:'safe',p:'~/Downloads/*.dmg, *.pkg',why:'Установщики программ, которые уже установлены.'},
-  {id:'xcode.device-support',t:'iOS DeviceSupport',nodes:['iOS DeviceSupport'],s:'safe',p:'~/Library/Developer/Xcode/iOS DeviceSupport',why:'Символы для отладки на устройствах. Загрузятся снова при подключении устройства.'},
+  {id:'downloads.installers',t:'Установщики в Загрузках',nodes:['Установщики .dmg и .pkg'],s:'recover',p:'~/Downloads/*.dmg, *.pkg',why:'Установщики программ, которые уже установлены.'},
+  {id:'xcode.device-support',t:'iOS DeviceSupport',nodes:['iOS DeviceSupport'],s:'recover',p:'~/Library/Developer/Xcode/iOS DeviceSupport',why:'Символы для отладки на устройствах. Загрузятся снова при подключении устройства.'},
   {id:'caches.user',t:'Кэши приложений',nodes:['Homebrew','com.spotify.client','org.swift.swiftpm','Yarn','Safari'],s:'safe',p:'~/Library/Caches',why:'Приложения пересоздадут кэши сами. Первый запуск может быть медленнее.'},
   {id:'dev.deps',t:'node_modules и zig-cache',nodes:['boss · node_modules','clavis · node_modules','facet · zig-cache'],s:'safe',p:'~/Projects/*/node_modules, zig-cache',why:'Зависимости и кэш сборки. Восстанавливаются bun install и zig build.'},
-  {id:'xcode.simulators',t:'Симуляторы Xcode',nodes:['CoreSimulator · Devices'],s:'recover',p:'~/Library/Developer/CoreSimulator/Devices',why:'Симуляторы скачиваются заново, но данные приложений внутри них пропадут.'},
+  {id:'xcode.simulators',t:'Симуляторы Xcode',nodes:['CoreSimulator · Devices'],s:'check',p:'~/Library/Developer/CoreSimulator/Devices',why:'Симуляторы скачиваются заново, но данные приложений внутри них пропадут.'},
   {id:'docker.vm',t:'Диск Docker',nodes:['Docker'],s:'check',p:'~/Library/Containers/com.docker.docker',why:'Внутри все образы и тома. Лучше чистить средствами Docker.'},
   {id:'ios.backups',t:'Резервные копии iPhone и iPad',nodes:['MobileSync · Backup'],s:'check',p:'~/Library/Application Support/MobileSync/Backup',why:'Удаляйте, только если есть копия в iCloud.'},
   {id:'xcode.archives',t:'Архивы Xcode',nodes:['Xcode · Archives'],s:'check',p:'~/Library/Developer/Xcode/Archives',why:'Выпущенные сборки с символами для разбора падений.'}
@@ -1077,7 +1077,7 @@ $('#tray-sum').textContent=fmt(tot.safe);
 const used=ROOT.size,free=DISK-used;
 function side(id,on){$(id).innerHTML=`<div class="grp">Диск</div><a href="#screens" class="${on==='disk'?'on':''}">Macintosh HD <span>${fmt(used)}</span></a>
 <div class="grp">Порядок</div><a href="#screens" class="${on==='recs'?'on':''}">Рекомендации <span>${fmt(all)}</span></a><a href="#screens" class="${on==='dup'?'on':''}">Дубликаты <span>4,3&nbsp;ГБ</span></a><a href="#screens" class="${on==='ai'?'on':''}">Домовой <span>AI</span></a>
-<div class="grp">Настройки</div><a href="#screens" class="${on==='model'?'on':''}">Модель <span>4,9&nbsp;ГБ</span></a>
+<div class="grp">Настройки</div><a href="#screens" class="${on==='model'?'on':''}">Модель <span>5,0&nbsp;ГБ</span></a>
 <div class="disk"><div class="prog"><b style="width:${(used/DISK*100).toFixed(1)}%"></b></div><small>свободно ${fmt(free)} из ${fmt(DISK)}</small></div>`;
   $(id).querySelectorAll('a').forEach(a=>a.addEventListener('click',e=>e.preventDefault()));}
 side('#side-scan','disk');side('#side-main','disk');side('#side-recs','recs');side('#side-ai','ai');side('#side-dup','dup');side('#side-model','model');

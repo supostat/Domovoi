@@ -1,0 +1,96 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/apfs-sys",
+    "crates/testkit",
+    "crates/scanner",
+    "crates/index",
+    "crates/rules",
+    "crates/dups",
+    "crates/theme",
+    "crates/render",
+    "crates/grammar",
+    "crates/llama-sys",
+    "crates/xpc-sys",
+    "crates/inference-proto",
+    "crates/inference",
+    "crates/downloader",
+    "crates/agent",
+    "crates/eval",
+    "crates/app",
+    "crates/xtask",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[workspace.dependencies]
+domovoi-apfs-sys = { path = "crates/apfs-sys" }
+domovoi-testkit = { path = "crates/testkit" }
+domovoi-scanner = { path = "crates/scanner" }
+domovoi-index = { path = "crates/index" }
+domovoi-rules = { path = "crates/rules" }
+domovoi-dups = { path = "crates/dups" }
+domovoi-theme = { path = "crates/theme" }
+domovoi-render = { path = "crates/render" }
+domovoi-grammar = { path = "crates/grammar" }
+domovoi-llama-sys = { path = "crates/llama-sys" }
+domovoi-xpc-sys = { path = "crates/xpc-sys" }
+domovoi-inference-proto = { path = "crates/inference-proto" }
+domovoi-inference = { path = "crates/inference" }
+domovoi-downloader = { path = "crates/downloader" }
+domovoi-agent = { path = "crates/agent" }
+domovoi-eval = { path = "crates/eval" }
+
+objc2 = { version = "=0.6.5", default-features = false, features = ["std"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std"] }
+objc2-metal = { version = "=0.3.2", default-features = false, features = ["std"] }
+objc2-metal-kit = { version = "=0.3.2", default-features = false, features = ["std"] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std"] }
+objc2-core-text = { version = "=0.3.2", default-features = false, features = ["std"] }
+objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std"] }
+objc2-core-services = { version = "=0.3.2", default-features = false, features = ["std"] }
+block2 = { version = "=0.6.2", default-features = false, features = ["std"] }
+dispatch2 = { version = "=0.3.1", default-features = false, features = ["std"] }
+libc = "0.2.190"
+blake3 = { version = "1.8.7", features = ["rayon", "mmap"] }
+rayon = "1.12.0"
+rkyv = "0.8.18"
+bindgen = "0.73.2"
+cmake = "0.1.58"
+bytemuck = { version = "1.25.2", features = ["derive"] }
+scraper = "0.27.0"
+cssparser = "0.38.0"
+quote = "1"
+proc-macro2 = "1"
+prettyplease = "0.2"
+syn = { version = "2", features = ["full"] }
+tiny_http = "0.12"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+print_stderr = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
