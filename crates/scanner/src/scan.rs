@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io;
 use std::mem;
+use std::num::NonZeroUsize;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -38,6 +39,7 @@ pub fn scan(root: &Path, options: &ScanOptions) -> Result<ScanReport, ScanError>
         deferred: Mutex::new(Vec::new()),
     };
     let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(options.workers.map_or(0, NonZeroUsize::get))
         .stack_size(WORKER_STACK_BYTES)
         .thread_name(|index| format!("{WORKER_NAME}-{index}"))
         .start_handler(|_| set_thread_disk_policy_utility().expect("utility disk policy applies to scan workers"))

@@ -1,1 +1,50 @@
 #![deny(unsafe_code)]
+
+mod app;
+mod badges;
+mod cache;
+mod category;
+mod enrichment;
+#[allow(unsafe_code)]
+mod ffi;
+mod file_types;
+mod index;
+mod index_node;
+mod index_root;
+mod installed_applications;
+mod last_opened_source;
+mod measured;
+mod model_event;
+mod name_table;
+mod node_id;
+mod node_kind;
+mod path_rules;
+mod query;
+mod reach;
+mod reclaimable;
+mod rescan;
+mod safety_level;
+mod timestamp;
+mod volumes;
+
+pub use app::{App, AppId, Installation};
+pub use badges::Badges;
+pub use cache::{CacheError, CacheHeader, CachedIndex, cache_directory, open_cache, write_cache};
+pub use category::Category;
+pub use enrichment::Enrichment;
+pub use index::Index;
+pub use index_node::IndexNode;
+pub use index_root::{FirmlinkPair, IndexRoot};
+pub use installed_applications::InstalledApplications;
+pub use last_opened_source::LastOpenedSource;
+pub use measured::{Measured, Source};
+pub use model_event::ModelEvent;
+pub use name_table::NameId;
+pub use node_id::NodeId;
+pub use node_kind::NodeKind;
+pub use query::Query;
+pub use reach::Reach;
+pub use reclaimable::Reclaimable;
+pub use safety_level::{SafetyLevel, SafetyLevels};
+pub use timestamp::Timestamp;
+pub use volumes::{HiddenSpace, Volumes};

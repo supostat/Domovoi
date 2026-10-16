@@ -9,9 +9,10 @@ use std::process::Command;
 
 use domovoi_apfs_sys::sys::IOPOL_UTILITY;
 use domovoi_apfs_sys::{
-    AccessError, AttributeSet, BulkListing, container_capacity, data_volume, firmlinks, gen_count, mkdir_at, open_at,
-    open_search, pids_with_open, private_size, process_path, raise_nofile_limit, real_dev, running_bundle_roots,
-    set_thread_disk_policy_utility, set_vfs_policies, snapshots, thread_disk_policy, volume_capabilities, volume_used,
+    AccessError, AttributeSet, BulkListing, container_capacity, data_volume, firmlinks, gen_count, mkdir_at,
+    mounted_volumes, open_at, open_search, os_build_version, pids_with_open, private_size, process_path,
+    raise_nofile_limit, real_dev, running_bundle_roots, set_thread_disk_policy_utility, set_vfs_policies, snapshots,
+    thread_disk_policy, volume_capabilities, volume_used, volume_uuid,
 };
 use temp_dir::TempDir;
 
@@ -215,4 +216,42 @@ fn thread_disk_policy_becomes_utility() {
 fn process_policies_and_file_limit_are_raised() {
     set_vfs_policies().expect("VFS policies are set");
     assert!(raise_nofile_limit().expect("file limit is raised") > GUI_DEFAULT_FILE_LIMIT);
+}
+
+fn plist_string(plist: &str, key: &str) -> String {
+    plist
+        .split_once(&format!("<key>{key}</key>"))
+        .and_then(|(_, rest)| rest.split_once("<string>"))
+        .and_then(|(_, rest)| rest.split_once("</string>"))
+        .map_or_else(|| panic!("diskutil reports {key}"), |(value, _)| value.to_owned())
+}
+
+#[test]
+fn volume_identity_matches_diskutil() {
+    let data = data();
+    let plist = command_output(
+        "/usr/sbin/diskutil",
+        &["info", "-plist", data.to_str().expect("volume path is UTF-8")],
+    );
+    assert_eq!(
+        volume_uuid(&data).expect("volume UUID is read"),
+        plist_string(&plist, "VolumeUUID")
+    );
+    let data_mount = mounted_volumes()
+        .expect("mount table is read")
+        .into_iter()
+        .find(|volume| volume.root_data)
+        .expect("the root data volume is mounted");
+    assert_eq!(data_mount.mount_point, data);
+    assert_eq!(data_mount.file_system, "apfs");
+    assert_eq!(
+        data_mount.device,
+        Path::new("/dev").join(plist_string(&plist, "DeviceIdentifier"))
+    );
+}
+
+#[test]
+fn os_build_matches_sw_vers() {
+    let build = command_output("/usr/bin/sw_vers", &["-buildVersion"]);
+    assert_eq!(os_build_version().expect("build version is read"), build.trim());
 }

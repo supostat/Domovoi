@@ -7,3 +7,18 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+domovoi-apfs-sys.workspace = true
+domovoi-scanner.workspace = true
+libc.workspace = true
+objc2.workspace = true
+objc2-app-kit = { workspace = true, features = ["NSWorkspace"] }
+objc2-core-foundation = { workspace = true, features = ["CFArray", "CFDate", "CFString"] }
+objc2-core-services = { workspace = true, features = ["MDItem", "MDQuery", "Metadata"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSDictionary", "NSError", "NSString", "NSURL", "NSValue"] }
+objc2-uniform-type-identifiers = { workspace = true, features = ["UTType", "UTCoreTypes"] }
+rkyv.workspace = true
+
+[dev-dependencies]
+domovoi-testkit.workspace = true

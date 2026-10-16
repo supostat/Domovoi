@@ -1,3 +1,4 @@
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 
@@ -11,6 +12,7 @@ use crate::scan_progress::ScanProgress;
 #[derive(Debug)]
 pub struct ScanOptions {
     pub attributes: AttributeSet,
+    pub workers: Option<NonZeroUsize>,
     pub progress: Option<SyncSender<ScanProgress>>,
     pub cancel: CancelToken,
     pub protected: ProtectedFolders,
@@ -21,6 +23,7 @@ impl Default for ScanOptions {
     fn default() -> Self {
         Self {
             attributes: AttributeSet::Extended,
+            workers: None,
             progress: None,
             cancel: CancelToken::default(),
             protected: ProtectedFolders::default(),
