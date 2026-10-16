@@ -7,3 +7,9 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+domovoi-xpc-sys.workspace = true
+
+[dev-dependencies]
+domovoi-testkit.workspace = true

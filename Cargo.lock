@@ -347,6 +347,10 @@ version = "0.1.0"
 [[package]]
 name = "domovoi-inference-proto"
 version = "0.1.0"
+dependencies = [
+ "domovoi-testkit",
+ "domovoi-xpc-sys",
+]
 
 [[package]]
 name = "domovoi-llama-sys"
@@ -413,6 +417,12 @@ dependencies = [
 [[package]]
 name = "domovoi-xpc-sys"
 version = "0.1.0"
+dependencies = [
+ "bindgen",
+ "block2",
+ "domovoi-testkit",
+ "libc",
+]
 
 [[package]]
 name = "dtoa"

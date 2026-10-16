@@ -7,3 +7,16 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+adhoc = []
+
+[dependencies]
+block2.workspace = true
+libc.workspace = true
+
+[build-dependencies]
+bindgen.workspace = true
+
+[dev-dependencies]
+domovoi-testkit.workspace = true
