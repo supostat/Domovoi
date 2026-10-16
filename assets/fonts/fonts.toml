@@ -1,0 +1,21 @@
+[[font]]
+family = "Onest"
+version = "2.001"
+file = "Onest/Onest[wght].ttf"
+sha256 = "966c5c29b4755da84b6854d5c21dd4eaa2420225d0e9874de602de176d4a9f31"
+license = "OFL-1.1"
+license_file = "Onest/OFL.txt"
+license_sha256 = "071195d8806e226faeee60259c28ca67b458227af5195a73f5cfcab06e3003bc"
+source = "https://github.com/google/fonts/tree/4c1db3aec83c67dd223dd82a68c039cab30917a9/ofl/onest"
+upstream = "https://github.com/simpals/onest/tree/8739b1910618a15335e4cc48842052d0ee739ade"
+
+[[font]]
+family = "JetBrains Mono"
+version = "2.304"
+file = "JetBrainsMono/JetBrainsMono[wght].ttf"
+sha256 = "662a196d58f1183bf2d77428b6d5283fe3f45161ab021bea4036bc98e5cac016"
+license = "OFL-1.1"
+license_file = "JetBrainsMono/OFL.txt"
+license_sha256 = "30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad"
+source = "https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip"
+upstream = "https://github.com/JetBrains/JetBrainsMono/tree/v2.304"

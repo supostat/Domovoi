@@ -28,6 +28,12 @@ cargo fmt --all -- --check
 | `cargo xtask check-comments` | Падает, если комментарий в `crates/` ссылается на книгу, фазы или спеку. |
 | `cargo xtask check-tokens` | Падает на hex-цветах и `rgba(` вне крейтов `theme` и `xtask`. |
 | `cargo xtask check-sources` | Падает, если документ или книга расходятся с принятыми решениями. |
+| `cargo xtask theme` | Генерирует `crates/theme/src/generated.rs` из токенов раздела XI книги. |
+| `cargo xtask theme --check` | Падает, если сгенерированный модуль расходится с книгой. |
+
+## Шрифты
+
+Onest 2.001 и JetBrains Mono 2.304 лежат в `assets/fonts/` вместе с лицензиями OFL 1.1. Манифест `assets/fonts/fonts.toml` хранит источник и SHA-256 каждого файла; тест `typography` сверяет файлы с манифестом. В приложение шрифты подключаются ключом `ATSApplicationFontsPath`.
 
 ## Профили подписи
 

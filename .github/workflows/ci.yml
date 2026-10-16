@@ -43,6 +43,7 @@ jobs:
       - run: cargo xtask check-comments
       - run: cargo xtask check-tokens
       - run: cargo xtask check-sources
+      - run: cargo xtask theme --check
 
   hdiutil-canary:
     name: hdiutil canary (${{ matrix.runner }})

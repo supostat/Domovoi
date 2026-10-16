@@ -5,20 +5,27 @@ mod check_sources;
 mod check_tokens;
 mod comment_scan;
 mod finding;
+mod theme;
+mod theme_codegen;
+mod theme_stylesheet;
+mod theme_tokens;
+mod theme_value;
 mod workspace;
 
 use std::process::ExitCode;
 
 use finding::Finding;
 
-const USAGE: &str = "usage: cargo xtask <check-comments | check-tokens | check-sources>";
+const USAGE: &str = "usage: cargo xtask <check-comments | check-tokens | check-sources | theme [--check]>";
 
 fn main() -> ExitCode {
-    let task = std::env::args().nth(1);
-    let outcome = match task.as_deref() {
-        Some("check-comments") => check_comments::run(),
-        Some("check-tokens") => check_tokens::run(),
-        Some("check-sources") => check_sources::run(),
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    let outcome = match arguments.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        ["check-comments"] => check_comments::run(),
+        ["check-tokens"] => check_tokens::run(),
+        ["check-sources"] => check_sources::run(),
+        ["theme"] => theme::run(theme::Mode::Write),
+        ["theme", "--check"] => theme::run(theme::Mode::Check),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::from(2);

@@ -7,3 +7,11 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+block2.workspace = true
+bytemuck.workspace = true
+objc2.workspace = true
+objc2-app-kit = { workspace = true, features = ["NSAccessibility", "NSAppearance", "NSColor", "NSWorkspace", "objc2-core-foundation"] }
+objc2-core-foundation = { workspace = true, features = ["CFCGTypes"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSDate", "NSNotification", "NSOperation", "NSString", "NSTimeZone", "block2"] }
