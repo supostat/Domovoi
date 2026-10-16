@@ -68,8 +68,8 @@ scraper = "0.27.0"
 cssparser = "0.38.0"
 quote = "1"
 proc-macro2 = "1"
-prettyplease = "0.2"
-syn = { version = "2", features = ["full"] }
+prettyplease = "0.3"
+syn = { version = "3", features = ["full"] }
 tiny_http = "0.12"
 
 [workspace.lints.rust]
