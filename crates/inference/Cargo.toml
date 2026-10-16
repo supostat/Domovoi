@@ -19,9 +19,7 @@ domovoi-inference-proto.workspace = true
 domovoi-llama-sys.workspace = true
 domovoi-xpc-sys.workspace = true
 libc.workspace = true
-objc2.workspace = true
 objc2-foundation = { workspace = true, features = ["NSBundle", "NSString"] }
-objc2-metal = { workspace = true, features = ["MTLDevice"] }
 
 [dev-dependencies]
 domovoi-grammar.workspace = true

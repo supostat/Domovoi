@@ -5,7 +5,7 @@ use std::process;
 use std::ptr::{self, NonNull};
 use std::sync::Once;
 
-use domovoi_inference_proto::{ErrorCode, GenerateRequest, GenerationStats, ModelClass};
+use domovoi_inference_proto::{ErrorCode, GenerateRequest, GenerationStats, MemoryBudget, ModelClass};
 use domovoi_llama_sys::{
     GGML_BACKEND_DEVICE_TYPE_GPU, GGML_TYPE_Q8_0, LLAMA_FLASH_ATTN_TYPE_ENABLED, LLAMA_LOAD_MODE_MMAP,
     ggml_backend_dev_by_type, ggml_backend_dev_t, llama_backend_init, llama_context_default_params,
@@ -17,7 +17,6 @@ use crate::cancel_flag::CancelFlag;
 use crate::device_profile::DeviceProfile;
 use crate::inference_backend::InferenceBackend;
 use crate::loaded_model::LoadedModel;
-use crate::memory_budget::MemoryBudget;
 
 pub(crate) const BATCH_SIZE: u32 = 256;
 static BACKEND_INITIALISATION: Once = Once::new();

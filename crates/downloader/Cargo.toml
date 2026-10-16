@@ -7,3 +7,36 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+block2.workspace = true
+domovoi-apfs-sys.workspace = true
+domovoi-grammar.workspace = true
+domovoi-index.workspace = true
+domovoi-inference-proto.workspace = true
+domovoi-rules.workspace = true
+libc.workspace = true
+objc2.workspace = true
+objc2-foundation = { workspace = true, features = [
+  "NSArray",
+  "NSData",
+  "NSError",
+  "NSFileManager",
+  "NSObject",
+  "NSOperation",
+  "NSPathUtilities",
+  "NSString",
+  "NSURL",
+  "NSURLCache",
+  "NSURLRequest",
+  "NSURLResponse",
+  "NSURLSession",
+  "block2",
+] }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+domovoi-scanner.workspace = true
+domovoi-testkit.workspace = true
+tiny_http.workspace = true

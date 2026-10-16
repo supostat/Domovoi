@@ -137,7 +137,9 @@
   рёбра xpc → inference и llama-sys → inference покрыты тестами `xpc_bundle` и `tiny_gguf` (шире smoke);
   непрямые рёбра index / rules / dups → apfs-sys покрыты тестами фаз на temp-дереве и образе без моков; app →
   theme — `theme_pixels`; событие «Модель»: тип `ModelEvent` живёт в index, downloader его эмитит (ребро
-  downloader → index, тест `catalog`); рёбра `theme → apfs-sys`, `dups → grammar`, `grammar → llama-sys`,
+  downloader → index, тест `catalog`); downloader потребляет `MemoryBudget` / `ClassFootprint` из inference-proto
+  (тест `catalog`), `trash_item` из rules (тесты `download` и `storage` на образе) и xattr / `pwrite_at` из
+  apfs-sys; рёбра `theme → apfs-sys`, `dups → grammar`, `grammar → llama-sys`,
   `llama-sys → xpc`, `inference → downloader`, `downloader → agent`, `agent → render` — order-only.
 - [платформа] macOS 15+, только arm64 (Tahoe — последний релиз для Intel; классы каталога «по общей памяти» и
   Metal-бэкенд предполагают unified memory). Замеры разведки сделаны на macOS 26.1 — платформенные тесты
@@ -279,7 +281,21 @@
 - [каталог] GPU-бюджет `recommendedMaxWorkingSetSize` ≈ 74 % памяти (8 ГБ → ≈ 5,9 ГБ) на веса + KV + compute рядом
   с индексом скана 0,6–0,9 ГБ; `n_ctx` по классу 8k / 16k / 32k; выгрузка модели по
   `DISPATCH_SOURCE_TYPE_MEMORYPRESSURE` WARN (следующий запрос перезагружает), CRITICAL — аварийная выгрузка и отказ
-  от новой загрузки до спада давления.
+  от новой загрузки до спада давления. Таблица `ClassFootprint` и `MemoryBudget` живут в inference-proto рядом с
+  `ModelClass`: их читают и сервис (отказ в загрузке), и downloader (модель по умолчанию — класс по `hw.memsize`,
+  при нехватке бюджета ступенью ниже).
+- [загрузка] Проверено на HF (16.10.2026): resolve `huggingface.co/<repo>/resolve/<rev>/<file>` → 302 с
+  `X-Repo-Commit`, `X-Linked-Etag` = SHA-256 файла и `X-Linked-Size`; `Location` — подписанная ссылка xet-CDN
+  (`us.aws.cdn.hf.co/xet-bridge-us/…`) с `Expires=<unix>` ≈ 1 ч. ETag CDN — xet-хэш, НЕ SHA-256, и CDN игнорирует
+  `If-Range` (206 даже с чужим валидатором): загрузчик хранит ETag CDN в xattr `com.domovoi.download-validator`
+  частичного файла, шлёт его в `If-Range` и принимает 206 только при `Content-Range` ровно со смещения и том же ETag,
+  иначе начинает файл заново; SHA-256 сверяется с `X-Linked-Etag` до передачи и потоково (CommonCrypto) после. Делегат
+  `NSURLSession` отказывается от редиректа (completion с nil) — 302 приходит как финальный ответ; сессия ephemeral без
+  `URLCache`. Докачка после двух пауз с живого HF побайтно совпала с эталоном. У GGUF-репозиториев каталога, кроме
+  Qwen3-14B-GGUF, нет LICENSE: текст берётся из базовой модели на закреплённой ревизии (`license_source`), у
+  T-lite-it-2.1 его нет нигде — канонический Apache-2.0. Test-only записи — `assets/test/catalog.json` (tiny-random)
+  вне встроенного каталога. Отмена и удаление моделей — только в Корзину (`trash_item` из rules); `.Trashes` тома не
+  листается — тесты читают `.Trashes/<uid>`.
 - [сборка] objc2 0.7 / frameworks 0.4 объявлены (BREAKING `ivars` в `define_class!`); примеры objc2 на `main`
   написаны под нерелизный API — референс только тег `objc2-0.6.5`; код `define_class!` держит ivars отдельной
   структурой; libc 1.0 — в ту же фазу миграции.
