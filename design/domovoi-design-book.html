@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>DOMOVOI Design Book</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -72,10 +77,15 @@ p{margin:0}
 main{margin-left:240px;padding-left:max(40px,env(safe-area-inset-left,0px));padding-right:max(40px,env(safe-area-inset-right,0px))}
 .col{max-width:1040px;margin:0 auto;padding-block:0 140px}
 @media (max-width:980px){
-  .toc{position:static;width:auto;border-right:0;border-bottom:1px solid var(--line-soft);padding-block:20px;padding-right:max(16px,env(safe-area-inset-right,0px));padding-left:max(16px,env(safe-area-inset-left,0px))}
-  .toc ol{display:flex;flex-wrap:wrap;gap:4px}
-  .toc a{display:flex;gap:6px;padding:4px 8px;font-size:13px}
+  body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+  .toc{position:sticky;top:env(safe-area-inset-top,0px);bottom:auto;width:auto;display:flex;align-items:center;gap:14px;border-right:0;border-bottom:1px solid var(--line-soft);padding-block:10px;padding-right:0;padding-left:max(16px,env(safe-area-inset-left,0px));overflow:visible}
+  .toc-brand{font-size:16px;flex:none}
+  .toc ol{display:flex;flex-wrap:nowrap;gap:2px;overflow-x:auto;scrollbar-width:none;padding-right:max(16px,env(safe-area-inset-right,0px));-webkit-overflow-scrolling:touch}
+  .toc ol::-webkit-scrollbar{display:none}
+  .toc li{flex:none}
+  .toc a{display:flex;gap:6px;padding:6px 9px;font-size:13px;white-space:nowrap}
   .toc-sub,.toc-foot{display:none}
+  .sec{scroll-margin-top:64px}
   main{margin-left:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 }
 
@@ -330,6 +340,45 @@ input[type=range]{accent-color:var(--wax);width:min(320px,60vw)}
 .rules div{display:grid;grid-template-columns:44px minmax(0,1fr);gap:16px;padding:12px 0;border-bottom:1px solid var(--line-soft);font-size:14px;color:var(--mute)}
 .rules div::before{counter-increment:r;content:counter(r);font:500 12px/1.9 var(--f-mono);color:var(--wax)}
 .rules b{color:var(--text);font-weight:600}
+
+/* ===== телефон и узкие экраны ===== */
+@media (max-width:760px){
+  .cover{padding-block:40px 28px}
+  .thesis{font-size:18px}
+  .sec{padding-top:64px}
+  h2{font-size:24px;gap:12px}
+  h3{margin-top:34px}
+  .lead{font-size:15px}
+  .board{padding:16px}
+  .viz{padding:12px;gap:12px}
+  .mock{padding:4px 0 20px}
+  .win{min-width:0}
+  .win-bar .ttl{margin-right:0}
+  .win-body,.win-body.fixed{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  .win-body.fixed{height:560px}
+  .side{display:flex;gap:4px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line-soft);padding:8px 10px;scrollbar-width:none}
+  .side::-webkit-scrollbar{display:none}
+  .side .grp,.side .disk{display:none}
+  .side a{flex:none;white-space:nowrap;gap:6px}
+  .pane{padding:16px}
+  .win-body.fixed>.pane>.pane-head{margin:0 -16px 12px;padding:14px 16px 12px}
+  .main-grid{grid-template-columns:minmax(0,1fr)}
+  #mw-sb{max-width:360px;margin:0 auto;width:100%}
+  .onb{padding:24px 18px}
+  .chat{padding:14px}
+  .chat-in{margin:0 14px 14px}
+  .chat-foot{padding:0 14px 12px}
+  .msg,.tool{max-width:100%}
+  .rec{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"cb amt" "cb body";gap:6px 12px;padding:14px}
+  .rec>input{grid-area:cb}
+  .rec>div:not(.amt){grid-area:body}
+  .rec .amt{grid-area:amt;text-align:left}
+  .dup-r{padding:9px 12px}
+  .dup-h{padding:10px 12px}
+  .tray-total b{font-size:22px}
+  .screen-cap h4{font-size:16px}
+  .seg-ctl button{padding:8px 11px}
+}
 pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-radius:var(--r-m);background:var(--bg-2);overflow-x:auto;font:400 12.5px/1.7 var(--f-mono);color:var(--mute)}
 .dec{counter-reset:d;display:grid;gap:0;border-top:1px solid var(--line-soft)}
 .dec div{display:grid;grid-template-columns:44px 180px minmax(0,1fr);gap:16px;padding:12px 0;border-bottom:1px solid var(--line-soft);font-size:14px}
@@ -339,6 +388,9 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
 @media (max-width:640px){.dec div{grid-template-columns:36px minmax(0,1fr)}.dec div span{grid-column:2}}
 .foot{margin-top:96px;padding-top:24px;border-top:1px solid var(--line-soft);font:400 12px var(--f-mono);color:var(--dim);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 </style>
+</head>
+<body>
+
 
 <nav class="toc" aria-label="Оглавление">
   <div class="toc-brand">DOMOVOI</div>
@@ -1017,7 +1069,9 @@ function renderViz(){
   const wrap=$('#viz-wrap');wrap.classList.toggle('one',viz.mode!=='both');
   $('#viz-sb').hidden=viz.mode==='tm';$('#viz-tm').hidden=viz.mode==='sb';
   if(viz.mode!=='tm') sunburst($('#viz-sb'),{focus:viz.focus,size:460,onFocus:setVizFocus,onHover:hov});
-  if(viz.mode!=='sb') treemap($('#viz-tm'),{focus:viz.focus,w:viz.mode==='tm'?960:760,h:viz.mode==='tm'?520:560,onFocus:setVizFocus,onHover:hov});
+  if(viz.mode!=='sb'){const cw=Math.round($('#viz-tm').clientWidth||($('#viz-wrap').clientWidth-40)||760),w=Math.max(300,cw),
+    h=w<560?Math.round(w*1.3):Math.round(w*(viz.mode==='tm'?0.56:0.74));
+    treemap($('#viz-tm'),{focus:viz.focus,w,h,onFocus:setVizFocus,onHover:hov});}
   crumbs($('#viz-crumbs'),viz.focus,setVizFocus);
   sizeList($('#viz-list'),viz.focus,setVizFocus);
   hov(null);
@@ -1092,7 +1146,7 @@ function truncMid(t,f,max){if(meas(f,t)<=max)return t;const cut=k=>{const tail=M
 const TP='~/Library/Application Support/MobileSync/Backup/00008110-001A2C3E4F56/Manifest.db';
 const TN='com.apple.dt.Xcode.DerivedData.Facet-gxkqzjwbvdemafbtyhlu';
 const TN3='Final Cut · библиотека проекта «Отпуск в Карелии 2026»';
-function renderTrunc(){const r=$('#trw');if(!r)return;const W=+r.value;$('#trw-v').textContent=W+' px';
+function renderTrunc(){const r=$('#trw');if(!r)return;const avail=(r.closest('.board').clientWidth||600)-34;r.max=String(Math.max(160,Math.min(560,avail)));const W=Math.min(+r.value,+r.max);$('#trw-v').textContent=W+' px';
   document.querySelectorAll('.tr-box').forEach(b=>b.style.width=W+'px');const inner=W-22;
   const fp='400 12.5px "JetBrains Mono", ui-monospace, monospace',fn='500 14px Onest, system-ui, sans-serif',fs='500 12.5px "JetBrains Mono", ui-monospace, monospace';
   const a=$('#tr1'),b=$('#tr2'),c=$('#tr3n');
@@ -1131,7 +1185,7 @@ function stitch(cv,animate){
 function allStitches(first){document.querySelectorAll('canvas.stitch').forEach(cv=>stitch(cv,first&&cv.id==='cover-stitch'));}
 const go=()=>{allStitches(true);renderViz();renderMw();renderScan();renderTrunc();};
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(go); else go();
-let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>allStitches(false),120);});
+let rt,lastW=innerWidth;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{allStitches(false);if(innerWidth!==lastW){lastW=innerWidth;renderViz();renderTrunc();}},150);});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>allStitches(false));
 new MutationObserver(()=>allStitches(false)).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 
@@ -1142,7 +1196,10 @@ $('#tok').textContent=m?m[0].replace(/;\s*/g,';\n  ').replace(/\{\s*/,'{\n  ').r
 
 /* ---------- оглавление ---------- */
 const links=[...document.querySelectorAll('#toc-list a')];
-const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id));}});},{rootMargin:'-30% 0px -60% 0px'});
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>{const on=a.getAttribute('href')==='#'+e.target.id;a.classList.toggle('on',on);if(on){const ol=a.closest('ol');if(ol.scrollWidth>ol.clientWidth)ol.scrollTo({left:a.parentElement.offsetLeft-ol.offsetLeft-8,behavior:reduce?'auto':'smooth'});}});}});},{rootMargin:'-30% 0px -60% 0px'});
 document.querySelectorAll('section.sec').forEach(s=>io.observe(s));
 })();
 </script>
+
+</body>
+</html>
