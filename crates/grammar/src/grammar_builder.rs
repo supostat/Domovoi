@@ -6,7 +6,8 @@ use crate::schema_node::SchemaNode;
 
 const ROOT: &str = "root";
 const SPACE: &str = "space ::= \" \"?";
-const CHARACTER: &str = r#"char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})"#;
+const CHARACTER: &str =
+    r#"char ::= [^"\\\x7F\x00-\x1F\uD800-\uDFFF\U00110000-\U003FFFFF] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})"#;
 const INTEGER_DIGITS: &str = r#"("0" | [1-9] [0-9]{0,15})"#;
 const FRACTION: &str = r#"("." [0-9]{1,15})?"#;
 const ZERO_FRACTION: &str = r#"("." "0"{1,15})?"#;

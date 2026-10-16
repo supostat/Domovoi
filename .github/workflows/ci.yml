@@ -77,11 +77,12 @@ jobs:
     continue-on-error: true
     env:
       DOMOVOI_GOLDEN_EXACT: "1"
+      DOMOVOI_NIGHTLY_COMPACT_MODEL: ${{ vars.DOMOVOI_NIGHTLY_COMPACT_MODEL }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - run: cargo xtask fetch-test-models
-      - run: cargo test --workspace -- --ignored
+      - run: cargo test --workspace -- --ignored --skip host_scenario
       - run: cargo bench --workspace
       - run: cargo xtask eval

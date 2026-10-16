@@ -5,8 +5,8 @@
       "location": "assets/test/tiny-random.gguf",
       "url": null,
       "size": 114816,
-      "sha256": "3e721f5b25769e274efe3b1d8d2e4df34c3c19150926fd7eda38261e6fc64d2a",
-      "origin": "research/tiny_gguf.py, seed 0: llama, byte-level SentencePiece vocabulary of 259 tokens, n_embd 32, one layer, F32",
+      "sha256": "9e39ca5751cc6c2db588a21b153c6b3fe84885c45a7bc0fdab8f1c1d19ffdf1b",
+      "origin": "research/tiny_gguf.py, seed 0: llama, byte-level SentencePiece vocabulary of 259 tokens, n_embd 32, one head, one layer, F32",
       "license": "generated in this repository"
     },
     {

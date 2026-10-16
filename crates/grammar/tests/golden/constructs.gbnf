@@ -27,5 +27,5 @@ root-tail-4 ::= ("," space root-ratio-kv)? root-tail-5
 root-tail-3 ::= ("," space root-count-kv)? root-tail-4
 root-tail-2 ::= ("," space root-mode-kv)? root-tail-3
 root-tail-1 ::= ("," space root-flag-kv)? root-tail-2
-char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
+char ::= [^"\\\x7F\x00-\x1F\uD800-\uDFFF\U00110000-\U003FFFFF] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
 space ::= " "?

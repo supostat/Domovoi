@@ -48,6 +48,7 @@ const GENERATE: &CStr = c"generate";
 const TOKEN: &CStr = c"token";
 const DONE: &CStr = c"done";
 const CANCEL: &CStr = c"cancel";
+const READY: &CStr = c"ready";
 const ERROR: &CStr = c"error";
 
 #[derive(Debug)]
@@ -67,6 +68,7 @@ pub enum Message {
     },
     Done(GenerationStats),
     Cancel,
+    Ready,
     Error {
         code: ErrorCode,
         description: String,
@@ -83,12 +85,18 @@ impl Message {
             Self::Token { .. } => TOKEN,
             Self::Done(_) => DONE,
             Self::Cancel => CANCEL,
+            Self::Ready => READY,
             Self::Error { .. } => ERROR,
         }
     }
 
     pub fn encode(&self) -> io::Result<XpcDictionary> {
         let mut dictionary = XpcDictionary::new();
+        self.encode_into(&mut dictionary)?;
+        Ok(dictionary)
+    }
+
+    pub fn encode_into(&self, dictionary: &mut XpcDictionary) -> io::Result<()> {
         dictionary.set_u64(VERSION, PROTOCOL_VERSION);
         dictionary.set_string(KIND, self.kind());
         match self {
@@ -102,16 +110,16 @@ impl Message {
                 dictionary.set_string(CLASS, class.name());
                 dictionary.set_u64(CONTEXT_LENGTH, u64::from(*context_length));
             }
-            Self::Generate(request) => encode_generate(&mut dictionary, request),
+            Self::Generate(request) => encode_generate(dictionary, request),
             Self::Token { text } => dictionary.set_bytes(TEXT, text.as_bytes()),
-            Self::Done(stats) => encode_done(&mut dictionary, stats),
+            Self::Done(stats) => encode_done(dictionary, stats),
             Self::Error { code, description } => {
                 dictionary.set_string(CODE, code.name());
                 dictionary.set_bytes(DESCRIPTION, description.as_bytes());
             }
-            Self::Unload | Self::Cancel => {}
+            Self::Unload | Self::Cancel | Self::Ready => {}
         }
-        Ok(dictionary)
+        Ok(())
     }
 
     pub fn decode(dictionary: &XpcDictionary) -> Result<Self, DecodeError> {
@@ -139,6 +147,7 @@ impl Message {
             }),
             kind if kind == DONE => decode_done(dictionary).map(Self::Done),
             kind if kind == CANCEL => Ok(Self::Cancel),
+            kind if kind == READY => Ok(Self::Ready),
             kind if kind == ERROR => Ok(Self::Error {
                 code: named_field(dictionary, CODE, ErrorCode::from_name)?,
                 description: text_field(dictionary, DESCRIPTION)?,

@@ -219,11 +219,17 @@
   ИСХОДНИКОВ для запасной компиляции (`<путь>/kernels/*.metal`), не путь к metallib — тест с Metal и без бандла
   кладёт metallib из `domovoi_llama_sys::METALLIB_DIRECTORY` рядом с бинарником. `LLAMA_CURL` на пине устарел
   (только предупреждение); сеть из сборки убирает `LLAMA_OPENSSL=OFF`.
-- [инференс] `n_gpu_layers=0` Metal не отключает; CPU-профиль = пустой `devices` в `llama_model_params` плюс
-  окружение `GGML_METAL_DEVICES=0` (иначе даже `vocab_only` создаёт MTLDevice); `abort_callback` работает только
-  на CPU, для Metal — `ggml_backend_metal_set_abort_callback` через `ggml_backend_dev_init` и `n_batch ≤ 256`;
-  модель из дескриптора — `fdopen` → `llama_model_load_from_file_ptr` (llama.h на пине, строка 532),
-  `load_mode = MMAP` (секция данных GGUF выровнена на 32 байта).
+- [инференс] `n_gpu_layers=0` Metal не отключает; CPU-профиль = пустой `devices` в `llama_model_params` плюс окружение
+  `GGML_METAL_DEVICES=0` (иначе даже `vocab_only` создаёт MTLDevice); GPU-профиль = `devices` из одного
+  `ggml_backend_dev_by_type(GPU)` — без Metal-устройства загрузка завершается ошибкой, а не тихим CPU-фолбэком.
+  `llama_set_abort_callback` на пине раздаёт колбэк всем бэкендам контекста через proc-адрес
+  `ggml_backend_set_abort_callback` (Metal включён), но Metal на пине проверяет его только в capture-режиме — отмена
+  срабатывает на границе графа (ubatch): задержка ≈ время одного ubatch, на M4 Pro с Qwen3.5-4B при `n_batch =
+  n_ubatch = 256` — 222–228 мс после прогрева (первый decode собирает pipeline-объекты ядер, 522 мс);
+  `metal_cancel_latency` прогревает; TPOT через сервис в песочнице 17,6 мс против 17,7–18,1 мс in-process (≤ 2,3 %);
+  `llama_decode` возвращает 2 при отмене. Модель из дескриптора — `fdopen` → `llama_model_load_from_file_ptr` (llama.h
+  на пине, строка 532), `load_mode = MMAP` (секция данных GGUF выровнена на 32 байта); `FILE*` остаётся за вызывающим.
+  KV q8_0 требует размер головы, кратный 32: tiny-GGUF — одна голова 32.
 - [инференс] `llama_sampler_init_grammar` возвращает NULL на невалидной грамматике (NULL в цепочке — UB) и no-op
   на пустой строке; `llama_sampler_init_grammar_lazy` deprecated; KV-кэш не ниже q8_0; под грамматикой ≈ 2× время
   на токен (issue #4218 открыт).
@@ -235,15 +241,27 @@
   `CFBundlePackageType XPC!`); анонимные listener/endpoint есть только в connection-API (`xpc_connection_create(NULL)`,
   `xpc_endpoint_create`, `xpc_connection_create_from_endpoint`) — ими тестируется кодирование протокола в одном
   процессе; `xpc_listener_*`/`xpc_session_*` покрываются только тестом из временного `TestHost.app` с ad-hoc
-  подписью (проверено для launchd; с entitlements песочницы — проверяется тем же тестом). Решение 9 обеспечивается
-  entitlements сервиса `com.apple.security.app-sandbox` без `network.client`; веса — через `xpc_fd_create`; работа
-  Metal внутри App Sandbox сводом не подтверждена — ночной тест на self-hosted.
+  подписью. Решение 9 обеспечивается entitlements сервиса `com.apple.security.app-sandbox` без `network.client`:
+  TCP-соединение даже на localhost из сервиса — EPERM, веса через `xpc_fd_create` читаются; Metal из бандла сервиса в
+  песочнице работает (`metal_in_sandbox`, M4 Pro, macOS 26.1; ночной тест остаётся). Хост `TestHost.app` — копия
+  самого тестового бинарника (`--exact host_scenario --ignored`; ночной `--ignored` идёт с `--skip host_scenario`),
+  сервис — копия бинарника с боевым `Info.plist` (идентификатор подменён `plutil`, ключ Team ID удалён,
+  `XPCService.EnvironmentVariables` вставлены) и metallib в `Contents/Resources`; после падения сервиса новая сессия
+  получает новый процесс (другой pid). Таймер выгрузки сервиса — `DOMOVOI_INFERENCE_IDLE_UNLOAD_SECS` из plist
+  (тесты); настройку пользователя исполняет приложение командой `unload` («сразу» — после `done`). `FakeBackend`
+  исполняет строки промпта: `token <текст>`, `delay <мс>`, `fail <код> <описание>`, `hang`, `crash`, `probe-network
+  <адрес>`, `weights`. Ночные тесты с моделью каталога берут путь к GGUF компактной записи из
+  `DOMOVOI_NIGHTLY_COMPACT_MODEL` (переменная репозитория для self-hosted раннера).
 - [грамматика] GBNF ставит `-INFINITY` недопустимым токенам — даже случайная модель выдаёт валидный JSON (ветку
-  `tool_call`/`final` она выбирает произвольно); правило `space` без пробельных цепочек, `n_predict ≥ 256` в
-  тестах; `maxLength ≥ 2000` ломает парсер. По arXiv:2606.25605 (medium: модели и движки не названы) совмещение
+  `tool_call`/`final` она выбирает произвольно); правило `space` без пробельных цепочек, `n_predict ≥ 256` в тестах;
+  `maxLength ≥ 2000` ломает парсер. `decode_utf8` сэмплера на пине маскирует ведущий байт по полубайту: F5–FF
+  декодируются как 4-байтные последовательности до 0x3FFFFF, суррогаты и overlong не проверяются — случайная модель
+  под грамматикой выдавала невалидный UTF-8; класс `char` исключает `\uD800-\uDFFF` и `\U00110000-\U003FFFFF`,
+  overlong грамматикой не закрывается — его ловит строгий парсер (`test-gbnf-validator` декодирует строго через
+  unicode.cpp и путь сэмплера не представляет). По arXiv:2606.25605 (medium: модели и движки не названы) совмещение
   tool calling и схемы ответа в одном проходе может подавлять вызовы; формат «один объект: вызов или ответ» — тот же
-  сценарий, поэтому метрика эвала «доля вызовов инструмента при явной необходимости» гейтит фиксацию формата;
-  схема и пример видны в system-промпте.
+  сценарий, поэтому метрика эвала «доля вызовов инструмента при явной необходимости» гейтит фиксацию формата; схема и
+  пример видны в system-промпте.
 - [каталог] Только семейство ChatML, все Apache-2.0, GGUF Q4_K_M: компактная — Qwen3.5-4B 2,74 ГБ (primary),
   Qwen3-4B-Instruct-2507 2,50 ГБ; стандартная — T-lite-it-2.1 5,03 ГБ (primary, ruBFCL 56,5, non-thinking),
   Qwen3.5-9B 5,68 ГБ; расширенная — Qwen3-14B 9,00 ГБ (primary, единственный кандидат: Hermes-4-14B без

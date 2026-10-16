@@ -63,6 +63,7 @@ fn messages(weights: &File) -> Vec<Message> {
             stop: StopReason::EndOfGeneration,
         }),
         Message::Cancel,
+        Message::Ready,
         Message::Error {
             code: ErrorCode::InvalidGrammar,
             description: "grammar root is missing".to_owned(),

@@ -1,7 +1,7 @@
 """Generate assets/test/tiny-random.gguf, a deterministic random llama model for CPU tests.
 
-Architecture llama, one layer, n_embd 32, n_ff 64, two heads, F32 weights drawn from a normal distribution with
-seed 0. The vocabulary is a byte-level SentencePiece one: <unk>, <s>, </s> and the 256 byte tokens <0x00>…<0xFF>,
+Architecture llama, one layer, n_embd 32, n_ff 64, a single head of 32 (q8_0 KV blocks need a head size that is
+a multiple of 32), F32 weights drawn from a normal distribution with seed 0. The vocabulary is a byte-level SentencePiece one: <unk>, <s>, </s> and the 256 byte tokens <0x00>…<0xFF>,
 so any text, JSON included, has a tokenization. Uses gguf-py from the pinned vendor/llama.cpp checkout.
 
 Usage: python3 research/tiny_gguf.py
@@ -23,7 +23,7 @@ SEED = 0
 WEIGHT_DEVIATION = 0.02
 EMBEDDING = 32
 FEED_FORWARD = 64
-HEADS = 2
+HEADS = 1
 LAYERS = 1
 CONTEXT = 512
 RMS_EPSILON = 1e-5

@@ -19,7 +19,7 @@ pub use xpc_connection::XpcConnection;
 pub use xpc_dictionary::XpcDictionary;
 pub use xpc_endpoint::XpcEndpoint;
 pub use xpc_event::XpcEvent;
-pub use xpc_listener::XpcListener;
+pub use xpc_listener::{PEER_REQUIREMENT_ENFORCED, XpcListener};
 pub use xpc_object::XpcObject;
 pub use xpc_rich_error::XpcRichError;
 pub use xpc_session::XpcSession;

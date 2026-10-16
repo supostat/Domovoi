@@ -11,6 +11,8 @@ use crate::sys::{
 };
 use crate::xpc_rich_error::XpcRichError;
 
+pub const PEER_REQUIREMENT_ENFORCED: bool = !cfg!(feature = "adhoc");
+
 #[derive(Debug)]
 pub struct XpcListener {
     raw: NonNull<c_void>,
@@ -50,7 +52,7 @@ impl XpcListener {
     }
 
     fn require_team(&self, team_identifier: &str) -> Result<(), XpcRichError> {
-        if cfg!(feature = "adhoc") {
+        if !PEER_REQUIREMENT_ENFORCED {
             return Ok(());
         }
         let requirement = CString::new(format!(

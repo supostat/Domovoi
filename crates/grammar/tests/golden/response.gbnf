@@ -62,5 +62,5 @@ final-answer-hypotheses-item-confidence-kv ::= "\"confidence\"" space ":" space 
 final-answer-hypotheses-item ::= "{" space final-answer-hypotheses-item-path-kv "," space final-answer-hypotheses-item-guess-kv "," space final-answer-hypotheses-item-confidence-kv "}" space
 final-answer-hypotheses ::= "[" space (final-answer-hypotheses-item ("," space final-answer-hypotheses-item){0,4})? "]" space
 final-answer-hypotheses-kv ::= "\"hypotheses\"" space ":" space final-answer-hypotheses
-char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
+char ::= [^"\\\x7F\x00-\x1F\uD800-\uDFFF\U00110000-\U003FFFFF] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
 space ::= " "?
