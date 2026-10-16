@@ -159,6 +159,10 @@ fn attaches_an_image_volume_with_its_own_device_and_detaches_it() {
     assert!(!volume_capabilities(&mount_point).expect("capabilities").case_sensitive);
     fs::write(mount_point.join("owned"), b"data").expect("volume root is writable by its owner");
     volume.detach().expect("image detaches");
+    volume.attach_read_only().expect("image reattaches read-only");
+    let refused = fs::write(mount_point.join("refused"), b"data").expect_err("read-only volume refuses writes");
+    assert_eq!(refused.raw_os_error(), Some(libc::EROFS));
+    volume.detach().expect("read-only image detaches");
     assert_eq!(
         fs::metadata(&mount_point).expect("mount directory stays").dev(),
         fs::metadata(volume.workspace()).expect("workspace").dev()

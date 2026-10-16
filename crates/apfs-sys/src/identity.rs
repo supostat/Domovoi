@@ -4,7 +4,8 @@ use std::path::Path;
 use crate::attribute_reader::has;
 use crate::path_query::{AttributeGroups, not_returned, query_path};
 use crate::sys::{
-    ATTR_CMN_GEN_COUNT, ATTR_CMNEXT_PRIVATESIZE, ATTR_CMNEXT_REALDEVID, FSOPT_ATTR_CMN_EXTENDED, FSOPT_NOFOLLOW,
+    ATTR_CMN_GEN_COUNT, ATTR_CMN_USERACCESS, ATTR_CMNEXT_LINKID, ATTR_CMNEXT_PRIVATESIZE, ATTR_CMNEXT_REALDEVID,
+    FSOPT_ATTR_CMN_EXTENDED, FSOPT_NOFOLLOW,
 };
 
 pub fn real_dev(path: &Path) -> io::Result<u32> {
@@ -59,4 +60,35 @@ pub fn gen_count(path: &Path) -> io::Result<u32> {
             reader.u32()
         },
     )
+}
+
+pub fn link_id(path: &Path) -> io::Result<u64> {
+    let groups = AttributeGroups {
+        extended: ATTR_CMNEXT_LINKID,
+        ..AttributeGroups::default()
+    };
+    query_path(
+        path,
+        groups,
+        FSOPT_NOFOLLOW | FSOPT_ATTR_CMN_EXTENDED,
+        |reader, returned| {
+            if !has(returned.forkattr, ATTR_CMNEXT_LINKID) {
+                return Err(not_returned("link id"));
+            }
+            reader.u64()
+        },
+    )
+}
+
+pub fn user_access(path: &Path) -> io::Result<u32> {
+    let groups = AttributeGroups {
+        common: ATTR_CMN_USERACCESS,
+        ..AttributeGroups::default()
+    };
+    query_path(path, groups, FSOPT_NOFOLLOW, |reader, returned| {
+        if !has(returned.commonattr, ATTR_CMN_USERACCESS) {
+            return Err(not_returned("user access"));
+        }
+        reader.u32()
+    })
 }

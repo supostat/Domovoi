@@ -27,6 +27,12 @@ pub enum Visibility {
     Browsable,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Access {
+    ReadWrite,
+    ReadOnly,
+}
+
 #[derive(Debug)]
 pub struct ImageVolume {
     backend: ImageBackend,
@@ -59,6 +65,14 @@ impl ImageVolume {
     }
 
     pub fn attach(&mut self, visibility: Visibility) -> io::Result<()> {
+        self.attach_with(visibility, Access::ReadWrite)
+    }
+
+    pub fn attach_read_only(&mut self) -> io::Result<()> {
+        self.attach_with(Visibility::Hidden, Access::ReadOnly)
+    }
+
+    fn attach_with(&mut self, visibility: Visibility, access: Access) -> io::Result<()> {
         if self.device.is_some() {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
@@ -66,8 +80,8 @@ impl ImageVolume {
             ));
         }
         let attach_output = match self.backend {
-            ImageBackend::Hdiutil => attach_with_hdiutil(&self.image, &self.mount_point, visibility)?,
-            ImageBackend::DiskutilImage => attach_with_diskutil(&self.image, &self.mount_point, visibility)?,
+            ImageBackend::Hdiutil => attach_with_hdiutil(&self.image, &self.mount_point, visibility, access)?,
+            ImageBackend::DiskutilImage => attach_with_diskutil(&self.image, &self.mount_point, visibility, access)?,
         };
         self.device = Some(whole_disk(&attach_output)?);
         if visibility == Visibility::Browsable {
@@ -162,10 +176,13 @@ fn create_with_hdiutil(image: &Path, format: VolumeFormat) -> io::Result<()> {
     .map(drop)
 }
 
-fn attach_with_hdiutil(image: &Path, mount_point: &Path, visibility: Visibility) -> io::Result<String> {
+fn attach_with_hdiutil(image: &Path, mount_point: &Path, visibility: Visibility, access: Access) -> io::Result<String> {
     let mut arguments = vec![OsStr::new("attach"), OsStr::new("-owners"), OsStr::new("on")];
     if visibility == Visibility::Hidden {
         arguments.push(OsStr::new("-nobrowse"));
+    }
+    if access == Access::ReadOnly {
+        arguments.push(OsStr::new("-readonly"));
     }
     arguments.extend([
         OsStr::new("-noverify"),
@@ -230,10 +247,18 @@ fn reformat_case_sensitive(image: &Path) -> io::Result<()> {
     reformatted.and(ejected)
 }
 
-fn attach_with_diskutil(image: &Path, mount_point: &Path, visibility: Visibility) -> io::Result<String> {
+fn attach_with_diskutil(
+    image: &Path,
+    mount_point: &Path,
+    visibility: Visibility,
+    access: Access,
+) -> io::Result<String> {
     let mut arguments = vec![OsStr::new("image"), OsStr::new("attach")];
     if visibility == Visibility::Hidden {
         arguments.push(OsStr::new("--nobrowse"));
+    }
+    if access == Access::ReadOnly {
+        arguments.push(OsStr::new("--readOnly"));
     }
     arguments.extend([
         OsStr::new("--mountPoint"),

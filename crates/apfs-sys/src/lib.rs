@@ -33,7 +33,7 @@ pub use container_capacity::{ContainerCapacity, container_capacity};
 pub use descriptor_operations::{chflags, copy_metadata, ftruncate, pwrite_at, set_nocache, set_xattr};
 pub use directory_operations::{clone_at, mkdir_at, open_at, open_search, rename_swap, stat_at};
 pub use firmlink::{Firmlink, firmlinks};
-pub use identity::{gen_count, private_size, real_dev};
+pub use identity::{gen_count, link_id, private_size, real_dev, user_access};
 pub use io_policy::{raise_nofile_limit, set_thread_disk_policy_utility, set_vfs_policies, thread_disk_policy};
 pub use last_used::{last_used_xattr, set_last_used_xattr};
 pub use mapped_file::{MappedFile, mmap_readonly};

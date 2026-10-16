@@ -9,10 +9,10 @@ use std::process::Command;
 
 use domovoi_apfs_sys::sys::IOPOL_UTILITY;
 use domovoi_apfs_sys::{
-    AccessError, AttributeSet, BulkListing, container_capacity, data_volume, firmlinks, gen_count, mkdir_at,
+    AccessError, AttributeSet, BulkListing, container_capacity, data_volume, firmlinks, gen_count, link_id, mkdir_at,
     mounted_volumes, open_at, open_search, os_build_version, pids_with_open, private_size, process_path,
     raise_nofile_limit, real_dev, running_bundle_roots, set_thread_disk_policy_utility, set_vfs_policies, snapshots,
-    thread_disk_policy, volume_capabilities, volume_used, volume_uuid,
+    thread_disk_policy, user_access, volume_capabilities, volume_used, volume_uuid,
 };
 use temp_dir::TempDir;
 
@@ -244,6 +244,7 @@ fn volume_identity_matches_diskutil() {
         .expect("the root data volume is mounted");
     assert_eq!(data_mount.mount_point, data);
     assert_eq!(data_mount.file_system, "apfs");
+    assert!(!data_mount.read_only);
     assert_eq!(
         data_mount.device,
         Path::new("/dev").join(plist_string(&plist, "DeviceIdentifier"))
@@ -254,4 +255,17 @@ fn volume_identity_matches_diskutil() {
 fn os_build_matches_sw_vers() {
     let build = command_output("/usr/bin/sw_vers", &["-buildVersion"]);
     assert_eq!(os_build_version().expect("build version is read"), build.trim());
+}
+
+#[test]
+fn access_and_link_identity_are_read_per_path() {
+    let temp = TempDir::new("access");
+    let path = temp.path().join("entry");
+    fs::write(&path, b"x").expect("file is written");
+    let writable = libc::c_uint::try_from(libc::W_OK).expect("W_OK fits");
+    assert_ne!(user_access(temp.path()).expect("access is read") & writable, 0);
+    assert_eq!(user_access(Path::new("/System")).expect("access is read") & writable, 0);
+    let first = link_id(&path).expect("link id is read");
+    fs::hard_link(&path, temp.path().join("second")).expect("link is created");
+    assert_ne!(link_id(&temp.path().join("second")).expect("link id is read"), first);
 }

@@ -286,6 +286,17 @@ version = "0.1.0"
 [[package]]
 name = "domovoi-rules"
 version = "0.1.0"
+dependencies = [
+ "domovoi-apfs-sys",
+ "domovoi-index",
+ "domovoi-scanner",
+ "domovoi-testkit",
+ "libc",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "rkyv",
+]
 
 [[package]]
 name = "domovoi-scanner"

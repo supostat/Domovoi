@@ -1,0 +1,193 @@
+use std::env;
+use std::fs::{self, File};
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+
+use domovoi_apfs_sys::sys::UF_COMPRESSED;
+use domovoi_apfs_sys::{link_id, private_size};
+use domovoi_index::{Enrichment, Index, IndexRoot};
+use domovoi_scanner::{ScanOptions, scan};
+use objc2_foundation::{NSFileManager, NSString, NSURL};
+use rkyv::rancor;
+
+const JOURNAL_PATH: &str = "Library/Application Support/com.domovoi.app/trash-journal";
+const TEMPORARY_SUFFIX: &str = "partial";
+
+#[derive(Clone, Debug, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+pub struct JournalEntry {
+    pub original: String,
+    pub original_physical: String,
+    pub trashed: String,
+    pub link_id: u64,
+    pub alloc_size: u64,
+    pub flags: u32,
+    pub clone_id: u64,
+    pub rule_id: Option<String>,
+    pub trashed_at: u64,
+}
+
+#[derive(Debug)]
+pub enum RestoreError {
+    NotInTrash,
+    Replaced,
+    ParentMissing,
+    Io(io::Error),
+}
+
+#[derive(Debug)]
+pub struct TrashJournal {
+    path: PathBuf,
+    entries: Vec<JournalEntry>,
+}
+
+impl TrashJournal {
+    pub fn default_path() -> io::Result<PathBuf> {
+        env::home_dir()
+            .map(|home| home.join(JOURNAL_PATH))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "home directory is unknown"))
+    }
+
+    pub fn open(path: &Path) -> io::Result<Self> {
+        let entries = match fs::read(path) {
+            Ok(bytes) => {
+                let mut aligned = rkyv::util::AlignedVec::<16>::new();
+                aligned.extend_from_slice(&bytes);
+                rkyv::from_bytes::<Vec<JournalEntry>, rancor::Error>(&aligned)
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => return Err(error),
+        };
+        Ok(Self {
+            path: path.to_path_buf(),
+            entries,
+        })
+    }
+
+    pub fn entries(&self) -> &[JournalEntry] {
+        &self.entries
+    }
+
+    pub(crate) fn record(&mut self, entry: JournalEntry) -> io::Result<()> {
+        self.entries.push(entry);
+        self.save()
+    }
+
+    pub fn forget_emptied(&mut self) -> io::Result<()> {
+        self.entries
+            .retain(|entry| Path::new(&entry.trashed).symlink_metadata().is_ok());
+        self.save()
+    }
+
+    pub fn reclaimable_after_emptying(&self) -> io::Result<u64> {
+        let mut total = 0;
+        for entry in &self.entries {
+            let trashed = Path::new(&entry.trashed);
+            let Ok(metadata) = trashed.symlink_metadata() else {
+                continue;
+            };
+            total += if metadata.is_dir() {
+                let report = scan(trashed, &ScanOptions::default()).map_err(io::Error::other)?;
+                let index = Index::build(&report, IndexRoot::for_path(trashed)?, &Enrichment::default());
+                index.reclaimable(index.root())?.bytes
+            } else if entry.flags & UF_COMPRESSED != 0 {
+                entry.alloc_size
+            } else {
+                private_size(trashed)?
+            };
+        }
+        Ok(total)
+    }
+
+    pub fn restore(&mut self, position: usize) -> Result<PathBuf, RestoreError> {
+        let entry = self.entries[position].clone();
+        let trashed = Path::new(&entry.trashed);
+        let current = link_id(trashed).map_err(|error| match error.raw_os_error() {
+            Some(libc::ENOENT) => RestoreError::NotInTrash,
+            _ => RestoreError::Io(error),
+        })?;
+        if current != entry.link_id {
+            return Err(RestoreError::Replaced);
+        }
+        let original = Path::new(&entry.original_physical);
+        let parent = original.parent().ok_or(RestoreError::ParentMissing)?;
+        if !parent.is_dir() {
+            return Err(RestoreError::ParentMissing);
+        }
+        let destination = free_name(original);
+        let manager = NSFileManager::defaultManager();
+        manager
+            .moveItemAtURL_toURL_error(&*file_url(trashed)?, &*file_url(&destination)?)
+            .map_err(|error| RestoreError::Io(io::Error::other(error.localizedDescription().to_string())))?;
+        self.entries.remove(position);
+        self.save().map_err(RestoreError::Io)?;
+        Ok(destination)
+    }
+
+    fn save(&self) -> io::Result<()> {
+        let bytes = rkyv::to_bytes::<rancor::Error>(&self.entries).map_err(io::Error::other)?;
+        let directory = self
+            .path
+            .parent()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "journal path has no directory"))?;
+        fs::create_dir_all(directory)?;
+        let temporary = self
+            .path
+            .with_extension(format!("{TEMPORARY_SUFFIX}-{}", std::process::id()));
+        let mut output = File::create(&temporary)?;
+        output.write_all(&bytes)?;
+        output.sync_all()?;
+        fs::rename(&temporary, &self.path)
+    }
+}
+
+pub(crate) fn file_url(path: &Path) -> Result<objc2::rc::Retained<NSURL>, RestoreError> {
+    let text = path
+        .to_str()
+        .ok_or_else(|| RestoreError::Io(io::Error::new(io::ErrorKind::InvalidInput, "path is not UTF-8")))?;
+    Ok(NSURL::fileURLWithPath(&NSString::from_str(text)))
+}
+
+fn free_name(original: &Path) -> PathBuf {
+    if original.symlink_metadata().is_err() {
+        return original.to_path_buf();
+    }
+    let parent = original.parent().unwrap_or_else(|| Path::new("/"));
+    let stem = original
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let extension = original
+        .extension()
+        .map(|extension| extension.to_string_lossy().into_owned());
+    let mut number = 2_u64;
+    loop {
+        let name = match &extension {
+            Some(extension) => format!("{stem} {number}.{extension}"),
+            None => format!("{stem} {number}"),
+        };
+        let candidate = parent.join(name);
+        if candidate.symlink_metadata().is_err() {
+            return candidate;
+        }
+        number += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::free_name;
+
+    #[test]
+    fn collisions_take_the_next_finder_number() {
+        let directory = std::env::temp_dir().join(format!("domovoi-free-name-{}", std::process::id()));
+        fs::create_dir_all(&directory).expect("directory is created");
+        fs::write(directory.join("report.pdf"), b"a").expect("file is written");
+        fs::write(directory.join("report 2.pdf"), b"b").expect("file is written");
+        assert_eq!(free_name(&directory.join("report.pdf")), directory.join("report 3.pdf"));
+        assert_eq!(free_name(&directory.join("fresh.txt")), directory.join("fresh.txt"));
+        fs::remove_dir_all(&directory).expect("directory is removed");
+    }
+}

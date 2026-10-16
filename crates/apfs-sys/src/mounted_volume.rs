@@ -9,12 +9,15 @@ use crate::attribute_reader::invalid;
 use crate::sys::MNT_EXT_ROOT_DATA_VOL;
 use crate::syscall::check;
 
+const READ_ONLY: u32 = libc::MNT_RDONLY as u32;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MountedVolume {
     pub mount_point: PathBuf,
     pub device: PathBuf,
     pub file_system: String,
     pub root_data: bool,
+    pub read_only: bool,
 }
 
 pub fn mounted_volumes() -> io::Result<Vec<MountedVolume>> {
@@ -33,6 +36,7 @@ pub fn mounted_volumes() -> io::Result<Vec<MountedVolume>> {
                 device: PathBuf::from(OsStr::from_bytes(c_field(&mount.f_mntfromname)?)),
                 file_system: String::from_utf8_lossy(c_field(&mount.f_fstypename)?).into_owned(),
                 root_data: mount.f_flags_ext & MNT_EXT_ROOT_DATA_VOL != 0,
+                read_only: mount.f_flags & READ_ONLY != 0,
             })
         })
         .collect()
