@@ -12,7 +12,9 @@ mod rule_table;
 mod running_applications;
 mod simulator_runtimes;
 mod trash_failure;
+mod trash_item;
 mod trash_journal;
+mod trash_subject;
 mod tray;
 
 pub use config_overrides::ConfigOverrides;
@@ -26,5 +28,7 @@ pub use rule_table::rule_table;
 pub use running_applications::running_bundle_ids;
 pub use simulator_runtimes::{InstalledSimulatorRuntimes, SimulatorRuntimes};
 pub use trash_failure::TrashFailure;
+pub use trash_item::trash_item;
 pub use trash_journal::{JournalEntry, RestoreError, TrashJournal};
+pub use trash_subject::TrashSubject;
 pub use tray::{TrashOutcome, Tray, TrayItem, open_trash};

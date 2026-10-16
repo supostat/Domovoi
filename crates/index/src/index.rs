@@ -386,7 +386,7 @@ impl Index {
         counted
     }
 
-    fn inside_dependency_store(&self, id: NodeId) -> bool {
+    pub fn inside_dependency_store(&self, id: NodeId) -> bool {
         let mut current = Some(id);
         while let Some(node) = current {
             let name = self.name(node);

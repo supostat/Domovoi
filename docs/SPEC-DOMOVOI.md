@@ -194,6 +194,10 @@
   Put Back Finder для `trashItem` сломан с 2015 г. — продукт ведёт журнал возврата через `moveItemAtURL:toURL:`;
   публичного API очистки Корзины нет — «Открыть Корзину». «Освободится после очистки Корзины» = Σ
   `reclaimable(node)` в момент показа; журнал хранит ALLOCSIZE, флаги и CLONEID, не PRIVATESIZE.
+- [дубликаты] Хэш читается `pread` кусками по 4 МиБ с дескриптора под `F_NOCACHE`, куски ≥ 128 КиБ идут в
+  `update_rayon`, а не через `update_mmap_rayon`: страницы mmap проходят мимо `F_NOCACHE`, а файл, ставший dataless
+  после проверки флагов, при обращении к странице даёт SIGBUS вместо EDEADLK. `fcopyfile` с `COPYFILE_METADATA`
+  удаляет на клоне xattr, которых нет у копии (тест `clone_replace_image`).
 - [текст] SDF/MSDF ниже ~18 px нечитаемы (нет хинтинга; субпиксельное LCD-сглаживание в macOS по вторичным
   источникам отключено с Mojave — проверяется визуально на 1x) — весь текст диаграммы растровый на точный
   device-размер через Core Text; AppKit-подписи поверх MTKView отклонены (`presentsWithTransaction`, размытие

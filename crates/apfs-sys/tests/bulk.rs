@@ -9,9 +9,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use domovoi_apfs_sys::sys::{EF_NO_XATTRS, EF_SHARES_ALL_BLOCKS, UF_HIDDEN};
 use domovoi_apfs_sys::{
-    AttributeSet, BulkListing, EntryAttributes, ObjectKind, chflags, clone_at, copy_metadata, ftruncate,
-    last_used_xattr, mkdir_at, mmap_readonly, open_at, pwrite_at, real_dev, rename_swap, set_last_used_xattr,
-    set_nocache, set_xattr,
+    AttributeSet, BulkListing, EntryAttributes, ObjectKind, chflags, clone_at, copy_metadata, current_user_id,
+    ftruncate, get_xattr, last_used_xattr, mkdir_at, mmap_readonly, open_at, pwrite_at, real_dev, rename_swap,
+    set_last_used_xattr, set_nocache, set_xattr, stream_identity,
 };
 use temp_dir::TempDir;
 
@@ -97,6 +97,34 @@ fn reports_clones_and_hard_links_through_extended_attributes() {
             .is_some_and(|flags| flags & u64::from(EF_SHARES_ALL_BLOCKS) != 0)
     );
     assert_eq!(clone.private_size, Some(0));
+
+    let original_stream = stream_identity(&temp.path().join("original")).expect("stream identity is read");
+    let clone_stream = stream_identity(&temp.path().join("clone")).expect("stream identity is read");
+    assert_eq!(Some(original_stream.real_dev), original.real_dev);
+    assert_eq!(Some(original_stream.clone_id), original.clone_id);
+    assert_eq!(original_stream.clone_id, clone_stream.clone_id);
+    assert_eq!(Some(clone_stream.ext_flags), clone.ext_flags);
+}
+
+#[test]
+fn reads_extended_attributes_and_the_current_user() {
+    let temp = TempDir::new("xattr");
+    let root = temp.open();
+    let file = create_file(root.as_fd(), "tagged", b"tagged");
+    let key = OsStr::new("com.domovoi.test");
+    assert_eq!(
+        get_xattr(file.as_fd(), key).expect("missing attribute is not an error"),
+        None
+    );
+    set_xattr(file.as_fd(), key, b"value").expect("attribute is written");
+    assert_eq!(
+        get_xattr(file.as_fd(), key).expect("attribute is read"),
+        Some(b"value".to_vec())
+    );
+    let owner = fs::symlink_metadata(temp.path().join("tagged"))
+        .expect("metadata")
+        .uid();
+    assert_eq!(current_user_id(), owner);
 }
 
 #[test]

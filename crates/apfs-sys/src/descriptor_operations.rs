@@ -55,6 +55,43 @@ pub fn set_xattr(file: BorrowedFd<'_>, name: &OsStr, value: &[u8]) -> io::Result
     .map(drop)
 }
 
+pub fn get_xattr(file: BorrowedFd<'_>, name: &OsStr) -> io::Result<Option<Vec<u8>>> {
+    let name = c_string(name)?;
+    loop {
+        let length = unsafe { libc::fgetxattr(file.as_raw_fd(), name.as_ptr(), ptr::null_mut(), 0, 0, 0) };
+        if length == -1 {
+            return missing_attribute(io::Error::last_os_error());
+        }
+        let mut value = vec![0_u8; usize::try_from(length).expect("a successful length is non-negative")];
+        let read = unsafe {
+            libc::fgetxattr(
+                file.as_raw_fd(),
+                name.as_ptr(),
+                value.as_mut_ptr().cast(),
+                value.len(),
+                0,
+                0,
+            )
+        };
+        if read == -1 {
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::ERANGE) {
+                continue;
+            }
+            return missing_attribute(error);
+        }
+        value.truncate(usize::try_from(read).expect("a successful read is non-negative"));
+        return Ok(Some(value));
+    }
+}
+
+fn missing_attribute(error: io::Error) -> io::Result<Option<Vec<u8>>> {
+    match error.raw_os_error() {
+        Some(libc::ENOATTR) => Ok(None),
+        _ => Err(error),
+    }
+}
+
 pub fn chflags(file: BorrowedFd<'_>, flags: u32) -> io::Result<()> {
     check(unsafe { libc::fchflags(file.as_raw_fd(), flags) }).map(drop)
 }

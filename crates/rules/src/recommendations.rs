@@ -95,7 +95,7 @@ impl Recommendations {
             if let Some(reason) = denylist.verdict(index, claim.node) {
                 card.blocked.push((claim.node, reason));
             } else {
-                add(&mut card.reclaimable, index.reclaimable(claim.node)?);
+                card.reclaimable += index.reclaimable(claim.node)?;
                 card.items.push(claim.node);
             }
         }
@@ -129,11 +129,4 @@ impl Recommendations {
             hypotheses,
         })
     }
-}
-
-fn add(total: &mut Reclaimable, other: Reclaimable) {
-    total.bytes += other.bytes;
-    total.held_by_clones += other.held_by_clones;
-    total.held_by_snapshots += other.held_by_snapshots;
-    total.held_by_hard_links += other.held_by_hard_links;
 }

@@ -1,1 +1,46 @@
 #![forbid(unsafe_code)]
+
+mod bucket;
+mod candidate;
+mod clone_journal;
+mod clone_plan;
+mod clone_refusal;
+mod clone_replace_error;
+mod clone_replaced;
+mod cloud_folders;
+mod content_digest;
+mod digest_kind;
+mod duplicate_action;
+mod duplicate_copy;
+mod duplicate_group;
+mod duplicate_options;
+mod duplicate_progress;
+mod duplicate_search;
+mod duplicate_stage;
+mod duplicates;
+mod hashing_pool;
+mod mount_point;
+mod pending_replacement;
+mod search_error;
+mod skip_reason;
+mod skipped_file;
+
+pub use clone_journal::CloneJournal;
+pub use clone_plan::ClonePlan;
+pub use clone_refusal::CloneRefusal;
+pub use clone_replace_error::CloneReplaceError;
+pub use clone_replaced::CloneReplaced;
+pub use cloud_folders::CloudFolders;
+pub use duplicate_action::DuplicateAction;
+pub use duplicate_copy::DuplicateCopy;
+pub use duplicate_group::DuplicateGroup;
+pub use duplicate_options::DuplicateOptions;
+pub use duplicate_progress::DuplicateProgress;
+pub use duplicate_search::find_duplicates;
+pub use duplicate_stage::DuplicateStage;
+pub use duplicates::Duplicates;
+pub use hashing_pool::HashingPool;
+pub use pending_replacement::{PendingReplacement, TEMPORARY_PREFIX};
+pub use search_error::SearchError;
+pub use skip_reason::SkipReason;
+pub use skipped_file::SkippedFile;

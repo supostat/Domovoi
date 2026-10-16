@@ -1,14 +1,13 @@
 use std::io;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use domovoi_index::{Index, NodeId, Reclaimable};
 use objc2_app_kit::NSWorkspace;
-use objc2_foundation::NSFileManager;
 
 use crate::denylist::Denylist;
 use crate::trash_failure::TrashFailure;
-use crate::trash_journal::{JournalEntry, TrashJournal, file_url};
+use crate::trash_journal::{TrashJournal, file_url};
+use crate::trash_subject::TrashSubject;
 
 const TRASH: &str = ".Trash";
 
@@ -57,11 +56,7 @@ impl Tray {
     pub fn reclaimable(&self, index: &Index) -> io::Result<Reclaimable> {
         let mut total = Reclaimable::default();
         for item in &self.items {
-            let item_reclaimable = index.reclaimable(item.node)?;
-            total.bytes += item_reclaimable.bytes;
-            total.held_by_clones += item_reclaimable.held_by_clones;
-            total.held_by_snapshots += item_reclaimable.held_by_snapshots;
-            total.held_by_hard_links += item_reclaimable.held_by_hard_links;
+            total += index.reclaimable(item.node)?;
         }
         Ok(total)
     }
@@ -72,7 +67,6 @@ impl Tray {
         denylist: &Denylist,
         journal: &mut TrashJournal,
     ) -> io::Result<Vec<TrashOutcome>> {
-        let manager = NSFileManager::defaultManager();
         let mut outcomes = Vec::with_capacity(self.items.len());
         for item in std::mem::take(&mut self.items) {
             if let Some(reason) = denylist.verdict(index, item.node) {
@@ -82,36 +76,17 @@ impl Tray {
                 });
                 continue;
             }
-            let url = file_url(&item.physical)
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path is not UTF-8"))?;
-            let mut resulting = None;
-            let result = match manager.trashItemAtURL_resultingItemURL_error(&url, Some(&mut resulting)) {
-                Ok(()) => {
-                    let trashed = resulting
-                        .and_then(|url| url.path())
-                        .map(|path| PathBuf::from(path.to_string()))
-                        .ok_or_else(|| io::Error::other("Finder did not report where the item went"))?;
-                    let node = index.node(item.node);
-                    journal.record(JournalEntry {
-                        original: item.path.to_string_lossy().into_owned(),
-                        original_physical: item.physical.to_string_lossy().into_owned(),
-                        trashed: trashed.to_string_lossy().into_owned(),
-                        link_id: node.link_id,
-                        alloc_size: node.alloc_size,
-                        flags: node.flags,
-                        clone_id: node.clone_id,
-                        rule_id: item.rule_id.clone(),
-                        trashed_at: SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .map_or(0, |since| since.as_secs()),
-                    })?;
-                    Ok(trashed)
-                }
-                Err(error) => Err(TrashFailure::from_cocoa(
-                    error.code(),
-                    error.localizedDescription().to_string(),
-                )),
-            };
+            let node = index.node(item.node);
+            let result = journal.trash(&TrashSubject {
+                original: item.path.clone(),
+                original_physical: item.physical.clone(),
+                location: item.physical,
+                link_id: node.link_id,
+                alloc_size: node.alloc_size,
+                flags: node.flags,
+                clone_id: node.clone_id,
+                rule_id: item.rule_id,
+            })?;
             outcomes.push(TrashOutcome {
                 path: item.path,
                 result,

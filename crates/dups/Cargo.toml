@@ -7,3 +7,20 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+blake3.workspace = true
+block2.workspace = true
+domovoi-apfs-sys.workspace = true
+domovoi-index.workspace = true
+domovoi-rules.workspace = true
+domovoi-scanner.workspace = true
+libc.workspace = true
+objc2.workspace = true
+objc2-app-kit = { workspace = true, features = ["NSWorkspace"] }
+objc2-foundation = { workspace = true, features = ["NSError", "NSFileCoordinator", "NSString", "NSURL", "NSUUID", "block2"] }
+rayon.workspace = true
+rkyv.workspace = true
+
+[dev-dependencies]
+domovoi-testkit.workspace = true

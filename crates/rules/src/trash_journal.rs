@@ -1,17 +1,21 @@
 use std::env;
-use std::fs::{self, File};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use domovoi_apfs_sys::sys::UF_COMPRESSED;
-use domovoi_apfs_sys::{link_id, private_size};
+use domovoi_apfs_sys::{link_id, private_size, write_atomically};
 use domovoi_index::{Enrichment, Index, IndexRoot};
 use domovoi_scanner::{ScanOptions, scan};
 use objc2_foundation::{NSFileManager, NSString, NSURL};
 use rkyv::rancor;
 
+use crate::trash_failure::TrashFailure;
+use crate::trash_item::trash_item;
+use crate::trash_subject::TrashSubject;
+
 const JOURNAL_PATH: &str = "Library/Application Support/com.domovoi.app/trash-journal";
-const TEMPORARY_SUFFIX: &str = "partial";
 
 #[derive(Clone, Debug, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct JournalEntry {
@@ -68,9 +72,26 @@ impl TrashJournal {
         &self.entries
     }
 
-    pub(crate) fn record(&mut self, entry: JournalEntry) -> io::Result<()> {
-        self.entries.push(entry);
-        self.save()
+    pub fn trash(&mut self, subject: &TrashSubject) -> io::Result<Result<PathBuf, TrashFailure>> {
+        let trashed = match trash_item(&subject.location)? {
+            Ok(trashed) => trashed,
+            Err(failure) => return Ok(Err(failure)),
+        };
+        self.entries.push(JournalEntry {
+            original: subject.original.to_string_lossy().into_owned(),
+            original_physical: subject.original_physical.to_string_lossy().into_owned(),
+            trashed: trashed.to_string_lossy().into_owned(),
+            link_id: subject.link_id,
+            alloc_size: subject.alloc_size,
+            flags: subject.flags,
+            clone_id: subject.clone_id,
+            rule_id: subject.rule_id.clone(),
+            trashed_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |since| since.as_secs()),
+        });
+        self.save()?;
+        Ok(Ok(trashed))
     }
 
     pub fn forget_emptied(&mut self) -> io::Result<()> {
@@ -126,18 +147,7 @@ impl TrashJournal {
 
     fn save(&self) -> io::Result<()> {
         let bytes = rkyv::to_bytes::<rancor::Error>(&self.entries).map_err(io::Error::other)?;
-        let directory = self
-            .path
-            .parent()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "journal path has no directory"))?;
-        fs::create_dir_all(directory)?;
-        let temporary = self
-            .path
-            .with_extension(format!("{TEMPORARY_SUFFIX}-{}", std::process::id()));
-        let mut output = File::create(&temporary)?;
-        output.write_all(&bytes)?;
-        output.sync_all()?;
-        fs::rename(&temporary, &self.path)
+        write_atomically(&self.path, &bytes)
     }
 }
 

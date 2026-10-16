@@ -2,6 +2,7 @@ mod temp_dir;
 
 use std::ffi::OsStr;
 use std::fs::{self, File};
+use std::io::Write;
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -17,6 +18,7 @@ use domovoi_apfs_sys::{
 use temp_dir::TempDir;
 
 const KIBIBYTE: u64 = 1024;
+const QUIET_WINDOW_ATTEMPTS: usize = 20;
 const MINIMUM_FIRMLINKS: usize = 18;
 const GUI_DEFAULT_FILE_LIMIT: u64 = 256;
 
@@ -61,13 +63,22 @@ fn diskutil_container_free(volume: &Path) -> u64 {
     value.parse().expect("APFSContainerFree parses")
 }
 
-fn assert_between(value: u64, first: u64, second: u64, tolerance: u64, what: &str) {
-    let low = first.min(second).saturating_sub(tolerance);
-    let high = first.max(second) + tolerance;
-    assert!(
-        (low..=high).contains(&value),
-        "{what}: {value} is outside {low}..={high}"
-    );
+fn assert_matches_in_a_quiet_window(reference: impl Fn() -> u64, measured: impl Fn() -> u64, what: &str) {
+    let mut last_fork = None;
+    for _ in 0..QUIET_WINDOW_ATTEMPTS {
+        let before = reference();
+        let value = measured();
+        let after = reference();
+        if before.abs_diff(after) <= KIBIBYTE {
+            assert!(
+                value.abs_diff(before) <= KIBIBYTE,
+                "{what}: {value} differs from {before} on a quiet volume"
+            );
+            return;
+        }
+        last_fork = Some((before, value, after));
+    }
+    panic!("{what}: the volume kept changing, last fork {last_fork:?}");
 }
 
 #[test]
@@ -170,7 +181,9 @@ fn own_open_file_is_found_by_path() {
 fn unshared_file_keeps_its_whole_allocation_private() {
     let temp = TempDir::new("private-size");
     let path = temp.path().join("owned");
-    fs::write(&path, vec![7_u8; 64 * 1024]).expect("file is written");
+    let mut file = File::create(&path).expect("file is created");
+    file.write_all(&vec![7_u8; 64 * 1024]).expect("file is written");
+    file.sync_all().expect("blocks reach the disk");
     let allocated = fs::metadata(&path).expect("metadata").blocks() * 512;
     assert_eq!(private_size(&path).expect("private size is read"), allocated);
     gen_count(&path).expect("generation count is read");
@@ -179,24 +192,21 @@ fn unshared_file_keeps_its_whole_allocation_private() {
 #[test]
 fn volume_used_matches_df() {
     let data = data();
-    let before = df_used_bytes(&data);
-    let used = volume_used(&data).expect("used space is read");
-    let after = df_used_bytes(&data);
-    assert_between(used, before, after, KIBIBYTE, "ATTR_VOL_SPACEUSED against df -k Used");
+    assert_matches_in_a_quiet_window(
+        || df_used_bytes(&data),
+        || volume_used(&data).expect("used space is read"),
+        "ATTR_VOL_SPACEUSED against df -k Used",
+    );
 }
 
 #[test]
 fn container_available_matches_diskutil() {
     let data = data();
-    let before = diskutil_container_free(&data);
     let capacity = container_capacity(&data).expect("container capacity is read");
-    let after = diskutil_container_free(&data);
     assert!(capacity.size > capacity.available);
-    assert_between(
-        capacity.available,
-        before,
-        after,
-        KIBIBYTE,
+    assert_matches_in_a_quiet_window(
+        || diskutil_container_free(&data),
+        || container_capacity(&data).expect("container capacity is read").available,
         "ATTR_VOL_SPACEAVAIL against APFSContainerFree",
     );
 }

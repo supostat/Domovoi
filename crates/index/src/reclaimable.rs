@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io;
+use std::ops::AddAssign;
 
 use domovoi_apfs_sys::private_size;
 use domovoi_apfs_sys::sys::{EF_SHARES_ALL_BLOCKS, UF_COMPRESSED};
@@ -16,8 +17,8 @@ pub struct Reclaimable {
     pub held_by_hard_links: u64,
 }
 
-impl Reclaimable {
-    fn add(&mut self, other: Self) {
+impl AddAssign for Reclaimable {
+    fn add_assign(&mut self, other: Self) {
         self.bytes += other.bytes;
         self.held_by_clones += other.held_by_clones;
         self.held_by_snapshots += other.held_by_snapshots;
@@ -90,7 +91,7 @@ impl Index {
             };
             let path = self.physical_path(entries[0]);
             match reclaimable_file(facts, || private_size(&path)) {
-                Ok(reclaimable) => total.add(reclaimable),
+                Ok(reclaimable) => total += reclaimable,
                 Err(error) if error.raw_os_error() == Some(libc::ENOENT) => {}
                 Err(error) => return Err(error),
             }
