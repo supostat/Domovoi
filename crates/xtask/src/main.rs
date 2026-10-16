@@ -4,7 +4,9 @@ mod check_comments;
 mod check_sources;
 mod check_tokens;
 mod comment_scan;
+mod fetch_test_models;
 mod finding;
+mod test_model;
 mod theme;
 mod theme_codegen;
 mod theme_stylesheet;
@@ -16,7 +18,8 @@ use std::process::ExitCode;
 
 use finding::Finding;
 
-const USAGE: &str = "usage: cargo xtask <check-comments | check-tokens | check-sources | theme [--check]>";
+const USAGE: &str =
+    "usage: cargo xtask <check-comments | check-tokens | check-sources | theme [--check] | fetch-test-models>";
 
 fn main() -> ExitCode {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -26,6 +29,7 @@ fn main() -> ExitCode {
         ["check-sources"] => check_sources::run(),
         ["theme"] => theme::run(theme::Mode::Write),
         ["theme", "--check"] => theme::run(theme::Mode::Check),
+        ["fetch-test-models"] => fetch_test_models::run(),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::from(2);

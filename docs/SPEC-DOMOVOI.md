@@ -212,10 +212,13 @@
   пиксельные эталоны с допуском, точные — на self-hosted; пороги кадра задаются по результатам `benches/frame`, до
   этого критерий — только корректность раскладки.
 - [инференс] `GGML_METAL_EMBED_LIBRARY=ON` встраивает ИСХОДНИК шейдеров и компилирует их при каждой инициализации
-  бэкенда (тёплый системный кэш 0,015–0,09 с; единичное наблюдение 10,6 с при первом запуске с неустановленной
-  причиной — холодная компиляция на чистой машине не измерена, замер в фазе llama-sys); с `EMBED=OFF` ggml грузит
-  `default.metallib` (и `ggml-tensor.metallib` при SDK ≥ 26) из бандла (`bundleForClass` → бандл сервиса) или по
-  `GGML_METAL_PATH_RESOURCES`.
+  бэкенда (тёплый системный кэш 0,015–0,09 с); холодная компиляция исходников ядер (36 библиотек параллельно, ключ
+  кэша сброшен уникальным `#define`) — 10,2 и 9,5 с на M4 Pro (`metal_cold_compile`, `#[ignore]`). С `EMBED=OFF`
+  ggml ищет `default.metallib` (и `ggml-tensor.metallib` при SDK ≥ 26) в бандле (`bundleForClass` → бандл сервиса),
+  затем рядом с исполняемым файлом (`argv[0]`); `GGML_METAL_PATH_RESOURCES` на пине указывает только каталог
+  ИСХОДНИКОВ для запасной компиляции (`<путь>/kernels/*.metal`), не путь к metallib — тест с Metal и без бандла
+  кладёт metallib из `domovoi_llama_sys::METALLIB_DIRECTORY` рядом с бинарником. `LLAMA_CURL` на пине устарел
+  (только предупреждение); сеть из сборки убирает `LLAMA_OPENSSL=OFF`.
 - [инференс] `n_gpu_layers=0` Metal не отключает; CPU-профиль = пустой `devices` в `llama_model_params` плюс
   окружение `GGML_METAL_DEVICES=0` (иначе даже `vocab_only` создаёт MTLDevice); `abort_callback` работает только
   на CPU, для Metal — `ggml_backend_metal_set_abort_callback` через `ggml_backend_dev_init` и `n_batch ≤ 256`;

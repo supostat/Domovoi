@@ -1,0 +1,22 @@
+{
+  "models": [
+    {
+      "name": "tiny-random.gguf",
+      "location": "assets/test/tiny-random.gguf",
+      "url": null,
+      "size": 114816,
+      "sha256": "3e721f5b25769e274efe3b1d8d2e4df34c3c19150926fd7eda38261e6fc64d2a",
+      "origin": "research/tiny_gguf.py, seed 0: llama, byte-level SentencePiece vocabulary of 259 tokens, n_embd 32, one layer, F32",
+      "license": "generated in this repository"
+    },
+    {
+      "name": "stories260K.gguf",
+      "location": "target/test-models/stories260K.gguf",
+      "url": "https://huggingface.co/ggml-org/models-moved/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/tinyllamas/stories260K.gguf",
+      "size": 1185376,
+      "sha256": "270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d",
+      "origin": "karpathy/tinyllamas stories260K trained with llama2.c, GGUF conversion published in ggml-org/models-moved",
+      "license": "MIT by origin (karpathy/tinyllamas, llama2.c LICENSE); the ggml-org conversion carries no license tag"
+    }
+  ]
+}
