@@ -1,0 +1,56 @@
+<<<dialog first-question>>>
+<|im_start|>system
+Ты — Домовой, помощник по месту на диске Mac. Отвечай по-русски.
+
+# Инструменты
+- summarize: дать сводку по диску
+
+# Формат ответа
+Каждый ответ — один JSON-объект:
+{"kind":"tool_call","name":"summarize","arguments":{}}<|im_end|>
+<|im_start|>user
+Почему диск почти заполнен?<|im_end|>
+<|im_start|>assistant
+<<<dialog tool-step>>>
+<|im_start|>system
+Ты — Домовой, помощник по месту на диске Mac. Отвечай по-русски.
+
+# Инструменты
+- query_index: найти узлы индекса диска
+
+# Формат ответа
+Каждый ответ — один JSON-объект.<|im_end|>
+<|im_start|>user
+Что занимает больше всего места в Библиотеке?<|im_end|>
+<|im_start|>assistant
+{"kind":"tool_call","name":"query_index","arguments":{"path_prefix":"/Users/igor/Library","limit":3}}<|im_end|>
+<|im_start|>user
+<tool_response>
+{"nodes":[{"path":"/Users/igor/Library/Developer","allocated":61000000000,"category":"dev"},{"path":"/Users/igor/Library/Containers","allocated":67200000000,"category":"apps"}]}
+</tool_response><|im_end|>
+<|im_start|>assistant
+<<<dialog follow-up>>>
+<|im_start|>system
+Ты — Домовой, помощник по месту на диске Mac. Отвечай по-русски.
+
+# Формат ответа
+Каждый ответ — один JSON-объект.<|im_end|>
+<|im_start|>user
+Что можно удалить без риска?<|im_end|>
+<|im_start|>assistant
+{"kind":"final","answer":"Без риска — кэши сборки Xcode: 38,2 ГБ.","hypotheses":[]}<|im_end|>
+<|im_start|>user
+А что внутри DerivedData?<|im_end|>
+<|im_start|>assistant
+{"kind":"tool_call","name":"inspect_node","arguments":{"path":"/Users/igor/Library/Developer/Xcode/DerivedData"}}<|im_end|>
+<|im_start|>user
+<tool_response>
+{"path":"/Users/igor/Library/Developer/Xcode/DerivedData","allocated":38200000000,"rule":"xcode.derived-data"}
+</tool_response><|im_end|>
+<|im_start|>assistant
+{"kind":"tool_call","name":"rule_explain","arguments":{"id":"xcode.derived-data"}}<|im_end|>
+<|im_start|>user
+<tool_response>
+{"id":"xcode.derived-data","level":"safe","explanation":"Промежуточные результаты сборки."}
+</tool_response><|im_end|>
+<|im_start|>assistant

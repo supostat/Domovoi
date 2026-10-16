@@ -1,0 +1,54 @@
+{
+  "entries": [
+    {
+      "repo": "unsloth/Qwen3.5-4B-GGUF",
+      "revision": "e87f176479d0855a907a41277aca2f8ee7a09523",
+      "file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "template": {
+        "family": "chatml",
+        "empty_think_before_answer": true,
+        "empty_think_in_tool_steps": true
+      }
+    },
+    {
+      "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+      "revision": "a06e946bb6b655725eafa393f4a9745d460374c9",
+      "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+      "template": {
+        "family": "chatml",
+        "empty_think_before_answer": false,
+        "empty_think_in_tool_steps": false
+      }
+    },
+    {
+      "repo": "t-tech/T-lite-it-2.1-GGUF",
+      "revision": "fc10186e59064c2e74f59c3d5dbce233931b3b81",
+      "file": "T-lite-it-2.1-Q4_K_M.gguf",
+      "template": {
+        "family": "chatml",
+        "empty_think_before_answer": true,
+        "empty_think_in_tool_steps": false
+      }
+    },
+    {
+      "repo": "unsloth/Qwen3.5-9B-GGUF",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "template": {
+        "family": "chatml",
+        "empty_think_before_answer": true,
+        "empty_think_in_tool_steps": true
+      }
+    },
+    {
+      "repo": "Qwen/Qwen3-14B-GGUF",
+      "revision": "530227a7d994db8eca5ab5ced2fb692b614357fd",
+      "file": "Qwen3-14B-Q4_K_M.gguf",
+      "template": {
+        "family": "chatml",
+        "empty_think_before_answer": true,
+        "empty_think_in_tool_steps": false
+      }
+    }
+  ]
+}

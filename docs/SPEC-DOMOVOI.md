@@ -78,8 +78,8 @@
   `app` (bin `domovoi`), `xtask`. Пакеты с префиксом `domovoi-` (кроме `xtask`).
 - **Пины (workspace.dependencies):** objc2 =0.6.5; objc2-foundation / -app-kit / -metal / -metal-kit /
   -core-foundation / -core-graphics / -core-text / -quartz-core / -core-services =0.3.2 (default-features = false,
-  фичи поимённо); block2 =0.6.2; dispatch2 =0.3.1; libc 0.2.190; blake3 1.8.7 (rayon, mmap); rayon 1.12.0;
-  rkyv 0.8.18; bindgen 0.73.2; cmake 0.1.58; bytemuck 1.25.2; scraper 0.27.0; cssparser 0.38.0; quote +
+  фичи поимённо); block2 =0.6.2; dispatch2 =0.3.1; libc 0.2.190; blake3 1.8.7 (rayon); rayon 1.12.0;
+  rkyv 0.8.18; serde 1.0.229 (derive); serde_json 1.0.154; bindgen 0.73.2; cmake 0.1.58; bytemuck 1.25.2; scraper 0.27.0; cssparser 0.38.0; quote +
   prettyplease; tiny_http (dev).
 - **Внешнее:** llama.cpp как git submodule `vendor/llama.cpp` на коммите `ceefd16daa2093730bf3340315fa2b84b286ddbc`
   (16.10.2026); Sparkle 2.10.0 (`Sparkle-2.10.0.tar.xz`, 16 319 840 байт, SHA-256
@@ -248,6 +248,13 @@
   ассистента `<think>\n\n</think>\n\n` (официальные шаблоны Qwen3.5 при `enable_thinking=false` и T-lite всегда);
   golden-промпт — на каждую запись каталога (репозиторий + ревизия), а не на семейство: вендоры правят шаблоны и
   перевыкладывают GGUF. Запись каталога хранит ревизию HF, размер, SHA-256 и текст LICENSE.
+- [шаблоны] В GGUF-репозиториях каталога нет `chat_template.jinja` — официальный шаблон записи = `tokenizer.chat_template`
+  из заголовка её Q4_K_M-файла на ревизии (скрипт читает заголовок HTTP Range-запросами). Без `tools` и при
+  `enable_thinking=false` шаблоны различаются двумя параметрами записи (`template` в `assets/catalog.json`):
+  префикс `<think>\n\n</think>\n\n` перед ответом — у Qwen3.5-4B/9B, T-lite-it-2.1 и Qwen3-14B, но не у
+  Qwen3-4B-Instruct-2507; тот же пустой блок у шагов ассистента после последнего вопроса пользователя — только у
+  Qwen3.5. Шаблоны Qwen3.5 обрезают пробелы по краям содержимого, остальные — нет: Rust-шаблон обрезает всегда.
+  GBNF грамматик ответа проверен `test-gbnf-validator` llama.cpp на пине.
 - [каталог] GPU-бюджет `recommendedMaxWorkingSetSize` ≈ 74 % памяти (8 ГБ → ≈ 5,9 ГБ) на веса + KV + compute рядом
   с индексом скана 0,6–0,9 ГБ; `n_ctx` по классу 8k / 16k / 32k; выгрузка модели по
   `DISPATCH_SOURCE_TYPE_MEMORYPRESSURE` WARN (следующий запрос перезагружает), CRITICAL — аварийная выгрузка и отказ

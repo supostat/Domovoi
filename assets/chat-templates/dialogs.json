@@ -1,0 +1,75 @@
+{
+  "dialogs": [
+    {
+      "name": "first-question",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Ты — Домовой, помощник по месту на диске Mac. Отвечай по-русски.\n\n# Инструменты\n- summarize: дать сводку по диску\n\n# Формат ответа\nКаждый ответ — один JSON-объект:\n{\"kind\":\"tool_call\",\"name\":\"summarize\",\"arguments\":{}}"
+        },
+        {
+          "role": "user",
+          "content": "Почему диск почти заполнен?"
+        }
+      ]
+    },
+    {
+      "name": "tool-step",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Ты — Домовой, помощник по месту на диске Mac. Отвечай по-русски.\n\n# Инструменты\n- query_index: найти узлы индекса диска\n\n# Формат ответа\nКаждый ответ — один JSON-объект."
+        },
+        {
+          "role": "user",
+          "content": "Что занимает больше всего места в Библиотеке?"
+        },
+        {
+          "role": "assistant",
+          "content": "{\"kind\":\"tool_call\",\"name\":\"query_index\",\"arguments\":{\"path_prefix\":\"/Users/igor/Library\",\"limit\":3}}"
+        },
+        {
+          "role": "tool",
+          "content": "{\"nodes\":[{\"path\":\"/Users/igor/Library/Developer\",\"allocated\":61000000000,\"category\":\"dev\"},{\"path\":\"/Users/igor/Library/Containers\",\"allocated\":67200000000,\"category\":\"apps\"}]}"
+        }
+      ]
+    },
+    {
+      "name": "follow-up",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Ты — Домовой, помощник по месту на диске Mac. Отвечай по-русски.\n\n# Формат ответа\nКаждый ответ — один JSON-объект."
+        },
+        {
+          "role": "user",
+          "content": "Что можно удалить без риска?"
+        },
+        {
+          "role": "assistant",
+          "content": "{\"kind\":\"final\",\"answer\":\"Без риска — кэши сборки Xcode: 38,2 ГБ.\",\"hypotheses\":[]}"
+        },
+        {
+          "role": "user",
+          "content": "А что внутри DerivedData?"
+        },
+        {
+          "role": "assistant",
+          "content": "{\"kind\":\"tool_call\",\"name\":\"inspect_node\",\"arguments\":{\"path\":\"/Users/igor/Library/Developer/Xcode/DerivedData\"}}"
+        },
+        {
+          "role": "tool",
+          "content": "{\"path\":\"/Users/igor/Library/Developer/Xcode/DerivedData\",\"allocated\":38200000000,\"rule\":\"xcode.derived-data\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "{\"kind\":\"tool_call\",\"name\":\"rule_explain\",\"arguments\":{\"id\":\"xcode.derived-data\"}}"
+        },
+        {
+          "role": "tool",
+          "content": "{\"id\":\"xcode.derived-data\",\"level\":\"safe\",\"explanation\":\"Промежуточные результаты сборки.\"}"
+        }
+      ]
+    }
+  ]
+}

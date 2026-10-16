@@ -1,1 +1,41 @@
 #![forbid(unsafe_code)]
+
+mod chat_message;
+mod chat_role;
+mod chat_template;
+mod compiled_schema;
+mod digit_range;
+mod final_answer;
+mod gbnf_grammar;
+mod gbnf_text;
+mod grammar_builder;
+mod model_hypothesis;
+mod model_response;
+mod pattern;
+mod prompt_family;
+mod response_error;
+mod response_schema;
+mod schema_error;
+mod schema_node;
+mod schema_violation;
+mod strict_json;
+mod system_prompt;
+mod tool;
+mod tool_call;
+
+pub use chat_message::ChatMessage;
+pub use chat_role::ChatRole;
+pub use chat_template::ChatTemplate;
+pub use compiled_schema::CompiledSchema;
+pub use final_answer::FinalAnswer;
+pub use gbnf_grammar::GbnfGrammar;
+pub use model_hypothesis::ModelHypothesis;
+pub use model_response::ModelResponse;
+pub use prompt_family::PromptFamily;
+pub use response_error::ResponseError;
+pub use response_schema::ResponseSchema;
+pub use schema_error::{SchemaError, SchemaProblem};
+pub use schema_violation::SchemaViolation;
+pub use system_prompt::system_prompt;
+pub use tool::Tool;
+pub use tool_call::ToolCall;

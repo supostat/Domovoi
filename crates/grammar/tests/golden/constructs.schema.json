@@ -1,0 +1,26 @@
+{
+  "$defs": {
+    "point": {
+      "type": "object",
+      "properties": {
+        "x": {"type": "integer", "minimum": -40, "maximum": 125},
+        "y": {"type": "number", "minimum": 2, "maximum": 5}
+      },
+      "required": ["x", "y"],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "id": {"type": "string", "pattern": "^v(?:\\d{1,3}\\.){2}\\d{1,3}(-beta)?$"},
+    "flag": {"type": "boolean"},
+    "mode": {"enum": ["fast", 2, true, null]},
+    "count": {"type": "integer"},
+    "ratio": {"type": "number"},
+    "points": {"type": "array", "items": {"$ref": "#/$defs/point"}, "minItems": 1, "maxItems": 3},
+    "note": {"type": "string", "maxLength": 0},
+    "tag": {"type": "string", "minLength": 2, "maxLength": 8}
+  },
+  "required": ["id", "points", "tag"],
+  "additionalProperties": false
+}
