@@ -11,3 +11,77 @@ workspace = true
 [[bin]]
 name = "domovoi"
 path = "src/main.rs"
+
+[dependencies]
+block2.workspace = true
+domovoi-index.workspace = true
+domovoi-render.workspace = true
+domovoi-rules.workspace = true
+domovoi-scanner.workspace = true
+domovoi-theme.workspace = true
+objc2.workspace = true
+objc2-app-kit = { workspace = true, features = [
+  "NSAccessibility",
+  "NSAlert",
+  "NSAccessibilityProtocols",
+  "NSAppearance",
+  "NSApplication",
+  "NSAttributedString",
+  "NSBezierPath",
+  "NSButton",
+  "NSButtonCell",
+  "NSCell",
+  "NSColor",
+  "NSColorSpace",
+  "NSControl",
+  "NSEvent",
+  "NSFont",
+  "NSFontDescriptor",
+  "NSGraphics",
+  "NSGraphicsContext",
+  "NSImage",
+  "NSImageRep",
+  "NSLayoutAnchor",
+  "NSLayoutConstraint",
+  "NSMenu",
+  "NSMenuItem",
+  "NSOutlineView",
+  "NSPanel",
+  "NSParagraphStyle",
+  "NSResponder",
+  "NSRunningApplication",
+  "NSScreen",
+  "NSScrollView",
+  "NSSegmentedControl",
+  "NSSplitView",
+  "NSSplitViewController",
+  "NSSplitViewItem",
+  "NSStackView",
+  "NSStringDrawing",
+  "NSTableCellView",
+  "NSTableColumn",
+  "NSTableHeaderView",
+  "NSTableView",
+  "NSText",
+  "NSTextField",
+  "NSUserInterfaceLayout",
+  "NSView",
+  "NSViewController",
+  "NSWindow",
+  "NSWorkspace",
+  "block2",
+  "objc2-core-foundation",
+  "objc2-core-graphics",
+] }
+objc2-core-foundation = { workspace = true, features = ["CFCGTypes"] }
+objc2-core-graphics = { workspace = true, features = ["CGBitmapContext", "CGColor", "CGColorSpace", "CGContext", "CGImage", "CGPath"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSAttributedString", "NSBundle", "NSDate", "NSDictionary", "NSError", "NSGeometry", "NSNotification", "NSObject", "NSOperation", "NSProcessInfo", "NSRunLoop", "NSString", "NSTimer", "NSURL", "NSUserDefaults", "NSValue", "block2"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+domovoi-testkit.workspace = true
+
+[[test]]
+name = "truncation"
+harness = false

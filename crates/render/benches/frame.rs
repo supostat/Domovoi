@@ -3,8 +3,8 @@ use std::time::Instant;
 
 use domovoi_index::Category;
 use domovoi_render::{
-    BUILT_METALLIB, DiagramOutline, DiagramPainter, DiagramRenderer, DiagramStrings, DiagramTree, GlyphAtlas, ROOT,
-    SunburstLayout, TreemapLayout, register_fonts,
+    BUILT_METALLIB, DiagramOutline, DiagramPainter, DiagramRenderer, DiagramStrings, DiagramTree, GlyphAtlas,
+    NodeOrigin, ROOT, SunburstLayout, TreemapLayout, register_fonts,
 };
 use domovoi_theme::Palette;
 
@@ -40,12 +40,14 @@ fn outline(fanout: &[usize], sizes: &mut Sizes, label: usize) -> DiagramOutline 
             name: format!("file-{label}"),
             category,
             size: sizes.next(),
+            origin: NodeOrigin::Outline,
             children: Vec::new(),
         },
         Some((count, rest)) => DiagramOutline {
             name: format!("folder-{label}"),
             category,
             size: 0,
+            origin: NodeOrigin::Outline,
             children: (0..*count)
                 .map(|child| outline(rest, sizes, label * 31 + child))
                 .collect(),
@@ -71,6 +73,7 @@ fn main() {
             scale: SCALE,
             hovered: None,
             dim_progress: 0.0,
+            center: None,
         };
         let mut atlas = GlyphAtlas::default();
         let sunburst_scene = painter.sunburst(&sunburst, None, 1.0, &mut atlas);

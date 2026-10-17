@@ -18,7 +18,7 @@ impl DiagramTree {
     }
 
     pub fn from_index(index: &Index, root: NodeId, depth: u32) -> Self {
-        Self::from_outline(&outline_of(index, root, depth))
+        Self::from_outline(&DiagramOutline::indexed(index, root, &|_, level| level < depth))
     }
 
     pub fn node(&self, node: usize) -> &DiagramNode {
@@ -50,6 +50,7 @@ impl DiagramTree {
             name: outline.name.clone(),
             category: outline.category,
             size: outline.size,
+            origin: outline.origin,
             depth,
             parent,
             children: Vec::new(),
@@ -65,29 +66,5 @@ impl DiagramTree {
         }
         self.nodes[position].children = children;
         position
-    }
-}
-
-fn outline_of(index: &Index, node: NodeId, depth: u32) -> DiagramOutline {
-    let record = index.node(node);
-    let children = if depth == 0 {
-        Vec::new()
-    } else {
-        index
-            .children(node)
-            .filter(|child| index.node(*child).allocated > 0)
-            .map(|child| outline_of(index, child, depth - 1))
-            .collect()
-    };
-    let name = if node == index.root() {
-        index.path(node).to_string_lossy().into_owned()
-    } else {
-        index.name(node).to_string_lossy().into_owned()
-    };
-    DiagramOutline {
-        name,
-        category: record.category,
-        size: record.allocated,
-        children,
     }
 }

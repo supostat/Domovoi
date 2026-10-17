@@ -66,8 +66,10 @@ impl Volumes {
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "data volume device is not an APFS volume"))?
             .to_owned();
         let mut other_volumes = 0;
+        let mut system_in_container = false;
         for volume in mounted_volumes()? {
             let same_container = container_of(&volume.device) == Some(container.as_str());
+            system_in_container |= same_container && volume.mount_point == Path::new(SYSTEM_ROOT);
             let counted_elsewhere = volume.mount_point == data_root || volume.mount_point == Path::new(SYSTEM_ROOT);
             if same_container && !counted_elsewhere {
                 other_volumes += volume_used(&volume.mount_point)?;
@@ -78,7 +80,14 @@ impl Volumes {
         let volume_root = OwnedFd::from(File::open(data_root)?);
         Ok(Self {
             data_used: Measured::new(volume_used(data_root)?, Source::Getattrlist),
-            system_used: Measured::new(volume_used(Path::new(SYSTEM_ROOT))?, Source::Getattrlist),
+            system_used: Measured::new(
+                if system_in_container {
+                    volume_used(Path::new(SYSTEM_ROOT))?
+                } else {
+                    0
+                },
+                Source::Getattrlist,
+            ),
             other_volumes: Measured::new(other_volumes, Source::Getattrlist),
             container_size: Measured::new(capacity.size, Source::Getattrlist),
             free: Measured::new(capacity.available, Source::Getattrlist),

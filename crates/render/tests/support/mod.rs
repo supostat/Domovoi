@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use domovoi_index::Category;
-use domovoi_render::{BUILT_METALLIB, DiagramOutline, DiagramRenderer, DiagramStrings, DiagramTree, register_fonts};
+use domovoi_render::{
+    BUILT_METALLIB, DiagramOutline, DiagramRenderer, DiagramStrings, DiagramTree, NodeOrigin, register_fonts,
+};
 use serde_json::Value;
 
 const GIGABYTE: f64 = 1_000_000_000.0;
@@ -53,6 +55,7 @@ fn outline(value: &Value) -> DiagramOutline {
         size: value["gigabytes"]
             .as_f64()
             .map_or(0, |gigabytes| (gigabytes * GIGABYTE).round() as u64),
+        origin: NodeOrigin::Outline,
         children: value["children"]
             .as_array()
             .map(|children| children.iter().map(outline).collect())

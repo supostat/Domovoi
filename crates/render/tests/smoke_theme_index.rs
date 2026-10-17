@@ -56,6 +56,7 @@ fn the_real_palette_and_a_real_index_produce_a_frame() {
         scale: 1.0,
         hovered: None,
         dim_progress: 0.0,
+        center: None,
     };
     let scene = painter.sunburst(&layout, None, 1.0, &mut atlas);
     let frame = renderer().render_offscreen(&scene, &atlas).image;

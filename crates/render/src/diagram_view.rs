@@ -12,12 +12,14 @@ use objc2_app_kit::{
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_core_graphics::{CGColorSpace, kCGColorSpaceSRGB};
-use objc2_foundation::{NSArray, NSCopying, NSRect, NSString};
+use objc2_foundation::{NSArray, NSCopying, NSPoint, NSRect, NSString};
 use objc2_metal_kit::MTKView;
 
 use crate::accessible_segment::AccessibleSegment;
+use crate::diagram_change::DiagramChange;
 use crate::diagram_drawer::DiagramDrawer;
 use crate::diagram_graphics::DiagramGraphics;
+use crate::diagram_observer::DiagramObserver;
 use crate::diagram_renderer::PIXEL_FORMAT;
 use crate::diagram_state::DiagramState;
 use crate::point::Point;
@@ -34,6 +36,7 @@ pub struct DiagramViewState {
     state: Rc<RefCell<DiagramState>>,
     surface: OnceCell<(Retained<MTKView>, Retained<DiagramDrawer>)>,
     tracking: RefCell<Option<Retained<NSTrackingArea>>>,
+    observer: RefCell<Option<DiagramObserver>>,
 }
 
 define_class!(
@@ -65,6 +68,7 @@ define_class!(
                 RETURN => {
                     self.ivars().state.borrow_mut().open_keyboard_focus(Instant::now());
                     self.changed();
+                    self.notify(None);
                 }
                 _ => unsafe {
                     let _: () = msg_send![super(self), keyDown: event];
@@ -77,6 +81,7 @@ define_class!(
             let point = self.local_point(event);
             self.ivars().state.borrow_mut().click(point, Instant::now());
             self.changed();
+            self.notify(Some(event.locationInWindow()));
         }
 
         #[unsafe(method(mouseMoved:))]
@@ -84,12 +89,14 @@ define_class!(
             let point = self.local_point(event);
             self.ivars().state.borrow_mut().hover(Some(point), Instant::now());
             self.animate();
+            self.notify(Some(event.locationInWindow()));
         }
 
         #[unsafe(method(mouseExited:))]
         fn mouse_exited(&self, _event: &NSEvent) {
             self.ivars().state.borrow_mut().hover(None, Instant::now());
             self.animate();
+            self.notify(None);
         }
 
         #[unsafe(method(updateTrackingAreas))]
@@ -163,6 +170,7 @@ impl DiagramView {
             state: Rc::clone(&state),
             surface: OnceCell::new(),
             tracking: RefCell::new(None),
+            observer: RefCell::new(None),
         });
         let this: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
         let device = graphics.renderer.device();
@@ -196,6 +204,24 @@ impl DiagramView {
         self.changed();
     }
 
+    pub fn observe(&self, observer: DiagramObserver) {
+        *self.ivars().observer.borrow_mut() = Some(observer);
+    }
+
+    fn notify(&self, pointer: Option<NSPoint>) {
+        let change = {
+            let state = self.ivars().state.borrow();
+            DiagramChange {
+                focus: state.focus(),
+                hovered: state.hovered,
+                pointer,
+            }
+        };
+        if let Some(observer) = self.ivars().observer.borrow().as_ref() {
+            observer.notify(change);
+        }
+    }
+
     fn move_focus(&self, forward: bool) {
         let focused = self
             .ivars()
@@ -207,6 +233,7 @@ impl DiagramView {
             unsafe { NSAccessibilityPostNotification(&element, NSAccessibilityFocusedUIElementChangedNotification) };
         }
         self.animate();
+        self.notify(None);
     }
 
     fn local_point(&self, event: &NSEvent) -> Point {

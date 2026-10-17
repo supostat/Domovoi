@@ -39,6 +39,7 @@ fn painter<'tree>(palette: &'static Palette, scale: f32, tree: &'tree DiagramTre
         scale,
         hovered: None,
         dim_progress: 0.0,
+        center: None,
     }
 }
 

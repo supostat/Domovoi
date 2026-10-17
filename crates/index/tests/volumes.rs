@@ -2,6 +2,7 @@ use std::path::Path;
 
 use domovoi_apfs_sys::data_volume;
 use domovoi_index::{HiddenSpace, Measured, Source, Volumes};
+use domovoi_testkit::{ImageVolume, Visibility, VolumeFormat};
 
 const GIGABYTE: u64 = 1_000_000_000;
 
@@ -42,4 +43,14 @@ fn every_volume_number_names_its_source() {
     );
     assert!(volumes.container_size.value > volumes.free.value);
     assert!(Volumes::measure(Path::new("/nonexistent")).is_err());
+}
+
+#[test]
+fn a_volume_of_another_container_counts_neither_macos_nor_its_neighbours() {
+    let volume = ImageVolume::create(VolumeFormat::Apfs, Visibility::Hidden).expect("the image attaches");
+    let mount_point = std::fs::canonicalize(volume.mount_point()).expect("the mount point resolves");
+    let volumes = Volumes::measure(&mount_point).expect("volume numbers are read");
+    assert_eq!(volumes.system_used.value, 0);
+    assert_eq!(volumes.other_volumes.value, 0);
+    assert!(volumes.data_used.value > 0);
 }

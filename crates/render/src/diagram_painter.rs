@@ -47,6 +47,7 @@ pub struct DiagramPainter<'a> {
     pub scale: f32,
     pub hovered: Option<usize>,
     pub dim_progress: f32,
+    pub center: Option<&'a [String; 3]>,
 }
 
 impl DiagramPainter<'_> {
@@ -98,7 +99,12 @@ impl DiagramPainter<'_> {
         } else {
             self.strings.used
         };
-        for line in center_text(layout, caption, &node.name, &format_size(node.size)) {
+        let size = format_size(node.size);
+        let [caption, name, size] = match self.center {
+            Some([caption, name, size]) => [caption.as_str(), name.as_str(), size.as_str()],
+            None => [caption, node.name.as_str(), size.as_str()],
+        };
+        for line in center_text(layout, caption, name, size) {
             let color = match line.role {
                 CenterRole::Caption => self.palette.dim,
                 CenterRole::Name => self.palette.text,

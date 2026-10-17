@@ -29,6 +29,7 @@ pub struct DiagramState {
     pub reduce_motion: bool,
     pub sweep: f32,
     pub hovered: Option<usize>,
+    pub center: Option<[String; 3]>,
     pub layout: DiagramLayout,
     previous: Option<SunburstLayout>,
     zoom: Option<Transition>,
@@ -56,6 +57,7 @@ impl DiagramState {
             reduce_motion: false,
             sweep: FULL_SWEEP,
             hovered: None,
+            center: None,
             layout,
             previous: None,
             zoom: None,
@@ -95,6 +97,14 @@ impl DiagramState {
             DiagramLayout::Treemap(_) => None,
         };
         self.zoom = Some(Transition::start(Motion::LevelZoom, now, self.reduce_motion));
+        self.hovered = None;
+        self.keyboard.reset();
+        self.relayout(node);
+    }
+
+    pub fn jump_to(&mut self, node: usize) {
+        self.previous = None;
+        self.zoom = None;
         self.hovered = None;
         self.keyboard.reset();
         self.relayout(node);
@@ -177,6 +187,7 @@ impl DiagramState {
             scale,
             hovered: self.hovered,
             dim_progress: self.dim.map_or(0.0, |dim| dim.progress(now)),
+            center: self.center.as_ref(),
         };
         match &self.layout {
             DiagramLayout::Sunburst(layout) => {

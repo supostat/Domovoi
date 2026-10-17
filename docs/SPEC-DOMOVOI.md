@@ -348,14 +348,37 @@
   `tmutil localsnapshot` в тестах запрещён (снапшотит системный том) — ветка «удержано снапшотом» проверяется
   unit-тестом с подставленными атрибутами, на живом снапшоте — ручная приёмка.
 - [UI] Снимки для agent-judged: `domovoi --snapshot <экран|all> --theme <dark|light> --scale <1|2> --state
-  <fixture.json> [--contrast high] <dir>` рендерит окна offscreen (`bitmapImageRepForCachingDisplayInRect` + текстура
-  диаграммы) без Screen Recording, состояния экранов — из фикстуры, не с хоста; файлы
+  <fixture.json> [--contrast high] <dir>` рендерит окна offscreen (sRGB `CGBitmapContext` +
+  `displayRectIgnoringOpacity:inContext:` + текстура диаграммы; кэш `bitmapImageRepForCachingDisplayInRect` — Generic
+  RGB, не годится) без Screen Recording, состояния экранов — из фикстуры, не с хоста; файлы
   `<screen>-<theme>@<scale>x.png`, ревьюер читает их из `target/snapshots/` (gitignored); «Open in Low Resolution» —
   по архивному документу Apple 2012 г. magnified mode без фильтрации, актуальность на macOS 15/26 проверяется
   вручную.
 - [UI] Доступность: `NSAccessibilityElement` на сегмент диаграммы; при `accessibilityDisplayShouldIncreaseContrast`
   рамки и разделители — системные `NSColor::separatorColor`/`labelColor` вместо `line`/`line-soft` (у книги нет
   HC-токенов); `reduce_motion` — смена кадра вместо анимации.
+- [UI] Рядом с каждым PNG пишется `<stem>.json`: окно, масштаб и пробы (фон окна, сайдбар, акцентная кнопка) в точках
+  от верхнего левого угла — по ним `theme_pixels` сверяет токены. На macOS 26 `NSSegmentedControl` — SwiftUI-хостинг на
+  слоях (`_NSCoreHostingView`) и в offscreen-снимок не попадает: переключатель режимов — свой из `ShellButton`.
+  `NSSplitViewController` включает автолэйаут всей иерархии: вид без собственного размера в `NSStackView` сжимается до
+  нуля, а стек шире панели раздвигает её — легенда раскладывается фреймами с переносом строк. Делегаты таблиц слабые:
+  экранная структура живёт до конца отрисовки снимка.
+  `NSAppearance(named:)` для имён `AccessibilityHighContrast*` возвращает обычные `DarkAqua`/`Aqua`: вариант высокого
+  контраста существует только при включённой системной настройке, поэтому снимок `--contrast high` проверяет замену
+  `line`/`line-soft` на `separatorColor`, но не его системное усиление — оно видно только в живом окне.
+- [UI] Живое окно раскрывает дерево индекса по бюджету 200 тыс. узлов: цепочка фокуса и кольца под ним, затем
+  крупнейшие каталоги; зум за раскрытое перестраивает дерево вокруг фокуса без анимации (`DiagramState::jump_to`).
+  «Скрытое», «Другие тома», «macOS» — из `Volumes` с источником цифр в тултипе; нулевые сегменты и тома других
+  контейнеров в круг не входят. «в облаке» — логический размер dataless-файлов вне суммы, строкой в шапке. Имя диска —
+  `NSURLVolumeLocalizedNameKey` тома `/` для Data-тома, иначе корня скана.
+- [UI] `--e2e <scenario.json> --report <report.json>`: шаги `scan`, `reopen_cache`, `await_change {path,
+  timeout_seconds}`, `recommendations`, `snapshots {directory, scale}`; отчёт — `steps`, `totals` по уровням,
+  `snapshots`. Шаги Корзины, дубликатов, загрузки модели и вопроса Домовому добавляют ui-care и ui-ai вместе со своими
+  экранами и XPC-клиентом.
+- [UI] В бандле шейдеры диаграммы — `Resources/diagram.metallib` (через `NSBundle`), шрифты — `ATSApplicationFontsPath =
+  Fonts`; вне бандла — `BUILT_METALLIB` и регистрация `assets/fonts`. Шаблон — `crates/app/bundle/Info.plist`, версии
+  штампует distribution. Живое окно (проба FDA, возврат из Настроек → «Перезапустить», скан с прогрессом, дельты
+  FSEvents, тултип-панель, смена темы и контраста) гейтами не покрывается — приёмка человеком после wire.
 
 # Gameplan
 
