@@ -1,0 +1,299 @@
+{
+ "name": "Macintosh HD",
+ "category": "home",
+ "children": [
+  {
+   "name": "Пользователи · igor",
+   "category": "home",
+   "children": [
+    {
+     "name": "Library",
+     "category": "home",
+     "children": [
+      {
+       "name": "Developer",
+       "category": "dev",
+       "children": [
+        {
+         "name": "Xcode · DerivedData",
+         "category": "dev",
+         "gigabytes": 38.2
+        },
+        {
+         "name": "CoreSimulator · Devices",
+         "category": "dev",
+         "gigabytes": 22.6
+        },
+        {
+         "name": "iOS DeviceSupport",
+         "category": "dev",
+         "gigabytes": 11.4
+        },
+        {
+         "name": "Xcode · Archives",
+         "category": "dev",
+         "gigabytes": 6.1
+        }
+       ]
+      },
+      {
+       "name": "Containers",
+       "category": "apps",
+       "children": [
+        {
+         "name": "Docker",
+         "category": "dev",
+         "gigabytes": 48.0
+        },
+        {
+         "name": "Telegram",
+         "category": "apps",
+         "gigabytes": 8.7
+        },
+        {
+         "name": "Mail",
+         "category": "apps",
+         "gigabytes": 6.3
+        },
+        {
+         "name": "Прочие контейнеры",
+         "category": "apps",
+         "gigabytes": 4.2
+        }
+       ]
+      },
+      {
+       "name": "Application Support",
+       "category": "apps",
+       "children": [
+        {
+         "name": "MobileSync · Backup",
+         "category": "docs",
+         "gigabytes": 31.5
+        },
+        {
+         "name": "Domovoi · models",
+         "category": "model",
+         "gigabytes": 5.0
+        },
+        {
+         "name": "Slack",
+         "category": "apps",
+         "gigabytes": 3.1
+        },
+        {
+         "name": "Code",
+         "category": "apps",
+         "gigabytes": 2.4
+        },
+        {
+         "name": "com.tinyapp.helper",
+         "category": "apps",
+         "gigabytes": 1.7
+        }
+       ]
+      },
+      {
+       "name": "Caches",
+       "category": "cache",
+       "children": [
+        {
+         "name": "Homebrew",
+         "category": "cache",
+         "gigabytes": 5.8
+        },
+        {
+         "name": "com.spotify.client",
+         "category": "cache",
+         "gigabytes": 4.4
+        },
+        {
+         "name": "org.swift.swiftpm",
+         "category": "cache",
+         "gigabytes": 3.2
+        },
+        {
+         "name": "Yarn",
+         "category": "cache",
+         "gigabytes": 2.9
+        },
+        {
+         "name": "Safari",
+         "category": "cache",
+         "gigabytes": 2.1
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Pictures",
+     "category": "media",
+     "children": [
+      {
+       "name": "Photos Library",
+       "category": "media",
+       "gigabytes": 58.3
+      },
+      {
+       "name": "Прочие изображения",
+       "category": "media",
+       "gigabytes": 3.4
+      }
+     ]
+    },
+    {
+     "name": "Projects",
+     "category": "dev",
+     "children": [
+      {
+       "name": "engram · target",
+       "category": "dev",
+       "gigabytes": 14.2
+      },
+      {
+       "name": "quartz · target",
+       "category": "dev",
+       "gigabytes": 9.8
+      },
+      {
+       "name": "Исходники",
+       "category": "dev",
+       "gigabytes": 4.1
+      },
+      {
+       "name": "facet · zig-cache",
+       "category": "dev",
+       "gigabytes": 3.4
+      },
+      {
+       "name": "boss · node_modules",
+       "category": "dev",
+       "gigabytes": 2.2
+      },
+      {
+       "name": "clavis · node_modules",
+       "category": "dev",
+       "gigabytes": 1.6
+      }
+     ]
+    },
+    {
+     "name": "Movies",
+     "category": "media",
+     "children": [
+      {
+       "name": "Final Cut · библиотека",
+       "category": "media",
+       "gigabytes": 29.5
+      },
+      {
+       "name": "Записи экрана",
+       "category": "media",
+       "gigabytes": 12.5
+      }
+     ]
+    },
+    {
+     "name": "Downloads",
+     "category": "docs",
+     "children": [
+      {
+       "name": "Установщики .dmg и .pkg",
+       "category": "docs",
+       "gigabytes": 14.7
+      },
+      {
+       "name": "Архивы .zip",
+       "category": "docs",
+       "gigabytes": 6.3
+      },
+      {
+       "name": "Разное",
+       "category": "docs",
+       "gigabytes": 3.8
+      }
+     ]
+    },
+    {
+     "name": "Documents",
+     "category": "docs",
+     "gigabytes": 12.6
+    },
+    {
+     "name": "Music",
+     "category": "media",
+     "gigabytes": 9.2
+    }
+   ]
+  },
+  {
+   "name": "Applications",
+   "category": "apps",
+   "children": [
+    {
+     "name": "Остальные программы",
+     "category": "apps",
+     "gigabytes": 18.9
+    },
+    {
+     "name": "Xcode",
+     "category": "apps",
+     "gigabytes": 12.1
+    },
+    {
+     "name": "Final Cut Pro",
+     "category": "apps",
+     "gigabytes": 6.4
+    },
+    {
+     "name": "Logic Pro",
+     "category": "apps",
+     "gigabytes": 2.3
+    }
+   ]
+  },
+  {
+   "name": "Скрытое",
+   "category": "hidden",
+   "children": [
+    {
+     "name": "Purgeable",
+     "category": "hidden",
+     "gigabytes": 12.4
+    },
+    {
+     "name": "Системные данные",
+     "category": "hidden",
+     "gigabytes": 9.6
+    },
+    {
+     "name": "Снапшоты Time Machine",
+     "category": "hidden",
+     "gigabytes": 8.1
+    }
+   ]
+  },
+  {
+   "name": "System",
+   "category": "system",
+   "gigabytes": 16.8
+  },
+  {
+   "name": "Library",
+   "category": "system",
+   "children": [
+    {
+     "name": "Audio · Apple Loops",
+     "category": "system",
+     "gigabytes": 6.8
+    },
+    {
+     "name": "Прочее",
+     "category": "system",
+     "gigabytes": 7.4
+    }
+   ]
+  }
+ ]
+}

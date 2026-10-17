@@ -317,6 +317,26 @@
   8 вопросов по 128 токенов с грамматикой и без. `cargo xtask eval --class <класс>` гоняет `#[ignore]`-тест в release,
   модель берётся из `DOMOVOI_NIGHTLY_<CLASS>_MODEL`, отчёт — `target/eval/<класс>.json`, пороги проверяются для
   primary-записи класса.
+- [рендер] Цель — `bgra8Unorm` (не `_srgb`) со слоем sRGB: Core Graphics смешивает в sRGB-кодированных значениях, а
+  `_srgb`-цель смешивала бы линейно и разошлась бы с `NSView` на `*-soft` токенах; `color_parity` сверяет 12 токенов в
+  обеих темах с точностью ±1. Кэш `bitmapImageRepForCachingDisplayInRect` у вида без окна — Generic RGB (гамма 1.8),
+  поэтому эталон `NSView` рисуется в sRGB `CGBitmapContext` через `NSGraphicsContext` и
+  `displayRectIgnoringOpacity:inContext:`. `.metallib` собирает `build.rs` крейта render (`xcrun metal` / `metallib` в
+  OUT_DIR, путь — `BUILT_METALLIB`), как llama-sys: тестам и бандлу не нужен отдельный шаг xtask. Глифы растеризуются
+  белым по чёрному в BGRA-контексте со сглаживанием (дилатация как у `NSTextField`), покрытие — зелёный канал, атлас
+  R8 2048², 4 субпиксельных варианта; текст атласа отличается от `CTLineDraw` в среднем не больше чем на 4/255.
+  Рендерер перезаливает атлас по паре «идентичность атласа, ревизия»: новый атлас с той же ревизией иначе рисовал
+  чужие глифы (поймал `golden_offscreen`). Onest и JetBrains Mono регистрируются `CTFontManagerRegisterFontsForURL`
+  (процесс), вес задаёт ось `wght` через `kCTFontVariationAttribute`. Строки диаграммы (категории, «занято», «↑
+  наверх») render получает в `DiagramStrings` от вызывающего. Тесты с AppKit (`color_parity`, `accessibility`) идут с
+  `harness = false`: AppKit требует главный поток. Эталоны — `crates/render/tests/golden/*.png` (M4 Pro, macOS 26.1):
+  допуск — не больше 0,5 % пикселей с отклонением канала больше 24, точное сравнение при `DOMOVOI_GOLDEN_EXACT=1`,
+  перезапись при `DOMOVOI_GOLDEN_UPDATE=1`. Квад дуги ограничен рамкой сектора (концы и экстремумы осей): GPU-кадр
+  sunburst при 2x — 0,46 мс вместо 7,9 мс.
+- [рендер] Первый замер `benches/frame` (M4 Pro, 2x): 1,01 млн узлов — sunburst раскладка 2 мс, 121 инстанс, GPU 0,46
+  мс; treemap 0,9 мс, 11 306 инстансов (фигуры и глифы), GPU 1,0 мс, подписано 91,8 % площади; 5,67 млн — sunburst 15
+  мс, 172 инстанса, GPU 0,19 мс; treemap 2,5 мс, 24 164 инстанса, GPU 1,15 мс, подписано 90 %. Пороги фиксируются по
+  ночному self-hosted.
 - [сборка] objc2 0.7 / frameworks 0.4 объявлены (BREAKING `ivars` в `define_class!`); примеры objc2 на `main`
   написаны под нерелизный API — референс только тег `objc2-0.6.5`; код `define_class!` держит ivars отдельной
   структурой; libc 1.0 — в ту же фазу миграции.
