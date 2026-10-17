@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::RecvTimeoutError;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use domovoi_scanner::CancelToken;
 use objc2::MainThreadMarker;
@@ -9,18 +9,24 @@ use serde_json::{Value, json};
 
 use crate::access_state::AccessState;
 use crate::cache_opening::CacheOpening;
+use crate::care_models::CareModels;
 use crate::disk_overview::DiskOverview;
+use crate::duplicate_summary::DuplicateSummary;
+use crate::duplicates_model::DuplicatesModel;
 use crate::event_effect::EventEffect;
 use crate::expansion::{Expansion, NODE_BUDGET};
-use crate::running_applications::running_bundle_ids;
+use crate::recommendations_model::RecommendationsModel;
+use crate::safety_badge::SafetyBadge;
 use crate::scan_status::ScanStatus;
 use crate::scenario::Scenario;
 use crate::scenario_step::ScenarioStep;
 use crate::screen::Screen;
 use crate::session::Session;
+use crate::session_paths::SessionPaths;
 use crate::shell_data::ShellData;
 use crate::shell_snapshot::write_snapshots;
 use crate::snapshot_options::SnapshotOptions;
+use crate::tray_model::TrayModel;
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -57,17 +63,20 @@ pub fn run_end_to_end(marker: MainThreadMarker, scenario: &Path, report: &Path) 
 
 struct EndToEnd {
     root: PathBuf,
-    cache: PathBuf,
+    paths: SessionPaths,
     session: Session,
+    duplicates: Option<DuplicateSummary>,
     snapshots: Vec<PathBuf>,
 }
 
 impl EndToEnd {
     fn open(scenario: &Scenario) -> Result<Self, String> {
+        let paths = SessionPaths::in_directory(&scenario.state);
         Ok(Self {
             root: scenario.root.clone(),
-            cache: scenario.cache.clone(),
-            session: Session::open(&scenario.root, &scenario.cache, APP_VERSION).map_err(|error| error.to_string())?,
+            session: Session::open(&scenario.root, &paths, APP_VERSION).map_err(|error| error.to_string())?,
+            paths,
+            duplicates: None,
             snapshots: Vec::new(),
         })
     }
@@ -78,41 +87,136 @@ impl EndToEnd {
                 self.session
                     .scan(None, CancelToken::default())
                     .map_err(|error| error.to_string())?;
-                self.refresh()?;
                 let index = self.session.index().expect("a finished scan installs an index");
                 let root = index.node(index.root());
                 Ok(json!({ "step": "scan", "files": root.files, "bytes": root.allocated, "nodes": index.len() }))
             }
             ScenarioStep::ReopenCache => {
                 let mut reopened =
-                    Session::open(&self.root, &self.cache, APP_VERSION).map_err(|error| error.to_string())?;
+                    Session::open(&self.root, &self.paths, APP_VERSION).map_err(|error| error.to_string())?;
                 match reopened.open_cached().map_err(|error| error.to_string())? {
                     CacheOpening::Opened => {}
                     opening => return Err(format!("the scan cache was not reused: {opening:?}")),
                 }
                 self.session = reopened;
-                self.refresh()?;
                 Ok(json!({ "step": "reopen_cache", "last_event_id": self.session.last_event_id() }))
             }
             ScenarioStep::AwaitChange { path, timeout_seconds } => {
                 let allocated = self.await_change(path, Duration::from_secs(*timeout_seconds))?;
-                self.refresh()?;
                 Ok(json!({ "step": "await_change", "path": path, "allocated": allocated }))
             }
             ScenarioStep::Recommendations => {
-                self.refresh()?;
-                let cards = self
-                    .session
-                    .recommendations()
-                    .map_or(0, |recommendations| recommendations.cards.len());
-                Ok(json!({ "step": "recommendations", "cards": cards }))
+                let model = self.recommendations();
+                let rules: Vec<String> = model.cards.iter().map(|card| card.provenance.label()).collect();
+                Ok(json!({ "step": "recommendations", "cards": rules, "total": model.total() }))
             }
+            ScenarioStep::TrashRecommendations { level } => self.trash_recommendations(*level),
+            ScenarioStep::RestoreLast => {
+                let last = self
+                    .session
+                    .trash_journal()
+                    .entries()
+                    .len()
+                    .checked_sub(1)
+                    .ok_or("the trash journal is empty")?;
+                let restored = self.session.restore(last).map_err(|error| format!("{error:?}"))?;
+                Ok(json!({ "step": "restore_last", "restored": restored }))
+            }
+            ScenarioStep::FindDuplicates => {
+                let started = Instant::now();
+                self.session
+                    .find_duplicates(None, CancelToken::default())
+                    .map_err(|error| error.to_string())?;
+                let model = self.duplicates_model(started.elapsed().as_secs())?;
+                let groups: Vec<Value> = model
+                    .groups()
+                    .iter()
+                    .map(|group| json!({ "name": group.name, "copies": group.copies.len(), "frees": group.frees() }))
+                    .collect();
+                Ok(json!({ "step": "find_duplicates", "groups": groups }))
+            }
+            ScenarioStep::ReplaceWithClone => self.replace_with_clone(),
             ScenarioStep::Snapshots { directory, scale } => {
                 let written = self.snapshots(marker, directory, *scale)?;
                 self.snapshots.extend(written.iter().cloned());
                 Ok(json!({ "step": "snapshots", "files": written }))
             }
         }
+    }
+
+    fn recommendations(&self) -> RecommendationsModel {
+        let index = self.session.index().expect("recommendations follow a scan");
+        self.session
+            .recommendations()
+            .map(|recommendations| {
+                RecommendationsModel::build(index, self.session.rules(), recommendations, SystemTime::now())
+            })
+            .unwrap_or_default()
+    }
+
+    fn duplicates_model(&mut self, seconds: u64) -> Result<DuplicatesModel, String> {
+        let index = self.session.index().expect("duplicates follow a scan");
+        let duplicates = self.session.duplicates().expect("a finished search stores duplicates");
+        let candidates = duplicates
+            .groups
+            .iter()
+            .map(|group| group.copies.len() as u64 + 1)
+            .sum::<u64>()
+            + duplicates.skipped.len() as u64;
+        self.duplicates = Some(DuplicateSummary { candidates, seconds });
+        let mut model =
+            DuplicatesModel::found(index, duplicates, candidates, seconds).map_err(|error| error.to_string())?;
+        model.assess_clones(|keep, copy| self.session.clone_plan(keep, copy).map(drop));
+        Ok(model)
+    }
+
+    fn trash_recommendations(&mut self, level: SafetyBadge) -> Result<Value, String> {
+        let targets: Vec<_> = self
+            .recommendations()
+            .cards
+            .into_iter()
+            .filter(|card| card.level == level && card.selectable())
+            .flat_map(|card| card.targets)
+            .collect();
+        for target in &targets {
+            self.session.add_to_tray(target.node, target.rule_id.as_deref());
+        }
+        let moved = self
+            .session
+            .tray_reclaimable()
+            .map_err(|error| error.to_string())?
+            .bytes;
+        let outcomes = self.session.move_tray_to_trash().map_err(|error| error.to_string())?;
+        let model = TrayModel::default().with_outcome(&outcomes, moved, self.session.trash_journal());
+        let trashed: Vec<String> = self
+            .session
+            .trash_journal()
+            .entries()
+            .iter()
+            .map(|entry| entry.trashed.clone())
+            .collect();
+        Ok(json!({
+            "step": "trash_recommendations",
+            "moved": moved,
+            "failures": model.outcome.map(|outcome| outcome.failures).unwrap_or_default(),
+            "trashed": trashed,
+        }))
+    }
+
+    fn replace_with_clone(&mut self) -> Result<Value, String> {
+        let model = self.duplicates_model(self.duplicates.map_or(0, |summary| summary.seconds))?;
+        let (keep, copy) = model
+            .groups()
+            .iter()
+            .flat_map(|group| group.copies.iter().map(move |copy| (group, copy)))
+            .find(|(_, copy)| copy.can_check(true))
+            .and_then(|(group, copy)| Some((group.keep.node?, copy.node?)))
+            .ok_or("no copy can be replaced with a clone")?;
+        let replaced = self
+            .session
+            .replace_with_clone(keep, copy)
+            .map_err(|error| format!("{error:?}"))?;
+        Ok(json!({ "step": "replace_with_clone", "trashed": replaced.trashed }))
     }
 
     fn await_change(&mut self, path: &Path, timeout: Duration) -> Result<u64, String> {
@@ -132,41 +236,41 @@ impl EndToEnd {
                 }
                 Err(RecvTimeoutError::Disconnected) => return Err("the volume event stream stopped".to_owned()),
             };
-            match self.session.apply_event(&event).map_err(|error| error.to_string())? {
+            let mut batch = vec![event];
+            batch.extend(events.try_iter());
+            match self.session.apply_events(&batch).map_err(|error| error.to_string())? {
                 EventEffect::Applied | EventEffect::Ignored => {}
-                EventEffect::RescanRequired => return Err(format!("the volume asked for a full rescan: {event:?}")),
+                EventEffect::RescanRequired => return Err("the volume asked for a full rescan".to_owned()),
             }
         }
     }
 
-    fn snapshots(&self, marker: MainThreadMarker, directory: &Path, scale: f64) -> Result<Vec<PathBuf>, String> {
+    fn snapshots(&mut self, marker: MainThreadMarker, directory: &Path, scale: f64) -> Result<Vec<PathBuf>, String> {
         let overview = DiskOverview::measure(&self.root).map_err(|error| error.to_string())?;
-        let index = self.session.index();
-        let expansion = index.map_or_else(Expansion::default, |index| {
-            Expansion::around(index, index.root(), NODE_BUDGET)
-        });
-        let scan = index.map_or_else(
-            || ScanStatus {
-                bytes: 0,
-                files: 0,
-                sweep: 0.0,
-                threads: self.session.workers(),
-                current: self.root.display().to_string(),
-                full_first_scan: false,
-            },
-            |index| {
-                let root = index.node(index.root());
-                ScanStatus {
-                    bytes: root.allocated,
-                    files: u64::from(root.files),
-                    sweep: 1.0,
-                    threads: self.session.workers(),
-                    current: self.root.display().to_string(),
-                    full_first_scan: false,
-                }
-            },
-        );
-        let data = ShellData::measured(AccessState::probe(), &overview, index, &expansion, scan);
+        let recommendations = self.recommendations();
+        let duplicates = match self.duplicates {
+            Some(summary) => self.duplicates_model(summary.seconds)?,
+            None => DuplicatesModel::idle(),
+        };
+        let index = self.session.index().expect("snapshots follow a scan");
+        let tray = TrayModel::build(index, self.session.tray(), self.session.trash_journal())
+            .map_err(|error| error.to_string())?;
+        let expansion = Expansion::around(index, index.root(), NODE_BUDGET);
+        let root = index.node(index.root());
+        let scan = ScanStatus {
+            bytes: root.allocated,
+            files: u64::from(root.files),
+            sweep: 1.0,
+            threads: self.session.workers(),
+            current: self.root.display().to_string(),
+            full_first_scan: false,
+        };
+        let care = CareModels {
+            recommendations,
+            duplicates,
+            tray,
+        };
+        let data = ShellData::measured(AccessState::probe(), &overview, Some(index), &expansion, scan, care);
         let mut written = Vec::new();
         for dark in [true, false] {
             let options = SnapshotOptions {
@@ -180,12 +284,6 @@ impl EndToEnd {
         }
         Ok(written)
     }
-
-    fn refresh(&mut self) -> Result<(), String> {
-        self.session
-            .refresh_recommendations(&running_bundle_ids())
-            .map_err(|error| error.to_string())
-    }
 }
 
 fn step_name(step: &ScenarioStep) -> &'static str {
@@ -194,6 +292,10 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::ReopenCache => "reopen_cache",
         ScenarioStep::AwaitChange { .. } => "await_change",
         ScenarioStep::Recommendations => "recommendations",
+        ScenarioStep::TrashRecommendations { .. } => "trash_recommendations",
+        ScenarioStep::RestoreLast => "restore_last",
+        ScenarioStep::FindDuplicates => "find_duplicates",
+        ScenarioStep::ReplaceWithClone => "replace_with_clone",
         ScenarioStep::Snapshots { .. } => "snapshots",
     }
 }

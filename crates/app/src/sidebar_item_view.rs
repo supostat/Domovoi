@@ -36,6 +36,7 @@ impl SidebarItemView {
                 fill: entry.selected.then(|| tokens.surface_2.ns_color()),
                 border: None,
                 radius: SELECTION_RADIUS,
+                dashed: false,
             },
         );
         let counter = entry.counter.as_ref().map(|counter| {

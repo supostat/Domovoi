@@ -307,5 +307,273 @@
     ]
    }
   ]
+ },
+ "care": {
+  "recommendations": {
+   "safe": 87800000000,
+   "recoverable": 26100000000,
+   "check_yourself": 108200000000,
+   "cards": [
+    {
+     "title": "Xcode · DerivedData",
+     "paths": [
+      "~/Library/Developer/Xcode/DerivedData"
+     ],
+     "explanation": "Промежуточные результаты сборки Xcode. Пересоздаются при следующей сборке, проекты не пострадают.",
+     "level": "safe",
+     "provenance": {
+      "rule": "xcode.derived-data"
+     },
+     "amount": 38200000000,
+     "selected": true
+    },
+    {
+     "title": "Каталоги target/ (Rust)",
+     "paths": [
+      "~/Projects/engram/target",
+      "~/Projects/quartz/target"
+     ],
+     "explanation": "Результаты сборки Rust-проекта. cargo соберёт их заново, исходники не пострадают.",
+     "level": "safe",
+     "provenance": {
+      "rule": "cargo.target"
+     },
+     "amount": 24000000000,
+     "selected": true,
+     "held_by_clones": 1200000000
+    },
+    {
+     "title": "Архивы Xcode",
+     "paths": [
+      "~/Library/Developer/Xcode/Archives"
+     ],
+     "explanation": "Архивы сборок Xcode. Нужны, чтобы разбирать отчёты о сбоях уже выпущенных версий.",
+     "level": "check_yourself",
+     "provenance": {
+      "rule": "xcode.archives"
+     },
+     "amount": 6100000000,
+     "selected": false,
+     "owner_running": "Xcode"
+    },
+    {
+     "title": "com.tinyapp.helper",
+     "paths": [
+      "~/Library/Application Support/com.tinyapp.helper"
+     ],
+     "explanation": "Похоже на остаток удалённого приложения TinyApp: в Программах его нет.",
+     "level": "check_yourself",
+     "provenance": "hypothesis",
+     "amount": 1700000000,
+     "age": "последнее обращение 1 год назад",
+     "selected": false
+    },
+    {
+     "title": "Диск Docker",
+     "paths": [
+      "~/Library/Containers/com.docker.docker/Data/vms"
+     ],
+     "explanation": "Диск виртуальной машины Docker. В нём образы, контейнеры и тома: удаление сотрёт их.",
+     "level": "check_yourself",
+     "provenance": {
+      "rule": "docker.vm"
+     },
+     "amount": 48000000000,
+     "selected": false
+    },
+    {
+     "title": "Резервные копии iPhone и iPad",
+     "paths": [
+      "~/Library/Application Support/MobileSync/Backup/00008110-001A2D3E0C82801E"
+     ],
+     "explanation": "Резервная копия iPhone или iPad. Возможно, других копий этих данных нет.",
+     "level": "check_yourself",
+     "provenance": {
+      "rule": "ios.backups"
+     },
+     "amount": 31500000000,
+     "selected": false,
+     "held_by_snapshots": 2400000000
+    },
+    {
+     "title": "Симуляторы Xcode",
+     "paths": [
+      "~/Library/Developer/CoreSimulator/Devices"
+     ],
+     "explanation": "Симулятор Xcode. Внутри живут установленные в нём приложения и их данные.",
+     "level": "check_yourself",
+     "provenance": {
+      "rule": "xcode.simulators"
+     },
+     "amount": 22600000000,
+     "selected": false
+    },
+    {
+     "title": "Кэши приложений",
+     "paths": [
+      "~/Library/Caches/Homebrew",
+      "~/Library/Caches/com.spotify.client",
+      "~/Library/Caches/org.swift.swiftpm",
+      "~/Library/Caches/Yarn",
+      "~/Library/Caches/com.apple.Safari"
+     ],
+     "explanation": "Кэш программы. Она создаст его заново, данные не пострадают.",
+     "level": "safe",
+     "provenance": {
+      "rule": "caches.user"
+     },
+     "amount": 18400000000,
+     "selected": true
+    },
+    {
+     "title": "Установщики в Загрузках",
+     "paths": [
+      "~/Downloads/Docker.dmg",
+      "~/Downloads/Figma-125.4.dmg",
+      "~/Downloads/Zoom.pkg"
+     ],
+     "explanation": "Установщик из Загрузок. Если программа понадобится снова, его придётся скачать заново.",
+     "level": "recoverable",
+     "provenance": {
+      "rule": "downloads.installers"
+     },
+     "amount": 14700000000,
+     "selected": false
+    },
+    {
+     "title": "iOS DeviceSupport",
+     "paths": [
+      "~/Library/Developer/Xcode/iOS DeviceSupport"
+     ],
+     "explanation": "Символы отладки для подключавшихся устройств. Вернутся только при следующем подключении устройства.",
+     "level": "recoverable",
+     "provenance": {
+      "rule": "xcode.device-support"
+     },
+     "amount": 11400000000,
+     "selected": false
+    },
+    {
+     "title": "node_modules и zig-cache",
+     "paths": [
+      "~/Projects/boss/node_modules",
+      "~/Projects/clavis/node_modules",
+      "~/Projects/facet/zig-cache"
+     ],
+     "explanation": "Зависимости и кэш сборки проекта. Вернутся после установки зависимостей и сборки.",
+     "level": "safe",
+     "provenance": {
+      "rule": "dev.deps"
+     },
+     "amount": 7200000000,
+     "selected": true
+    }
+   ]
+  },
+  "duplicates": {
+   "state": "found",
+   "candidates": 18406,
+   "seconds": 134,
+   "groups": [
+    {
+     "name": "IMG_4471.MOV",
+     "keep": {
+      "path": "~/Movies/Записи/IMG_4471.MOV",
+      "size": 2100000000
+     },
+     "copies": [
+      {
+       "path": "~/Downloads/IMG_4471.MOV",
+       "size": 2100000000,
+       "frees": 2100000000,
+       "checked": true
+      },
+      {
+       "path": "~/Downloads/AirDrop/IMG_4471.MOV",
+       "size": 2100000000,
+       "frees": 2100000000,
+       "checked": true
+      }
+     ]
+    },
+    {
+     "name": "ubuntu-24.04-desktop-arm64.iso",
+     "keep": {
+      "path": "~/Downloads/ubuntu-24.04-desktop-arm64.iso",
+      "size": 2800000000
+     },
+     "copies": [
+      {
+       "path": "~/VMs/iso/ubuntu-24.04-desktop-arm64.iso",
+       "size": 2800000000,
+       "clone": true
+      }
+     ]
+    },
+    {
+     "name": "thesis-final-v3.pdf",
+     "keep": {
+      "path": "~/Documents/Учёба/thesis-final-v3.pdf",
+      "size": 15300000
+     },
+     "copies": [
+      {
+       "path": "~/Downloads/thesis-final-v3.pdf",
+       "size": 15300000,
+       "frees": 15300000,
+       "checked": true
+      },
+      {
+       "path": "~/Desktop/thesis-final-v3.pdf",
+       "size": 15300000,
+       "frees": 15300000,
+       "checked": true
+      },
+      {
+       "path": "~/Documents/Почта/thesis-final-v3.pdf",
+       "size": 15300000,
+       "frees": 15300000,
+       "checked": true
+      }
+     ]
+    }
+   ]
+  },
+  "tray": {
+   "rows": [
+    {
+     "category": "dev",
+     "title": "Xcode · DerivedData",
+     "size": 38200000000
+    },
+    {
+     "category": "dev",
+     "title": "Каталоги target/ (Rust)",
+     "size": 24000000000
+    },
+    {
+     "category": "cache",
+     "title": "Кэши приложений",
+     "size": 18400000000
+    },
+    {
+     "category": "dev",
+     "title": "node_modules и zig-cache",
+     "size": 7200000000
+    }
+   ],
+   "journal": [
+    {
+     "title": "Установщики в Загрузках",
+     "path": "~/Downloads/Slack-4.41.dmg",
+     "size": 612000000
+    },
+    {
+     "title": "Кэш Homebrew",
+     "path": "~/Library/Caches/Homebrew/downloads",
+     "size": 1300000000
+    }
+   ]
+  }
  }
 }

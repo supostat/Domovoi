@@ -1,9 +1,9 @@
-use domovoi_index::{Index, Source};
+use domovoi_index::{Category, Index, Source};
 use domovoi_render::NodeOrigin;
 use domovoi_theme::format_size;
 
 use crate::shell_data::ShellData;
-use crate::strings::{SOURCE_APFS, SOURCE_MACOS_ESTIMATE, SOURCE_SCAN};
+use crate::strings::{SNAPSHOTS_RELEASE, SOURCE_APFS, SOURCE_MACOS_ESTIMATE, SOURCE_SCAN};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HoverTip {
@@ -11,6 +11,7 @@ pub struct HoverTip {
     pub size_text: String,
     pub path: Option<String>,
     pub source: &'static str,
+    pub note: Option<&'static str>,
 }
 
 impl HoverTip {
@@ -25,6 +26,10 @@ impl HoverTip {
             size_text: format_size(record.size),
             path,
             source: source_label(record.origin)?,
+            note: (matches!(record.origin, NodeOrigin::Measured(_))
+                && record.category == Category::Hidden
+                && data.snapshots_present)
+                .then_some(SNAPSHOTS_RELEASE),
         })
     }
 }

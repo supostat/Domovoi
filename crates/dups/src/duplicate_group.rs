@@ -15,7 +15,7 @@ pub struct DuplicateGroup {
 }
 
 impl DuplicateGroup {
-    pub(crate) fn of_members(index: &Index, size: u64, fully_hashed: bool, members: &[NodeId]) -> io::Result<Self> {
+    pub fn of_members(index: &Index, size: u64, fully_hashed: bool, members: &[NodeId]) -> io::Result<Self> {
         let keep = *members
             .iter()
             .min_by_key(|member| {

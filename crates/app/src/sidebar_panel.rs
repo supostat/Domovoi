@@ -1,3 +1,4 @@
+use objc2::Message;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2::{MainThreadMarker, MainThreadOnly};
@@ -9,6 +10,7 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use crate::fill_view::{FillStyle, FillView};
 use crate::label::measure_label;
+use crate::shell_actions::ShellActions;
 use crate::shell_palette::ShellPalette;
 use crate::sidebar_entry::SidebarEntry;
 use crate::sidebar_source::{SidebarModel, SidebarSource};
@@ -34,6 +36,7 @@ impl SidebarPanel {
         used_share: f64,
         free_text: &str,
         palette: ShellPalette,
+        actions: &ShellActions,
     ) -> Self {
         let tokens = palette.tokens;
         let view = FillView::new(
@@ -43,6 +46,7 @@ impl SidebarPanel {
                 fill: Some(tokens.bg_2.ns_color()),
                 border: None,
                 radius: 0.0,
+                dashed: false,
             },
         );
         let bar_track = FillView::new(
@@ -55,6 +59,7 @@ impl SidebarPanel {
                 fill: Some(palette.line_soft()),
                 border: None,
                 radius: BAR_HEIGHT / 2.0,
+                dashed: false,
             },
         );
         let bar_fill = FillView::new(
@@ -67,6 +72,7 @@ impl SidebarPanel {
                 fill: Some(tokens.wax.ns_color()),
                 border: None,
                 radius: BAR_HEIGHT / 2.0,
+                dashed: false,
             },
         );
         let free = measure_label(marker, free_text, &mono_font(11.5, 400.0), &tokens.dim.ns_color());
@@ -93,7 +99,7 @@ impl SidebarPanel {
         outline.addTableColumn(&column);
         unsafe { outline.setOutlineTableColumn(Some(&column)) };
         let selected = selected_row(&groups);
-        let source = SidebarSource::new(marker, SidebarModel::new(groups, palette, size.width));
+        let source = SidebarSource::new(marker, SidebarModel::new(groups, palette, size.width, actions.retain()));
         unsafe {
             outline.setDataSource(Some(ProtocolObject::from_ref(&*source)));
             outline.setDelegate(Some(ProtocolObject::from_ref(&*source)));

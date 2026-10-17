@@ -1,3 +1,4 @@
+use std::fs;
 use std::io;
 use std::path::Path;
 
@@ -14,6 +15,7 @@ impl Index {
             if let Some(node) = self
                 .find(&target)
                 .filter(|node| self.node(*node).kind != NodeKind::File)
+                .filter(|node| fs::symlink_metadata(self.physical_path(*node)).is_ok())
             {
                 break node;
             }

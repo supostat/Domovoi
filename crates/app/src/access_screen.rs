@@ -59,6 +59,7 @@ impl AccessScreen {
                 fill: Some(tokens.bg.ns_color()),
                 border: None,
                 radius: 0.0,
+                dashed: false,
             },
         );
         let ornament = FieldOrnament::new(
@@ -142,6 +143,7 @@ fn add_steps(marker: MainThreadMarker, root: &FillView, mut top: f64, width: f64
                 fill: Some(tokens.wax_soft.ns_color()),
                 border: None,
                 radius: BADGE / 2.0,
+                dashed: false,
             },
         );
         let digit = label(

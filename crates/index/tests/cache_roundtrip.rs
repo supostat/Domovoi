@@ -125,3 +125,26 @@ fn a_file_system_delta_rescans_the_changed_subtree() {
     assert!(index.node(index.root()).allocated > before);
     assert_eq!(index.node(index.root()).files, 2);
 }
+
+#[test]
+fn a_deleted_folder_is_dropped_by_rescanning_its_parent() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.root().expect("root opens");
+    let project = root.directory("project").expect("directory is created");
+    let build = project.directory("build").expect("directory is created");
+    build.file("artifact", 40_960, Fill::Noise(9)).expect("file is written");
+    project.file("source", 8_192, Fill::Byte(2)).expect("file is written");
+    let report = scan(tree.path(), &ScanOptions::default()).expect("temp tree scans");
+    let mut index = Index::build(
+        &report,
+        IndexRoot::for_path(tree.path()).expect("root kind"),
+        &Enrichment::default(),
+    );
+    let removed: PathBuf = fs::canonicalize(tree.path().join("project/build")).expect("path canonicalizes");
+    fs::remove_dir_all(&removed).expect("the build folder is removed");
+    index
+        .rescan(&removed, &ScanOptions::default(), &Enrichment::default())
+        .expect("the parent of the removed folder rescans");
+    assert!(index.find(&removed).is_none());
+    assert_eq!(index.node(index.root()).files, 1);
+}

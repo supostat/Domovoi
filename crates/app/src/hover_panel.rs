@@ -26,6 +26,7 @@ pub struct HoverPanel {
     pub size: Retained<NSTextField>,
     pub path: Retained<NSTextField>,
     pub source: Retained<NSTextField>,
+    pub note: Retained<NSTextField>,
 }
 
 impl HoverPanel {
@@ -49,6 +50,7 @@ impl HoverPanel {
                 fill: None,
                 border: None,
                 radius: RADIUS,
+                dashed: false,
             },
         );
         panel.setContentView(Some(&card));
@@ -80,7 +82,14 @@ impl HoverPanel {
             &NSColor::labelColor(),
             NSLineBreakMode::ByTruncatingTail,
         );
-        for field in [&name, &size, &path, &source] {
+        let note = label(
+            marker,
+            "",
+            &interface_font(12.0, 400.0),
+            &NSColor::labelColor(),
+            NSLineBreakMode::ByWordWrapping,
+        );
+        for field in [&name, &size, &path, &source, &note] {
             card.addSubview(field);
         }
         Self {
@@ -90,6 +99,7 @@ impl HoverPanel {
             size,
             path,
             source,
+            note,
         }
     }
 
@@ -113,15 +123,18 @@ impl HoverPanel {
             fill: Some(tokens.surface.ns_color()),
             border: Some(palette.line()),
             radius: RADIUS,
+            dashed: false,
         });
         let path = tip.path.as_deref().unwrap_or_default();
-        let rows: [(&NSTextField, &str, _); 4] = [
+        let rows: [(&NSTextField, &str, _); 5] = [
             (&self.name, tip.name.as_str(), tokens.text),
             (&self.size, tip.size_text.as_str(), tokens.text),
             (&self.path, path, tokens.dim),
             (&self.source, tip.source, tokens.dim),
+            (&self.note, tip.note.unwrap_or_default(), tokens.mute),
         ];
         let inner = WIDTH - 2.0 * PADDING;
+        self.note.setPreferredMaxLayoutWidth(inner);
         let visible: Vec<_> = rows.iter().filter(|(_, text, _)| !text.is_empty()).collect();
         let heights: Vec<f64> = visible
             .iter()

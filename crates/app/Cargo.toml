@@ -14,6 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 block2.workspace = true
+domovoi-dups.workspace = true
 domovoi-index.workspace = true
 domovoi-render.workspace = true
 domovoi-rules.workspace = true
@@ -31,6 +32,9 @@ objc2-app-kit = { workspace = true, features = [
   "NSButton",
   "NSButtonCell",
   "NSCell",
+  "NSCollectionView",
+  "NSCollectionViewFlowLayout",
+  "NSCollectionViewLayout",
   "NSColor",
   "NSColorSpace",
   "NSControl",
@@ -75,7 +79,7 @@ objc2-app-kit = { workspace = true, features = [
 ] }
 objc2-core-foundation = { workspace = true, features = ["CFCGTypes"] }
 objc2-core-graphics = { workspace = true, features = ["CGBitmapContext", "CGColor", "CGColorSpace", "CGContext", "CGImage", "CGPath"] }
-objc2-foundation = { workspace = true, features = ["NSArray", "NSAttributedString", "NSBundle", "NSDate", "NSDictionary", "NSError", "NSGeometry", "NSNotification", "NSObject", "NSOperation", "NSProcessInfo", "NSRunLoop", "NSString", "NSTimer", "NSURL", "NSUserDefaults", "NSValue", "block2"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSAttributedString", "NSBundle", "NSDate", "NSDictionary", "NSError", "NSGeometry", "NSIndexPath", "NSNotification", "NSObject", "NSOperation", "NSProcessInfo", "NSRunLoop", "NSString", "NSTimer", "NSURL", "NSUserDefaults", "NSValue", "block2"] }
 serde.workspace = true
 serde_json.workspace = true
 

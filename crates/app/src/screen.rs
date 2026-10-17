@@ -3,16 +3,29 @@ pub enum Screen {
     Access,
     Scanning,
     Main,
+    Recommendations,
+    Duplicates,
+    Tray,
 }
 
 impl Screen {
-    pub const ALL: [Self; 3] = [Self::Access, Self::Scanning, Self::Main];
+    pub const ALL: [Self; 6] = [
+        Self::Access,
+        Self::Scanning,
+        Self::Main,
+        Self::Recommendations,
+        Self::Duplicates,
+        Self::Tray,
+    ];
 
     pub fn number(self) -> &'static str {
         match self {
             Self::Access => "01",
             Self::Scanning => "02",
             Self::Main => "03",
+            Self::Recommendations => "04",
+            Self::Duplicates => "06",
+            Self::Tray => "08",
         }
     }
 

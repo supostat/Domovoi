@@ -1,5 +1,4 @@
 use std::cell::OnceCell;
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use objc2::rc::Retained;
@@ -8,11 +7,12 @@ use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_se
 use objc2_app_kit::{NSApplication, NSApplicationDelegate};
 use objc2_foundation::{NSNotification, NSObject};
 
+use crate::session_paths::SessionPaths;
 use crate::shell_controller::ShellController;
 
 #[derive(Debug)]
 pub(crate) struct AppDelegateState {
-    cache_directory: PathBuf,
+    paths: SessionPaths,
     controller: OnceCell<Rc<ShellController>>,
 }
 
@@ -28,7 +28,7 @@ define_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn application_did_finish_launching(&self, _notification: &NSNotification) {
-            let controller = ShellController::launch(MainThreadMarker::from(self), &self.ivars().cache_directory);
+            let controller = ShellController::launch(MainThreadMarker::from(self), self.ivars().paths.clone());
             self.ivars()
                 .controller
                 .set(controller)
@@ -57,9 +57,9 @@ define_class!(
 );
 
 impl AppDelegate {
-    pub(crate) fn new(marker: MainThreadMarker, cache_directory: PathBuf) -> Retained<Self> {
+    pub(crate) fn new(marker: MainThreadMarker, paths: SessionPaths) -> Retained<Self> {
         let this = Self::alloc(marker).set_ivars(AppDelegateState {
-            cache_directory,
+            paths,
             controller: OnceCell::new(),
         });
         unsafe { msg_send![super(this), init] }

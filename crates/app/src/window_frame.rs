@@ -7,6 +7,9 @@ use objc2_app_kit::{
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 use crate::fill_view::{FillStyle, FillView};
+use crate::navigation::Navigation;
+use crate::section::Section;
+use crate::shell_actions::ShellActions;
 use crate::shell_data::ShellData;
 use crate::shell_layout::{SIDEBAR_WIDTH, WINDOW};
 use crate::shell_palette::ShellPalette;
@@ -23,14 +26,24 @@ pub struct WindowFrame {
 }
 
 impl WindowFrame {
-    pub fn build(marker: MainThreadMarker, data: &ShellData, palette: &ShellPalette) -> Self {
+    pub fn build(
+        marker: MainThreadMarker,
+        data: &ShellData,
+        current: Section,
+        palette: &ShellPalette,
+        actions: &ShellActions,
+    ) -> Self {
         let sidebar = SidebarPanel::build(
             marker,
             NSSize::new(SIDEBAR_WIDTH, WINDOW.height),
-            data.sidebar(),
+            data.sidebar(Navigation {
+                current,
+                care_ready: data.care_ready,
+            }),
             data.used_share(),
             &data.free_line(),
             *palette,
+            actions,
         );
         let pane = FillView::new(
             marker,
@@ -39,6 +52,7 @@ impl WindowFrame {
                 fill: Some(palette.tokens.bg.ns_color()),
                 border: None,
                 radius: 0.0,
+                dashed: false,
             },
         );
         let split = ShellSplitView::new(

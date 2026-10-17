@@ -3,7 +3,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use domovoi_app::{
-    AccessState, CacheOpening, DiskOverview, Expansion, NODE_BUDGET, ScanStatus, Session, ShellData, strings,
+    AccessState, CacheOpening, CareModels, DiskOverview, Expansion, NODE_BUDGET, ScanStatus, Session, SessionPaths,
+    ShellData, strings,
 };
 use domovoi_index::{Category, Source};
 use domovoi_render::{DiagramMode, DiagramRenderer, DiagramState, GlyphAtlas, NodeOrigin, ROOT};
@@ -53,8 +54,8 @@ fn session_feeds_the_real_scanner_index_and_renderer_on_a_volume() {
     let mount_point = fs::canonicalize(volume.mount_point()).expect("the mount point resolves");
     populate(&mount_point);
     let caches = TempTree::new().expect("a temp tree is created");
-    let cache = caches.path().join("scan.cache");
-    let mut session = Session::open(&mount_point, &cache, "0.0.0-test").expect("the session opens");
+    let paths = SessionPaths::in_directory(caches.path());
+    let mut session = Session::open(&mount_point, &paths, "0.0.0-test").expect("the session opens");
     assert_eq!(
         session.open_cached().expect("the cache probe runs"),
         CacheOpening::Absent
@@ -70,6 +71,7 @@ fn session_feeds_the_real_scanner_index_and_renderer_on_a_volume() {
         Some(index),
         &expansion,
         scan_status(&session),
+        CareModels::default(),
     );
 
     let names: Vec<&str> = data
@@ -125,7 +127,7 @@ fn session_feeds_the_real_scanner_index_and_renderer_on_a_volume() {
         "the diagram of a scanned volume is drawn"
     );
 
-    let mut reopened = Session::open(&mount_point, &cache, "0.0.0-test").expect("the session reopens");
+    let mut reopened = Session::open(&mount_point, &paths, "0.0.0-test").expect("the session reopens");
     assert_eq!(reopened.open_cached().expect("the cache opens"), CacheOpening::Opened);
     assert_eq!(
         reopened.index().expect("the cache installs an index").len(),
@@ -140,10 +142,10 @@ fn a_cache_from_another_application_version_is_reset() {
         .expect("the tree root opens")
         .file("payload.bin", MEGABYTE, Fill::Byte(1))
         .expect("a file is written");
-    let cache = tree.path().join("scan.cache");
-    let mut first = Session::open(tree.path(), &cache, "1.0.0").expect("the session opens");
+    let paths = SessionPaths::in_directory(&tree.path().join("state"));
+    let mut first = Session::open(tree.path(), &paths, "1.0.0").expect("the session opens");
     first.scan(None, CancelToken::default()).expect("the tree scans");
-    let mut upgraded = Session::open(tree.path(), &cache, "1.0.1").expect("the session opens");
+    let mut upgraded = Session::open(tree.path(), &paths, "1.0.1").expect("the session opens");
     assert_eq!(
         upgraded.open_cached().expect("the cache probe runs"),
         CacheOpening::Reset

@@ -39,6 +39,7 @@ impl LevelRowView {
             fill: None,
             border: None,
             radius,
+            dashed: false,
         };
         let parts = Self {
             name: name_label(
@@ -79,16 +80,19 @@ impl LevelRowView {
             fill: Some(color.clone()),
             border: None,
             radius: DOT_RADIUS,
+            dashed: false,
         });
         self.track.restyle(FillStyle {
             fill: Some(palette.line_soft()),
             border: None,
             radius: BAR_RADIUS,
+            dashed: false,
         });
         self.bar.restyle(FillStyle {
             fill: Some(color),
             border: None,
             radius: BAR_RADIUS,
+            dashed: false,
         });
         self.share.set(row.share.clamp(0.0, 1.0));
     }

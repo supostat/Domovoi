@@ -1,5 +1,5 @@
 use domovoi_render::{DiagramMode, DiagramState};
-use domovoi_theme::format_size;
+use domovoi_theme::{format_count, format_size};
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, sel};
 use objc2_app_kit::{NSAccessibility, NSAutoresizingMaskOptions, NSLineBreakMode, NSTextField};
@@ -9,15 +9,13 @@ use crate::button_style::ButtonStyle;
 use crate::label::{label, measure_label};
 use crate::probes::Probes;
 use crate::scan_status::ScanStatus;
+use crate::section::Section;
 use crate::shell_actions::ShellActions;
 use crate::shell_button::ShellButton;
 use crate::shell_data::ShellData;
 use crate::shell_layout::{PANE_PADDING, WINDOW, from_top};
 use crate::shell_palette::ShellPalette;
-use crate::strings::{
-    DIAGRAM, FILES_MILLIONS, FULL_FIRST_SCAN, SCAN_ENGINE, SCANNING, STOP, THREADS_FEW, THREADS_MANY, THREADS_ONE,
-    WALKED,
-};
+use crate::strings::{DIAGRAM, FILES_MILLIONS, FULL_FIRST_SCAN, SCAN_ENGINE, SCANNING, STOP, THREADS, WALKED};
 use crate::ui_font::{interface_font, mono_font};
 use crate::window_frame::WindowFrame;
 
@@ -43,7 +41,7 @@ pub struct ScanningScreen {
 impl ScanningScreen {
     pub fn build(marker: MainThreadMarker, data: &ShellData, palette: &ShellPalette, actions: &ShellActions) -> Self {
         let tokens = palette.tokens;
-        let frame = WindowFrame::build(marker, data, palette);
+        let frame = WindowFrame::build(marker, data, Section::Disk, palette, actions);
         let pane = WindowFrame::pane_size();
         let left = PANE_PADDING;
         let pane_width = pane.width - 2.0 * PANE_PADDING;
@@ -189,12 +187,7 @@ pub(crate) fn center_lines(scan: &ScanStatus) -> [String; 3] {
 }
 
 fn engine_line(threads: usize) -> String {
-    let word = match threads % 10 {
-        1 if threads % 100 != 11 => THREADS_ONE,
-        2..=4 if !(12..=14).contains(&(threads % 100)) => THREADS_FEW,
-        _ => THREADS_MANY,
-    };
-    format!("{SCAN_ENGINE} · {threads} {word}")
+    format!("{SCAN_ENGINE} · {}", format_count(threads as u64, &THREADS))
 }
 
 fn format_count_millions(files: u64) -> String {

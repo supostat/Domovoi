@@ -5,11 +5,14 @@ use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_se
 use objc2_app_kit::{NSBezierPath, NSColor, NSView};
 use objc2_foundation::NSRect;
 
+const DASH: [f64; 2] = [4.0, 3.0];
+
 #[derive(Debug)]
 pub struct FillStyle {
     pub fill: Option<Retained<NSColor>>,
     pub border: Option<Retained<NSColor>>,
     pub radius: f64,
+    pub dashed: bool,
 }
 
 define_class!(
@@ -37,6 +40,10 @@ define_class!(
             if let Some(border) = &style.border {
                 border.setStroke();
                 path.setLineWidth(1.0);
+                if style.dashed {
+                    let pattern = DASH;
+                    unsafe { path.setLineDash_count_phase(pattern.as_ptr(), 2, 0.0) };
+                }
                 path.stroke();
             }
         }

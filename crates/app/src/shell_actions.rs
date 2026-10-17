@@ -9,8 +9,12 @@ use objc2_app_kit::{NSMenuItem, NSMenuItemValidation};
 use objc2_foundation::{NSInteger, NSObject};
 
 use crate::action_handler::ActionHandler;
-use crate::mode_switch::SUNBURST_TAG;
 use crate::shell_action::ShellAction;
+
+pub(crate) const SUNBURST_SEGMENT: usize = 0;
+pub(crate) const TREEMAP_SEGMENT: usize = 1;
+pub(crate) const TRASH_SEGMENT: usize = 0;
+pub(crate) const CLONE_SEGMENT: usize = 1;
 
 #[derive(Default)]
 pub struct ShellActionsState {
@@ -55,9 +59,63 @@ define_class!(
 
         #[unsafe(method(selectMode:))]
         fn select_mode(&self, sender: &AnyObject) {
-            let tag: NSInteger = unsafe { msg_send![sender, tag] };
-            let mode = if tag == SUNBURST_TAG { DiagramMode::Sunburst } else { DiagramMode::Treemap };
+            let mode = if tag_of(sender) == SUNBURST_SEGMENT { DiagramMode::Sunburst } else { DiagramMode::Treemap };
             self.dispatch(ShellAction::ChangeMode(mode));
+        }
+
+        #[unsafe(method(openTray:))]
+        fn open_tray(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::OpenTray);
+        }
+
+        #[unsafe(method(toggleCard:))]
+        fn toggle_card(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::ToggleCard(tag_of(sender)));
+        }
+
+        #[unsafe(method(sendCardsToTray:))]
+        fn send_cards_to_tray(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::SendCardsToTray);
+        }
+
+        #[unsafe(method(toggleDuplicateSearch:))]
+        fn toggle_duplicate_search(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ToggleDuplicateSearch);
+        }
+
+        #[unsafe(method(selectDuplicateAction:))]
+        fn select_duplicate_action(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::SelectDuplicateAction(tag_of(sender) == CLONE_SEGMENT));
+        }
+
+        #[unsafe(method(toggleCopy:))]
+        fn toggle_copy(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::ToggleCopy(tag_of(sender)));
+        }
+
+        #[unsafe(method(applyDuplicates:))]
+        fn apply_duplicates(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ApplyDuplicates);
+        }
+
+        #[unsafe(method(confirmTray:))]
+        fn confirm_tray(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ConfirmTray);
+        }
+
+        #[unsafe(method(closeTray:))]
+        fn close_tray(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::CloseTray);
+        }
+
+        #[unsafe(method(openTrash:))]
+        fn open_trash(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::OpenTrash);
+        }
+
+        #[unsafe(method(restore:))]
+        fn restore(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::Restore(tag_of(sender)));
         }
 
         #[unsafe(method(focusNode:))]
@@ -105,7 +163,7 @@ impl ShellActions {
         self.as_ref()
     }
 
-    fn dispatch(&self, action: ShellAction) {
+    pub(crate) fn dispatch(&self, action: ShellAction) {
         let handler = self.ivars().handler.borrow().as_ref().and_then(Weak::upgrade);
         if let Some(handler) = handler {
             handler.perform(action);
@@ -133,5 +191,5 @@ impl ShellActions {
 
 fn tag_of(sender: &AnyObject) -> usize {
     let tag: NSInteger = unsafe { msg_send![sender, tag] };
-    usize::try_from(tag).expect("controls tag tree nodes with their index")
+    usize::try_from(tag).expect("controls carry a non-negative position tag")
 }

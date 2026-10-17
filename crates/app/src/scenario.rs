@@ -9,7 +9,7 @@ use crate::scenario_step::ScenarioStep;
 #[serde(deny_unknown_fields)]
 pub struct Scenario {
     pub root: PathBuf,
-    pub cache: PathBuf,
+    pub state: PathBuf,
     pub steps: Vec<ScenarioStep>,
 }
 

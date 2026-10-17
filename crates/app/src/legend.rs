@@ -79,6 +79,7 @@ fn chip(marker: MainThreadMarker, entry: &LegendEntry, palette: &ShellPalette) -
                 fill: Some(palette.tokens.surface.ns_color()),
                 border: Some(palette.line()),
                 radius: CHIP_HEIGHT / 2.0,
+                dashed: false,
             },
         );
         let dot = FillView::new(
@@ -91,6 +92,7 @@ fn chip(marker: MainThreadMarker, entry: &LegendEntry, palette: &ShellPalette) -
                 fill: Some(category_color(palette.tokens, entry.category).ns_color()),
                 border: None,
                 radius: DOT / 2.0,
+                dashed: false,
             },
         );
         title.setFrame(NSRect::new(

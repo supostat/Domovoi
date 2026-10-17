@@ -311,6 +311,7 @@ name = "domovoi-app"
 version = "0.1.0"
 dependencies = [
  "block2",
+ "domovoi-dups",
  "domovoi-index",
  "domovoi-render",
  "domovoi-rules",

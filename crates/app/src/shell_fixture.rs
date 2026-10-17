@@ -5,6 +5,7 @@ use domovoi_render::{DiagramTree, ROOT};
 use serde::Deserialize;
 
 use crate::access_state::AccessState;
+use crate::care_models::CareModels;
 use crate::outline_fixture::OutlineFixture;
 use crate::scan_status::ScanStatus;
 use crate::shell_data::ShellData;
@@ -17,8 +18,13 @@ pub struct ShellFixture {
     pub disk_total_bytes: u64,
     #[serde(default)]
     pub in_cloud_bytes: u64,
+    #[serde(default)]
+    pub hidden_folders: u64,
+    #[serde(default)]
+    pub snapshots_present: bool,
     pub scan: ScanStatus,
     pub tree: OutlineFixture,
+    pub care: CareModels,
 }
 
 impl ShellFixture {
@@ -38,6 +44,10 @@ impl ShellFixture {
             disk_total_bytes: self.disk_total_bytes,
             in_cloud_bytes: self.in_cloud_bytes,
             scan: self.scan.clone(),
+            care: self.care.clone(),
+            care_ready: true,
+            hidden_folders: self.hidden_folders,
+            snapshots_present: self.snapshots_present,
         })
     }
 }

@@ -2,19 +2,21 @@ use std::cell::RefCell;
 
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObjectProtocol};
-use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
+use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{
-    NSAccessibility, NSControlTextEditingDelegate, NSFontAttributeName, NSForegroundColorAttributeName,
-    NSKernAttributeName, NSLineBreakMode, NSOutlineView, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableColumn,
-    NSTableViewDelegate, NSView,
+    NSAccessibility, NSControlTextEditingDelegate, NSLineBreakMode, NSOutlineView, NSOutlineViewDataSource,
+    NSOutlineViewDelegate, NSTableColumn, NSTableViewDelegate, NSView,
 };
 use objc2_core_foundation::CGFloat;
-use objc2_foundation::{NSAttributedString, NSDictionary, NSInteger, NSNumber, NSObject, NSString};
+use objc2_foundation::{NSAttributedString, NSInteger, NSNotification, NSObject, NSString};
 
 use crate::label::label;
+use crate::shell_action::ShellAction;
+use crate::shell_actions::ShellActions;
 use crate::shell_palette::ShellPalette;
 use crate::sidebar_entry::SidebarEntry;
 use crate::sidebar_item_view::SidebarItemView;
+use crate::tracked_caps::tracked_caps;
 use crate::ui_font::interface_font;
 
 const ROW_HEIGHT: CGFloat = 28.0;
@@ -28,15 +30,17 @@ pub struct SidebarModel {
     pub groups: Vec<SidebarEntry>,
     pub palette: ShellPalette,
     pub width: f64,
+    actions: Retained<ShellActions>,
     keys: RefCell<Vec<Retained<NSString>>>,
 }
 
 impl SidebarModel {
-    pub fn new(groups: Vec<SidebarEntry>, palette: ShellPalette, width: f64) -> Self {
+    pub fn new(groups: Vec<SidebarEntry>, palette: ShellPalette, width: f64, actions: Retained<ShellActions>) -> Self {
         Self {
             groups,
             palette,
             width,
+            actions,
             keys: RefCell::new(Vec::new()),
         }
     }
@@ -117,6 +121,29 @@ define_class!(
             SidebarModel::locate(item).1.is_none()
         }
 
+        #[unsafe(method(outlineView:shouldSelectItem:))]
+        fn should_select(&self, _outline: &NSOutlineView, item: &AnyObject) -> bool {
+            self.ivars().entry(item).section.is_some()
+        }
+
+        #[unsafe(method(outlineViewSelectionDidChange:))]
+        fn selection_did_change(&self, notification: &NSNotification) {
+            let Some(outline) = notification
+                .object()
+                .and_then(|object| object.downcast::<NSOutlineView>().ok())
+            else {
+                return;
+            };
+            let Some(item) = outline.itemAtRow(outline.selectedRow()) else {
+                return;
+            };
+            let model = self.ivars();
+            let entry = model.entry(&item);
+            if let Some(section) = entry.section.filter(|_| !entry.selected) {
+                model.actions.dispatch(ShellAction::Navigate(section));
+            }
+        }
+
         #[unsafe(method(outlineView:heightOfRowByItem:))]
         fn row_height(&self, _outline: &NSOutlineView, item: &AnyObject) -> CGFloat {
             if SidebarModel::locate(item).1.is_none() {
@@ -170,17 +197,5 @@ impl SidebarSource {
 }
 
 fn group_title(title: &str, palette: &ShellPalette) -> Retained<NSAttributedString> {
-    let font = interface_font(GROUP_FONT_SIZE, 600.0);
-    let color = palette.tokens.dim.ns_color();
-    let tracking = NSNumber::new_f64(GROUP_FONT_SIZE * GROUP_TRACKING);
-    let keys = unsafe { [NSFontAttributeName, NSForegroundColorAttributeName, NSKernAttributeName] };
-    let values: [&AnyObject; 3] = [font.as_ref(), color.as_ref(), tracking.as_ref()];
-    let attributes = NSDictionary::from_slices(&keys, &values);
-    unsafe {
-        NSAttributedString::initWithString_attributes(
-            NSAttributedString::alloc(),
-            &NSString::from_str(&title.to_uppercase()),
-            Some(&attributes),
-        )
-    }
+    tracked_caps(title, GROUP_FONT_SIZE, GROUP_TRACKING, &palette.tokens.dim.ns_color())
 }
