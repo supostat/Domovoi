@@ -7,3 +7,15 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+domovoi-grammar.workspace = true
+domovoi-index.workspace = true
+domovoi-inference.workspace = true
+domovoi-inference-proto.workspace = true
+domovoi-rules.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+domovoi-scanner.workspace = true
+domovoi-testkit.workspace = true

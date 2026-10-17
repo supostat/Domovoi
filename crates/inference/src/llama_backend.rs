@@ -151,6 +151,13 @@ impl InferenceBackend for LlamaBackend {
             .ok_or_else(|| BackendError::new(ErrorCode::ModelNotLoaded, "no model is loaded"))?
             .generate(request, cancel, on_token)
     }
+
+    fn count_tokens(&self, text: &str) -> Result<u32, BackendError> {
+        self.model
+            .as_ref()
+            .ok_or_else(|| BackendError::new(ErrorCode::ModelNotLoaded, "no model is loaded"))?
+            .count_tokens(text)
+    }
 }
 
 unsafe extern "C" fn report_progress(fraction: f32, data: *mut c_void) -> bool {

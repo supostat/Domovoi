@@ -287,6 +287,16 @@ dependencies = [
 [[package]]
 name = "domovoi-agent"
 version = "0.1.0"
+dependencies = [
+ "domovoi-grammar",
+ "domovoi-index",
+ "domovoi-inference",
+ "domovoi-inference-proto",
+ "domovoi-rules",
+ "domovoi-scanner",
+ "domovoi-testkit",
+ "serde_json",
+]
 
 [[package]]
 name = "domovoi-apfs-sys"
@@ -342,6 +352,20 @@ dependencies = [
 [[package]]
 name = "domovoi-eval"
 version = "0.1.0"
+dependencies = [
+ "domovoi-agent",
+ "domovoi-apfs-sys",
+ "domovoi-downloader",
+ "domovoi-grammar",
+ "domovoi-index",
+ "domovoi-inference",
+ "domovoi-inference-proto",
+ "domovoi-llama-sys",
+ "domovoi-rules",
+ "domovoi-scanner",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "domovoi-grammar"

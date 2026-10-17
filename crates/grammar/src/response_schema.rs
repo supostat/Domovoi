@@ -27,11 +27,15 @@ pub struct ResponseSchema {
 
 impl ResponseSchema {
     pub fn answers_and_tool_calls() -> Self {
-        Self::build(true)
+        Self::build(true, true)
     }
 
     pub fn tool_calls_only() -> Self {
-        Self::build(false)
+        Self::build(true, false)
+    }
+
+    pub fn answers_only() -> Self {
+        Self::build(false, true)
     }
 
     pub fn document(&self) -> &Value {
@@ -75,10 +79,12 @@ impl ResponseSchema {
         })
     }
 
-    fn build(allows_final: bool) -> Self {
+    fn build(allows_tools: bool, allows_final: bool) -> Self {
         let mut definitions = Map::new();
-        for tool in Tool::ALL {
-            definitions.insert(tool.name().to_owned(), tool_call_schema(tool));
+        if allows_tools {
+            for tool in Tool::ALL {
+                definitions.insert(tool.name().to_owned(), tool_call_schema(tool));
+            }
         }
         if allows_final {
             definitions.insert(FINAL_DEFINITION.to_owned(), final_answer_schema());

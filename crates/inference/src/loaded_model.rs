@@ -131,6 +131,11 @@ impl LoadedModel {
         unsafe { llama_model_get_vocab(self.model.as_ptr()) }
     }
 
+    pub(crate) fn count_tokens(&self, text: &str) -> Result<u32, BackendError> {
+        let tokens = self.tokenize(text)?;
+        Ok(u32::try_from(tokens.len()).expect("a token count fits in u32"))
+    }
+
     fn tokenize(&self, text: &str) -> Result<Vec<llama_token>, BackendError> {
         let length =
             i32::try_from(text.len()).map_err(|_| BackendError::new(ErrorCode::Internal, "the prompt is too long"))?;

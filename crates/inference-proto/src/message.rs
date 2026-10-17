@@ -40,6 +40,7 @@ const GENERATION_NANOSECONDS: &CStr = c"generation_nanoseconds";
 const STOP: &CStr = c"stop";
 const CODE: &CStr = c"code";
 const DESCRIPTION: &CStr = c"description";
+const COUNT: &CStr = c"count";
 
 const HANDSHAKE: &CStr = c"handshake";
 const LOAD: &CStr = c"load";
@@ -50,6 +51,8 @@ const DONE: &CStr = c"done";
 const CANCEL: &CStr = c"cancel";
 const READY: &CStr = c"ready";
 const ERROR: &CStr = c"error";
+const COUNT_TOKENS: &CStr = c"count_tokens";
+const TOKEN_COUNT: &CStr = c"token_count";
 
 #[derive(Debug)]
 pub enum Message {
@@ -73,6 +76,12 @@ pub enum Message {
         code: ErrorCode,
         description: String,
     },
+    CountTokens {
+        text: String,
+    },
+    TokenCount {
+        count: u32,
+    },
 }
 
 impl Message {
@@ -87,6 +96,8 @@ impl Message {
             Self::Cancel => CANCEL,
             Self::Ready => READY,
             Self::Error { .. } => ERROR,
+            Self::CountTokens { .. } => COUNT_TOKENS,
+            Self::TokenCount { .. } => TOKEN_COUNT,
         }
     }
 
@@ -111,12 +122,13 @@ impl Message {
                 dictionary.set_u64(CONTEXT_LENGTH, u64::from(*context_length));
             }
             Self::Generate(request) => encode_generate(dictionary, request),
-            Self::Token { text } => dictionary.set_bytes(TEXT, text.as_bytes()),
+            Self::Token { text } | Self::CountTokens { text } => dictionary.set_bytes(TEXT, text.as_bytes()),
             Self::Done(stats) => encode_done(dictionary, stats),
             Self::Error { code, description } => {
                 dictionary.set_string(CODE, code.name());
                 dictionary.set_bytes(DESCRIPTION, description.as_bytes());
             }
+            Self::TokenCount { count } => dictionary.set_u64(COUNT, u64::from(*count)),
             Self::Unload | Self::Cancel | Self::Ready => {}
         }
         Ok(())
@@ -151,6 +163,12 @@ impl Message {
             kind if kind == ERROR => Ok(Self::Error {
                 code: named_field(dictionary, CODE, ErrorCode::from_name)?,
                 description: text_field(dictionary, DESCRIPTION)?,
+            }),
+            kind if kind == COUNT_TOKENS => Ok(Self::CountTokens {
+                text: text_field(dictionary, TEXT)?,
+            }),
+            kind if kind == TOKEN_COUNT => Ok(Self::TokenCount {
+                count: u32_field(dictionary, COUNT)?,
             }),
             unknown => Err(DecodeError::UnknownKind(unknown.to_string_lossy().into_owned())),
         }

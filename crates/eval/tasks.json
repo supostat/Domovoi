@@ -1,0 +1,452 @@
+{
+  "tasks": [
+    {
+      "id": "query-safe",
+      "question": "Что можно удалить без риска?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Называет DerivedData Xcode (около 18,5 ГБ), папку сборки target проекта engine (7,5 ГБ), node_modules проектов, кэши Homebrew, npm, Xcode и Chrome; говорит, что всё это пересоздаётся."
+    },
+    {
+      "id": "query-caches-over-gigabyte",
+      "question": "Какие кэши занимают больше 1 ГБ?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Кэш Homebrew 2,4 ГБ, кэш npm 1,6 ГБ, кэш Xcode 1,1 ГБ, кэш dyld симулятора 2,9 ГБ; кэш Chrome меньше гигабайта."
+    },
+    {
+      "id": "query-untouched-year",
+      "question": "Что я не открывал больше года?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Диплом в Документах (около 800 дней), папка com.tinyapp.helper (около 700 дней), архив Xcode (около 590 дней), старый проект old-site (около 420 дней), Holiday.mov (около 400 дней)."
+    },
+    {
+      "id": "query-largest-downloads",
+      "question": "Найди самые большие файлы в /Users/fixture/Downloads",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Xcode_16.dmg 4,5 ГБ и Docker.dmg 620 МБ — установщики, их можно удалить после установки; report.pdf всего 2 МБ."
+    },
+    {
+      "id": "query-check-yourself",
+      "question": "Что из найденного требует моей проверки перед удалением?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Диск Docker 40 ГБ, резервная копия iPhone 25,3 ГБ, данные симулятора 8,2 ГБ и архив Xcode 3,1 ГБ: решать нужно самому."
+    },
+    {
+      "id": "query-dev-category",
+      "question": "Сколько места занимают папки разработки?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Перечисляет DerivedData, папку target, node_modules, симуляторы и кэши разработчика с размерами."
+    },
+    {
+      "id": "query-media-large",
+      "question": "Какие медиафайлы больше 10 ГБ?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Медиатека Фото около 61 ГБ и Holiday.mov 14 ГБ; удалять их не советует без проверки."
+    },
+    {
+      "id": "query-node-modules",
+      "question": "Где лежат папки node_modules и сколько они весят?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "node_modules в Projects/site около 900 МБ и в Projects/old-site около 500 МБ; пересоздаются командой установки зависимостей."
+    },
+    {
+      "id": "query-recoverable",
+      "question": "Что можно удалить, но потом придётся скачать заново?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Реестр cargo 2,2 ГБ и установщики в Загрузках (Xcode_16.dmg 4,5 ГБ, Docker.dmg 620 МБ)."
+    },
+    {
+      "id": "query-over-five-gb",
+      "question": "Покажи всё, что занимает больше 5 ГБ.",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Медиатека Фото 61 ГБ, диск Docker 40 ГБ, резервная копия iPhone 25,3 ГБ, Holiday.mov 14 ГБ, DerivedData Domovoi 12,4 ГБ, Music 9 ГБ, симулятор 8,2 ГБ, target 7,5 ГБ, DerivedData Widget 6,1 ГБ."
+    },
+    {
+      "id": "query-old-projects",
+      "question": "Какие проекты в /Users/fixture/Projects давно не трогали?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Проект old-site не менялся около 420 дней; его node_modules 500 МБ можно удалить."
+    },
+    {
+      "id": "query-hidden-folders",
+      "question": "Что занимает место в скрытых папках домашней папки?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Папки .ollama (4,7 ГБ), .cargo (2,2 ГБ) и .npm (1,6 ГБ)."
+    },
+    {
+      "id": "query-xcode",
+      "question": "Сколько занимает всё, что связано с Xcode?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "DerivedData около 18,5 ГБ, симулятор 8,2 ГБ, архив 3,1 ГБ, кэш dyld 2,9 ГБ, кэш Xcode 1,1 ГБ и установщик Xcode_16.dmg 4,5 ГБ."
+    },
+    {
+      "id": "query-model-category",
+      "question": "Где на диске лежат модели?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Модель Qwen3.5-4B 2,74 ГБ в папке Domovoi/models; ещё похоже на модели папка .ollama 4,7 ГБ."
+    },
+    {
+      "id": "query-safe-over-gigabyte",
+      "question": "Найди безопасные для удаления папки больше 2 ГБ.",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "DerivedData проектов Domovoi (12,4 ГБ) и Widget (6,1 ГБ), target проекта engine (7,5 ГБ), кэш dyld (2,9 ГБ), кэш Homebrew (2,4 ГБ)."
+    },
+    {
+      "id": "query-docs-old",
+      "question": "Есть ли в Документах что-то старое и крупное?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Диплом thesis.docx 1,2 ГБ не менялся около 800 дней; решать, хранить ли его, нужно самому."
+    },
+    {
+      "id": "query-caches-recent",
+      "question": "Какие кэши обновлялись на этой неделе?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Кэш Xcode (день назад) и кэш Chrome (сегодня); они пересоздаются."
+    },
+    {
+      "id": "query-installers",
+      "question": "Остались ли установщики, которые можно убрать?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Xcode_16.dmg 4,5 ГБ и Docker.dmg 620 МБ в Загрузках."
+    },
+    {
+      "id": "query-library-large",
+      "question": "Что больше всего весит в /Users/fixture/Library?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Диск Docker 40 ГБ, резервная копия iPhone 25,3 ГБ, DerivedData около 18,5 ГБ, симулятор 8,2 ГБ."
+    },
+    {
+      "id": "query-unknown-folders",
+      "question": "Найди папки, которые не подходят ни под одно правило.",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Например com.tinyapp.helper (1,8 ГБ) и .ollama (4,7 ГБ); о них можно только строить гипотезы."
+    },
+    {
+      "id": "inspect-derived-data",
+      "question": "Что внутри папки /Users/fixture/Library/Developer/Xcode/DerivedData?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Сборки проектов Domovoi (12,4 ГБ) и Widget (6,1 ГБ); пересоздаются при следующей сборке."
+    },
+    {
+      "id": "inspect-tinyapp",
+      "question": "Что это за папка /Users/fixture/Library/Application Support/com.tinyapp.helper?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "1,8 ГБ, не менялась около 700 дней; похоже на остаток удалённого приложения TinyApp — это гипотеза, проверить самому."
+    },
+    {
+      "id": "inspect-ollama",
+      "question": "Что лежит в /Users/fixture/.ollama?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "4,7 ГБ в models/blobs; похоже на модели Ollama — гипотеза."
+    },
+    {
+      "id": "inspect-docker",
+      "question": "Почему /Users/fixture/Library/Containers/com.docker.docker такая большая?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Внутри диск виртуальной машины Docker.raw 40 ГБ с образами и томами; чистить лучше средствами Docker."
+    },
+    {
+      "id": "inspect-backup",
+      "question": "Что за данные в /Users/fixture/Library/Application Support/MobileSync/Backup?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Резервная копия iPhone 25,3 ГБ, сделана около 210 дней назад; удалять только если она не нужна."
+    },
+    {
+      "id": "inspect-engine",
+      "question": "Расскажи про папку /Users/fixture/Projects/engine.",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Проект Rust: исходники маленькие, папка target 7,5 ГБ — результаты сборки, пересоздаются."
+    },
+    {
+      "id": "inspect-downloads",
+      "question": "Что лежит в папке /Users/fixture/Downloads?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Xcode_16.dmg 4,5 ГБ, Docker.dmg 620 МБ, report.pdf 2 МБ."
+    },
+    {
+      "id": "inspect-simulator",
+      "question": "Что занимает место в /Users/fixture/Library/Developer/CoreSimulator?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Устройство симулятора 8,2 ГБ и кэш dyld 2,9 ГБ."
+    },
+    {
+      "id": "inspect-photos",
+      "question": "Можно ли что-то убрать из /Users/fixture/Pictures?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Там медиатека Фото около 61 ГБ — это личные данные, удалять из неё стоит только в самом приложении Фото."
+    },
+    {
+      "id": "inspect-old-site",
+      "question": "Что внутри /Users/fixture/Projects/old-site?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Старый веб-проект: node_modules 500 МБ, не менялся около 420 дней."
+    },
+    {
+      "id": "inspect-archives",
+      "question": "Что хранится в /Users/fixture/Library/Developer/Xcode/Archives?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Архив Domovoi от 2024-03-01, 3,1 ГБ; нужен для повторной отправки сборки, решать самому."
+    },
+    {
+      "id": "inspect-models",
+      "question": "Что в папке /Users/fixture/Library/Application Support/Domovoi/models?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Модель Qwen3.5-4B 2,74 ГБ, которую использует Домовой; удаляется в настройках модели."
+    },
+    {
+      "id": "inspect-missing",
+      "question": "Что в папке /Users/fixture/Library/Fonts?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Такой папки в индексе нет; честно сообщает, что не нашёл её."
+    },
+    {
+      "id": "inspect-music",
+      "question": "Сколько занимает /Users/fixture/Music?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Около 9 ГБ — медиатека Музыки."
+    },
+    {
+      "id": "rule-derived-data",
+      "question": "Объясни правило xcode.derived-data.",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Промежуточные результаты сборки Xcode; пересоздаются при следующей сборке, проекты не пострадают; уровень «безопасно»."
+    },
+    {
+      "id": "rule-docker",
+      "question": "Почему правило docker.vm требует проверки?",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Диск виртуальной машины Docker: в нём образы, контейнеры и тома, удаление сотрёт их."
+    },
+    {
+      "id": "rule-cargo-target",
+      "question": "Что означает правило cargo.target?",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Результаты сборки Rust-проекта; cargo соберёт их заново, исходники не пострадают."
+    },
+    {
+      "id": "rule-ios-backups",
+      "question": "Объясни правило ios.backups.",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Резервные копии iPhone и iPad: после удаления восстановить устройство из них не получится; решать самому."
+    },
+    {
+      "id": "rule-installers",
+      "question": "Почему downloads.installers считается восстановимым?",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Установщики в Загрузках можно скачать заново; уровень «можно восстановить»."
+    },
+    {
+      "id": "rule-homebrew",
+      "question": "Расскажи о правиле cache.homebrew.",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Кэш загрузок Homebrew; пересоздаётся при следующих установках."
+    },
+    {
+      "id": "rule-dev-deps",
+      "question": "Что за правило dev.deps?",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Зависимости проектов вроде node_modules; восстанавливаются установкой зависимостей."
+    },
+    {
+      "id": "rule-simulators",
+      "question": "Объясни правило xcode.simulators.",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Данные установленных симуляторов: удаление сотрёт приложения и данные в них; решать самому."
+    },
+    {
+      "id": "rule-archives",
+      "question": "Почему xcode.archives помечено как «проверьте сами»?",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Архивы нужны для повторной отправки и символикации сборок; восстановить их нельзя."
+    },
+    {
+      "id": "rule-cargo-registry",
+      "question": "Что делает правило cache.cargo-registry?",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Скачанные пакеты crates.io; cargo скачает их заново при сборке."
+    },
+    {
+      "id": "rule-unknown",
+      "question": "Объясни правило evil.rule.",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Такого правила нет; честно сообщает об этом и ничего не выдумывает."
+    },
+    {
+      "id": "rule-npm",
+      "question": "Расскажи, что за правило cache.npm.",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Кэш пакетов npm; пересоздаётся при установке пакетов."
+    },
+    {
+      "id": "summary-free",
+      "question": "Сколько места можно освободить?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Безопасно около 36 ГБ (сборки Xcode и Rust, зависимости, кэши), ещё около 7 ГБ восстановимо и около 77 ГБ требует проверки."
+    },
+    {
+      "id": "summary-disk",
+      "question": "Дай сводку по диску.",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Всего занято около 225 ГБ; больше всего медиа и Docker; можно освободить безопасно около 36 ГБ."
+    },
+    {
+      "id": "summary-why",
+      "question": "Почему у меня так мало места?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Больше всего занимают медиатека Фото, диск Docker и резервная копия iPhone; из безопасного — сборки Xcode и Rust."
+    },
+    {
+      "id": "summary-categories",
+      "question": "Как распределено место по категориям?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Перечисляет категории с размерами: медиа, разработка, кэши, прочие данные домашней папки."
+    },
+    {
+      "id": "summary-levels",
+      "question": "Сколько можно удалить безопасно, а сколько только после проверки?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Безопасно около 36 ГБ, восстановимо около 7 ГБ, после проверки около 77 ГБ."
+    },
+    {
+      "id": "summary-top-rule",
+      "question": "Какое правило освобождает больше всего места?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Docker 40 ГБ требует проверки; среди безопасных больше всего даёт DerivedData Xcode — около 18,5 ГБ."
+    },
+    {
+      "id": "summary-used",
+      "question": "Сколько всего занято в домашней папке?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Около 225 ГБ."
+    },
+    {
+      "id": "summary-plan",
+      "question": "С чего начать уборку?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Начать с безопасного: DerivedData, папка target, кэши; затем решить про установщики; Docker и бэкап iPhone — только после проверки."
+    },
+    {
+      "id": "summary-media-share",
+      "question": "Какую долю занимают фото и видео?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Около 84 ГБ из примерно 225 ГБ (медиатека Фото и Holiday.mov, ещё 9 ГБ музыки)."
+    },
+    {
+      "id": "summary-dev-share",
+      "question": "Сколько съедает разработка?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Сборки Xcode, симуляторы, папка target и зависимости — несколько десятков гигабайт."
+    },
+    {
+      "id": "summary-recoverable",
+      "question": "Сколько я освобожу, если удалю то, что можно скачать заново?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Около 7 ГБ: реестр cargo и установщики."
+    },
+    {
+      "id": "summary-cache-total",
+      "question": "Сколько всего занимают кэши?",
+      "expected_tool": "summarize",
+      "needs_tool": true,
+      "reference": "Около 9 ГБ: Homebrew, npm, Xcode, dyld и Chrome."
+    },
+    {
+      "id": "none-read-files",
+      "question": "Ты читаешь содержимое моих файлов?",
+      "expected_tool": null,
+      "needs_tool": false,
+      "reference": "Нет: видны только пути, размеры, даты и правила; содержимое файлов не читается."
+    },
+    {
+      "id": "none-delete-yourself",
+      "question": "Можешь сам удалить DerivedData?",
+      "expected_tool": null,
+      "needs_tool": false,
+      "reference": "Нет: Домовой ничего не удаляет; приложение покажет кнопку «Добавить в Корзину» по результатам, удаление — только через Корзину."
+    },
+    {
+      "id": "none-what-you-do",
+      "question": "Что ты умеешь?",
+      "expected_tool": null,
+      "needs_tool": false,
+      "reference": "Отвечает на вопросы о месте на диске, объясняет правила, строит гипотезы о незнакомых папках и делает сводку."
+    },
+    {
+      "id": "none-cloud",
+      "question": "Мои данные уходят в интернет?",
+      "expected_tool": null,
+      "needs_tool": false,
+      "reference": "Нет: модель работает на этом Mac, у сервиса инференса нет сети."
+    },
+    {
+      "id": "none-trash",
+      "question": "Куда попадают удалённые файлы?",
+      "expected_tool": null,
+      "needs_tool": false,
+      "reference": "В Корзину; их можно вернуть, пока Корзина не очищена."
+    },
+    {
+      "id": "none-hypothesis",
+      "question": "Почему ты пишешь «Похоже на…»?",
+      "expected_tool": null,
+      "needs_tool": false,
+      "reference": "Потому что это гипотезы модели по метаданным; проверять их нужно самому."
+    }
+  ]
+}

@@ -36,6 +36,10 @@ enum Command {
         request: GenerateRequest,
         reply: Reply,
     },
+    CountTokens {
+        text: String,
+        reply: Reply,
+    },
     Pressure(PressureLevel),
 }
 
@@ -115,6 +119,7 @@ impl InferenceService {
             }),
             Message::Unload => self.enqueue(Command::Unload { reply }),
             Message::Generate(request) => self.enqueue(Command::Generate { request, reply }),
+            Message::CountTokens { text } => self.enqueue(Command::CountTokens { text, reply }),
             other => reply.send(
                 &BackendError::new(
                     ErrorCode::Internal,
@@ -200,6 +205,10 @@ impl Worker {
                     Err(error) => reply.send(&error.into_message()),
                 }
             }
+            Command::CountTokens { text, reply } => match self.backend.count_tokens(&text) {
+                Ok(count) => reply.send(&Message::TokenCount { count }),
+                Err(error) => reply.send(&error.into_message()),
+            },
             Command::Pressure(PressureLevel::Warning) => self.backend.unload(),
             Command::Pressure(PressureLevel::Critical) => {
                 self.backend.unload();

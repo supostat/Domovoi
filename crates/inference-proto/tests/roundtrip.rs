@@ -68,6 +68,10 @@ fn messages(weights: &File) -> Vec<Message> {
             code: ErrorCode::InvalidGrammar,
             description: "grammar root is missing".to_owned(),
         },
+        Message::CountTokens {
+            text: "<|im_start|>user\nСколько места?<|im_end|>".to_owned(),
+        },
+        Message::TokenCount { count: 1264 },
     ]
 }
 

@@ -55,6 +55,13 @@ fn round_trip(service: &str) {
     let client = ServiceClient::connect(service);
     handshake(&client);
     assert!(matches!(load(&client, &workspace), Ok(Message::Ready)));
+    let counted = client.request(&Message::CountTokens {
+        text: "Привет".to_owned(),
+    });
+    assert!(
+        matches!(counted, Ok(Message::TokenCount { count }) if count == "Привет".len() as u32),
+        "{counted:?}"
+    );
 
     let Ok(Message::Done(stats)) = client.request(&script(&["token Привет", "token , мир", "weights"])) else {
         panic!("the scripted generation completes");

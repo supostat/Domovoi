@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Read;
 use std::net::{TcpStream, ToSocketAddrs};
@@ -20,6 +21,21 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 #[derive(Debug, Default)]
 pub struct FakeBackend {
     weights_prefix: Option<[u8; WEIGHTS_PREFIX]>,
+    replies: VecDeque<String>,
+    requests: Vec<GenerateRequest>,
+}
+
+impl FakeBackend {
+    pub fn replying(replies: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            replies: replies.into_iter().collect(),
+            ..Self::default()
+        }
+    }
+
+    pub fn requests(&self) -> &[GenerateRequest] {
+        &self.requests
+    }
 }
 
 impl InferenceBackend for FakeBackend {
@@ -55,8 +71,9 @@ impl InferenceBackend for FakeBackend {
         let prefix = self
             .weights_prefix
             .ok_or_else(|| BackendError::new(ErrorCode::ModelNotLoaded, "no model is loaded"))?;
-        let commands = request
-            .prompt
+        self.requests.push(request.clone());
+        let script = self.replies.pop_front().unwrap_or_else(|| request.prompt.clone());
+        let commands = script
             .lines()
             .map(|line| {
                 FakeCommand::parse(line)
@@ -102,6 +119,13 @@ impl InferenceBackend for FakeBackend {
             generation_duration: started.elapsed(),
             stop,
         })
+    }
+
+    fn count_tokens(&self, text: &str) -> Result<u32, BackendError> {
+        if self.weights_prefix.is_none() {
+            return Err(BackendError::new(ErrorCode::ModelNotLoaded, "no model is loaded"));
+        }
+        Ok(u32::try_from(text.len()).unwrap_or(u32::MAX))
     }
 }
 

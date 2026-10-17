@@ -115,3 +115,18 @@ fn the_first_step_grammar_admits_only_tool_calls() {
         assert!(prompt.contains(tool.name()), "{}", tool.name());
     }
 }
+
+#[test]
+fn the_last_step_grammar_admits_only_a_final_answer() {
+    let schema = ResponseSchema::answers_only();
+    assert!(
+        schema
+            .parse(r#"{"kind":"final","answer":"Можно освободить 3,2 ГБ","hypotheses":[]}"#)
+            .is_ok()
+    );
+    assert!(matches!(
+        rejects(&schema, r#"{"kind":"tool_call","name":"summarize","arguments":{}}"#),
+        ResponseError::Schema(_)
+    ));
+    assert!(!schema.grammar().as_str().contains("tool_call"));
+}

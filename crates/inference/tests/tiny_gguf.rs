@@ -124,3 +124,17 @@ fn the_grammar_keeps_a_random_model_inside_json() {
     let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_else(|error| panic!("{text:?}: {error}"));
     assert!(value.is_object());
 }
+
+#[test]
+fn the_token_count_matches_the_prompt_the_model_decodes() {
+    let mut backend = loaded();
+    let prompt = "<|im_start|>user\nСколько места?<|im_end|>\n";
+    let counted = backend.count_tokens(prompt).expect("the loaded model counts tokens");
+    let (_, stats) = generate(&mut backend, &request(prompt, None, 1));
+    assert_eq!(counted, stats.prompt_tokens);
+    backend.unload();
+    assert_eq!(
+        backend.count_tokens(prompt).map_err(|error| error.code),
+        Err(ErrorCode::ModelNotLoaded)
+    );
+}
