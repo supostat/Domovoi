@@ -145,6 +145,7 @@ mod tray_sheet;
 mod tray_target;
 mod ui_font;
 mod unload_delay;
+mod updater_controller;
 mod volume_name;
 mod window_frame;
 

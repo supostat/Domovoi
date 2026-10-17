@@ -2,21 +2,23 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 
 use objc2::rc::Retained;
-use objc2::runtime::NSObjectProtocol;
-use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
-use objc2_app_kit::{NSApplication, NSApplicationDelegate};
+use objc2::runtime::{AnyObject, NSObjectProtocol};
+use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use objc2_app_kit::{NSApplication, NSApplicationDelegate, NSMenuItem, NSMenuItemValidation};
 use objc2_foundation::{NSNotification, NSObject};
 
 use domovoi_downloader::ModelStore;
 
 use crate::session_paths::SessionPaths;
 use crate::shell_controller::ShellController;
+use crate::updater_controller::UpdaterController;
 
 #[derive(Debug)]
 pub(crate) struct AppDelegateState {
     paths: SessionPaths,
     models: ModelStore,
     controller: OnceCell<Rc<ShellController>>,
+    updater: OnceCell<Option<Retained<UpdaterController>>>,
 }
 
 define_class!(
@@ -28,6 +30,22 @@ define_class!(
 
     unsafe impl NSObjectProtocol for AppDelegate {}
 
+    impl AppDelegate {
+        #[unsafe(method(checkForUpdates:))]
+        fn check_for_updates(&self, _sender: Option<&AnyObject>) {
+            if let Some(updater) = self.updater() {
+                updater.check_for_updates();
+            }
+        }
+    }
+
+    unsafe impl NSMenuItemValidation for AppDelegate {
+        #[unsafe(method(validateMenuItem:))]
+        fn validate_menu_item(&self, item: &NSMenuItem) -> bool {
+            item.action() != Some(sel!(checkForUpdates:)) || self.updater().is_some()
+        }
+    }
+
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn application_did_finish_launching(&self, _notification: &NSNotification) {
@@ -38,6 +56,10 @@ define_class!(
                 .controller
                 .set(controller)
                 .expect("the application finishes launching once");
+            self.ivars()
+                .updater
+                .set(UpdaterController::start(MainThreadMarker::from(self)))
+                .expect("the updater starts once");
         }
 
         #[unsafe(method(applicationDidBecomeActive:))]
@@ -62,11 +84,16 @@ define_class!(
 );
 
 impl AppDelegate {
+    fn updater(&self) -> Option<&UpdaterController> {
+        self.ivars().updater.get().and_then(Option::as_deref)
+    }
+
     pub(crate) fn new(marker: MainThreadMarker, paths: SessionPaths, models: ModelStore) -> Retained<Self> {
         let this = Self::alloc(marker).set_ivars(AppDelegateState {
             paths,
             models,
             controller: OnceCell::new(),
+            updater: OnceCell::new(),
         });
         unsafe { msg_send![super(this), init] }
     }

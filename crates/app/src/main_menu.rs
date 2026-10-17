@@ -4,14 +4,18 @@ use objc2::{MainThreadMarker, MainThreadOnly, sel};
 use objc2_app_kit::{NSMenu, NSMenuItem};
 use objc2_foundation::NSString;
 
-use crate::strings::{APP_NAME, CLOSE_WINDOW, HIDE_APP, MINIMIZE, QUIT_APP, WINDOW_MENU};
+use crate::strings::{APP_NAME, CHECK_FOR_UPDATES, CLOSE_WINDOW, HIDE_APP, MINIMIZE, QUIT_APP, WINDOW_MENU};
 
 pub(crate) fn main_menu(marker: MainThreadMarker) -> Retained<NSMenu> {
     let bar = NSMenu::new(marker);
     let application = submenu(
         marker,
         APP_NAME,
-        &[(HIDE_APP, sel!(hide:), "h"), (QUIT_APP, sel!(terminate:), "q")],
+        &[
+            (CHECK_FOR_UPDATES, sel!(checkForUpdates:), ""),
+            (HIDE_APP, sel!(hide:), "h"),
+            (QUIT_APP, sel!(terminate:), "q"),
+        ],
     );
     let window = submenu(
         marker,

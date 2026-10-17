@@ -405,6 +405,23 @@
   SHA-256» и загрузки не стартуют; дальше отчёт обновляется по событиям (`ModelEvent` в индекс через `Session`,
   отложенно, если `Session` занята задачей). Настройки AI (`AssistantSettings`) — в `NSUserDefaults`; зеркало
   принимается только `https://`; таймер выгрузки ставится после ответа и снимается при новом вопросе.
+- [дистрибуция] `cargo xtask bundle --profile <dev|adhoc|release>` собирает `target/bundle/DOMOVOI.app` поверх прошлой
+  сборки (каталоги не удаляются, файлы перезаписываются): пути release-бинарников и шейдеров — из JSON-сообщений cargo
+  (`DOMOVOI_DIAGRAM_METALLIB`, `DOMOVOI_METALLIB_DIR` build-скриптов), версии обоих plist — из
+  `[workspace.package].version`. Sparkle 2.10.0 кэшируется в `target/sparkle` после сверки размера и SHA-256;
+  `XPCServices` фреймворка (Installer, Downloader — только для песочницы) не копируется. dev и release требуют
+  `DOMOVOI_SIGNING_IDENTITY` и `DOMOVOI_TEAM_IDENTIFIER` (Team ID пишется в `DOMOVOITeamIdentifier` сервиса), release —
+  ещё `DOMOVOI_NOTARY_PROFILE` (профиль notarytool в Keychain); adhoc собирается с `domovoi-xpc-sys/adhoc` и без ключа
+  Team ID. Лицензии шрифтов, Sparkle и llama.cpp лежат в `Resources/Licenses`. rcodesign не встроен.
+- [обновления] Sparkle грузится в рантайме: `NSBundle` из `Contents/Frameworks/Sparkle.framework` и
+  `SPUStandardUpdaterController` через `extern_class!` (поиск класса по имени) — без `#[link]`, потому что тесты
+  запускают небандловый `target/*/domovoi`, которому dyld не нашёл бы фреймворк; вне бандла пункт «Проверить
+  обновления…» неактивен. rpath `@executable_path/../Frameworks` ставит build.rs приложения. Ключ EdDSA: приватный — в
+  связке «вход» (служба `https://sparkle-project.org`, учётная запись `ed25519`; резервная копия — `generate_keys -x`),
+  публичный — `SUPublicEDKey` в шаблоне. Appcast — GitHub Releases (`releases/latest/download/appcast.xml`), архивы для
+  `generate_appcast` копятся в `dist/appcast`. `xtask release`: чистое дерево → инкремент патча → бандл release,
+  нотаризация zip и DMG со степлингом → appcast → CHANGELOG → коммит `Release X.Y.Z` и аннотированный тег; загрузка
+  артефактов в GitHub Release — вручную.
 
 # Gameplan
 

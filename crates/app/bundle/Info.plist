@@ -30,6 +30,10 @@
 	<true/>
 	<key>ATSApplicationFontsPath</key>
 	<string>Fonts</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/supostat/Domovoi/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>u6AR564dIndzCoxFQAYNSJUWUK2FSuDEyph8aEJEYE4=</string>
 	<key>NSDesktopFolderUsageDescription</key>
 	<string>Домовой считает, сколько места занимает Рабочий стол. Файлы не открываются и никуда не отправляются.</string>
 	<key>NSDocumentsFolderUsageDescription</key>

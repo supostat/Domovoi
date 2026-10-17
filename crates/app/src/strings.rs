@@ -52,6 +52,7 @@ pub const SOURCE_MACOS_ESTIMATE: &str = "оценка macOS";
 pub const DATA_VOLUME: &str = "Данные";
 pub const PURGEABLE: &str = "Purgeable";
 pub const SYSTEM_DATA: &str = "Системные данные";
+pub const CHECK_FOR_UPDATES: &str = "Проверить обновления…";
 pub const HIDE_APP: &str = "Скрыть DOMOVOI";
 pub const QUIT_APP: &str = "Завершить DOMOVOI";
 pub const WINDOW_MENU: &str = "Окно";
