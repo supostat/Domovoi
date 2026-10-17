@@ -15,6 +15,11 @@ impl SnapshotOptions {
     pub fn file_stem(&self) -> String {
         let theme = if self.dark { "dark" } else { "light" };
         let contrast = if self.high_contrast { "-contrast" } else { "" };
-        format!("{}-{theme}@{}x{contrast}", self.screen.number(), self.scale as u32)
+        let variant = self.screen.variant().map(|name| format!("-{name}")).unwrap_or_default();
+        format!(
+            "{}{variant}-{theme}@{}x{contrast}",
+            self.screen.number(),
+            self.scale as u32
+        )
     }
 }

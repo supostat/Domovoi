@@ -9,11 +9,13 @@ pub enum ErrorCode {
     InvalidGrammar,
     OutOfMemory,
     Busy,
+    Stalled,
+    Unavailable,
     Internal,
 }
 
 impl ErrorCode {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::ProtocolMismatch,
         Self::ModelNotLoaded,
         Self::LoadFailed,
@@ -21,6 +23,8 @@ impl ErrorCode {
         Self::InvalidGrammar,
         Self::OutOfMemory,
         Self::Busy,
+        Self::Stalled,
+        Self::Unavailable,
         Self::Internal,
     ];
 
@@ -33,6 +37,8 @@ impl ErrorCode {
             Self::InvalidGrammar => c"invalid_grammar",
             Self::OutOfMemory => c"out_of_memory",
             Self::Busy => c"busy",
+            Self::Stalled => c"stalled",
+            Self::Unavailable => c"unavailable",
             Self::Internal => c"internal",
         }
     }

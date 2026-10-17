@@ -181,6 +181,97 @@ pub const RESTORE_FAILED: &str = "Не удалось вернуть";
 pub const CLONED: &str = "Заменено клоном:";
 pub const NOT_CLONED: &str = "Не заменено:";
 
+pub const ASK_PLACEHOLDER: &str = "Спросите о своём диске…";
+pub const ASK_PLACEHOLDER_UNLOADED: &str = "Спросите о своём диске — модель загрузится в память с вопросом";
+pub const MODEL_LOADING: &str = "Модель загружается в память…";
+pub const ANSWERING: &str = "Домовой отвечает…";
+pub const SEND_KEY: &str = "⏎";
+pub const STOP_ANSWER: &str = "Остановить";
+pub const CHAT_FOOT: &str = "модель видит пути, размеры и даты · содержимое файлов не читается";
+pub const ASSISTANT_OFF: &str =
+    "Домовой выключен. Включите его на странице «Модель»: вопросы к диску обрабатывает локальная модель на этом Mac.";
+pub const ASSISTANT_NO_MODEL: &str =
+    "Модель ещё не скачана. Домовой отвечает локально, поэтому сначала нужна модель из каталога.";
+pub const GO_TO_MODEL: &str = "Перейти к Модели";
+pub const ADD_TO_TRAY: &str = "Добавить в Корзину";
+pub const NODES: PluralForms = PluralForms {
+    one: "узел",
+    few: "узла",
+    many: "узлов",
+};
+pub const ANSWER_CANCELLED: &str = "Ответ остановлен.";
+pub const ANSWER_STALLED: &str = "Сервис модели перестал отвечать и был перезапущен. Спросите ещё раз.";
+pub const ANSWER_FAILED: &str = "Модель не смогла ответить.";
+pub const ANSWER_OUTSIDE_SCHEMA: &str = "Модель ответила не по схеме. Попробуйте сформулировать вопрос иначе.";
+pub const ANSWER_TOO_LONG: &str = "Разговор не помещается в память модели. Начните новый вопрос короче.";
+pub const SERVICE_UNAVAILABLE: &str = "Сервис модели недоступен.";
+pub const MODEL_FILE_UNREADABLE: &str = "Файл модели не открывается.";
+
+pub const LOCAL_MODEL: &str = "Локальная модель";
+pub const ASSISTANT_SWITCH: &str = "Домовой (AI)";
+pub const THIS_MAC: &str = "Этот Mac:";
+pub const SHARED_MEMORY: &str = "общей памяти";
+pub const FITS_ANY: &str = "подходит любая из каталога";
+pub const FITS_ONE: &str = "подходит";
+pub const FITS_SEVERAL: &str = "подходят";
+pub const FITS_NONE: &str = "моделям каталога нужно больше памяти";
+pub const AND: &str = "и";
+pub const FROM: &str = "от";
+pub const OF_MEMORY: &str = "памяти";
+pub const CLASS_COMPACT: &str = "Компактная";
+pub const CLASS_STANDARD: &str = "Стандартная";
+pub const CLASS_EXTENDED: &str = "Расширенная";
+pub const NOTE_COMPACT: &str = "быстрые ответы, проще формулировки";
+pub const NOTE_STANDARD: &str = "точнее разбирает вопросы, отвечает дольше";
+pub const NOTE_EXTENDED: &str = "самые подробные ответы, нужна память";
+pub const DOWNLOAD: &str = "Скачать";
+pub const PAUSE: &str = "Пауза";
+pub const RESUME: &str = "Продолжить";
+pub const CANCEL_DOWNLOAD: &str = "Отменить";
+pub const REMOVE: &str = "Удалить";
+pub const MAKE_ACTIVE: &str = "Сделать активной";
+pub const ACTIVE: &str = "Активна";
+pub const INSTALLED: &str = "Скачана";
+pub const PAUSED: &str = "На паузе";
+pub const FAILED: &str = "Не скачалась";
+pub const CHECKING: &str = "проверяю SHA-256";
+pub const ADOPTION_RUNNING: &str = "Предыдущий файл ещё проверяется.";
+pub const DOWNLOAD_AGAIN: &str = "Скачать заново";
+pub const SHA_MATCHES: &str = "SHA-256 совпадает";
+pub const PER_SECOND: &str = "/с";
+pub const REMAINING: &str = "осталось";
+pub const REMAINING_UNDER_MINUTE: &str = "осталось меньше минуты";
+pub const RESUMABLE: &str = "докачка поддерживается";
+pub const UNLOAD_AFTER_IDLE: &str = "Выгружать модель из памяти после простоя";
+pub const UNLOAD_EXPLANATION: &str =
+    "Простаивающий сервис macOS может завершить и сама — тогда модель загрузится заново со следующим вопросом.";
+pub const UNLOAD_IMMEDIATELY: &str = "сразу";
+pub const UNLOAD_FIVE_MINUTES: &str = "через 5 минут";
+pub const UNLOAD_FIFTEEN_MINUTES: &str = "через 15 минут";
+pub const UNLOAD_SIXTY_MINUTES: &str = "через 60 минут";
+pub const UNLOAD_NEVER: &str = "без таймера";
+pub const DOWNLOAD_SOURCE: &str = "Источник загрузки";
+pub const CHANGE: &str = "Изменить";
+pub const CHOOSE_FILE: &str = "Файл вручную…";
+pub const SOURCE_PROMPT: &str = "Адрес зеркала Hugging Face";
+pub const SOURCE_HINT: &str =
+    "Оставьте поле пустым, чтобы скачивать с huggingface.co. Зеркало должно отдавать файлы по HTTPS.";
+pub const SOURCE_SAVE: &str = "Сохранить";
+pub const SOURCE_NOT_HTTPS: &str = "Зеркало должно начинаться с https://";
+pub const ORPHANS: &str = "Лишние файлы в папке моделей";
+pub const ORPHAN_NOT_IN_CATALOG: &str = "нет в каталоге";
+pub const ORPHAN_DIGEST_MISMATCH: &str = "SHA-256 не совпадает";
+pub const TO_TRASH: &str = "В Корзину";
+pub const CATALOG_NOTE: &str = "Каталог — семейство ChatML, веса Apache-2.0:";
+pub const FILE_NOT_IN_CATALOG: &str = "Файл не совпадает ни с одной моделью каталога.";
+pub const INSTALL_SIZE_MISMATCH: &str = "размер файла не совпадает с каталогом";
+pub const INSTALL_DIGEST_MISMATCH: &str = "SHA-256 не совпал с каталогом";
+pub const INSTALL_NO_SPACE: &str = "не хватает места на диске";
+pub const INSTALL_SOURCE_CHANGED: &str = "источник отдал другую версию файла";
+pub const INSTALL_NETWORK: &str = "загрузка прервалась";
+pub const INSTALL_REFUSED: &str = "источник отказал в загрузке";
+pub const INSTALL_DISK: &str = "файл не удалось записать";
+
 pub const RULE_TITLES: [(&str, &str); 42] = [
     ("xcode.derived-data", "Xcode · DerivedData"),
     ("xcode.device-support", "iOS DeviceSupport"),

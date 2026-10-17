@@ -3,11 +3,14 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant, SystemTime};
 
+use domovoi_downloader::{Catalog, ModelStore};
 use domovoi_scanner::CancelToken;
 use objc2::MainThreadMarker;
 use serde_json::{Value, json};
 
 use crate::access_state::AccessState;
+use crate::assistant::Assistant;
+use crate::assistant_settings::AssistantSettings;
 use crate::cache_opening::CacheOpening;
 use crate::care_models::CareModels;
 use crate::disk_overview::DiskOverview;
@@ -270,7 +273,18 @@ impl EndToEnd {
             duplicates,
             tray,
         };
-        let data = ShellData::measured(AccessState::probe(), &overview, Some(index), &expansion, scan, care);
+        let models = ModelStore::open(&self.paths.models).map_err(|error| error.to_string())?;
+        let mut assistant = Assistant::new(models, Catalog::bundled(), AssistantSettings::default());
+        assistant.library.finish_scan()?;
+        let data = ShellData::measured(
+            AccessState::probe(),
+            &overview,
+            Some(index),
+            &expansion,
+            scan,
+            care,
+            assistant.models(),
+        );
         let mut written = Vec::new();
         for dark in [true, false] {
             let options = SnapshotOptions {
@@ -280,7 +294,7 @@ impl EndToEnd {
                 high_contrast: false,
                 directory: directory.to_path_buf(),
             };
-            written.extend(write_snapshots(marker, &data, &Screen::ALL, &options)?);
+            written.extend(write_snapshots(marker, &data, &Screen::primary(), &options)?);
         }
         Ok(written)
     }

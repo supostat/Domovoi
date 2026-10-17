@@ -36,7 +36,9 @@ impl CommandLine {
         let screens = if *target == "all" {
             Screen::ALL.to_vec()
         } else {
-            vec![Screen::from_number(target).ok_or_else(|| format!("unknown screen {target}"))?]
+            Some(Screen::with_number(target))
+                .filter(|screens| !screens.is_empty())
+                .ok_or_else(|| format!("unknown screen {target}"))?
         };
         let mut dark = None;
         let mut scale = None;
@@ -92,5 +94,5 @@ impl CommandLine {
 }
 
 fn usage() -> String {
-    "usage: domovoi [--snapshot <01|02|03|all> --theme <dark|light> --scale <1|2> --state <fixture.json> [--contrast high] <dir> | --e2e <scenario.json> --report <report.json>]".to_owned()
+    "usage: domovoi [--snapshot <01|02|03|04|05|06|07|08|all> --theme <dark|light> --scale <1|2> --state <fixture.json> [--contrast high] <dir> | --e2e <scenario.json> --report <report.json>]".to_owned()
 }

@@ -575,5 +575,168 @@
     }
    ]
   }
- }
+ },
+  "ai": {
+    "chat": {
+      "entries": [
+        {
+          "kind": "question",
+          "text": "Что из разработки можно убрать, не ломая проекты?"
+        },
+        {
+          "kind": "tool_call",
+          "tool": "query_index",
+          "arguments": "category: \"dev\", level: \"safe\"",
+          "found": 7
+        },
+        {
+          "kind": "answer",
+          "text": "Без последствий для проектов можно убрать 80,8 ГБ. Всё это пересоздаётся при следующей сборке.\n\nDocker (48 ГБ) я не трогаю: внутри образы и тома. Их лучше чистить средствами самого Docker.",
+          "items": [
+            {
+              "title": "Xcode · DerivedData",
+              "bytes": 38200000000
+            },
+            {
+              "title": "Каталоги target/ (Rust)",
+              "bytes": 24000000000
+            },
+            {
+              "title": "iOS DeviceSupport",
+              "bytes": 11400000000
+            },
+            {
+              "title": "node_modules и zig-cache",
+              "bytes": 7200000000
+            }
+          ]
+        },
+        {
+          "kind": "question",
+          "text": "А что за com.tinyapp.helper?"
+        },
+        {
+          "kind": "tool_call",
+          "tool": "inspect_node",
+          "arguments": "path: \"~/Library/Application Support/com.tinyapp.helper\""
+        },
+        {
+          "kind": "hypothesis",
+          "path": "~/Library/Application Support/com.tinyapp.helper",
+          "text": "Похоже на остаток удалённого приложения TinyApp: в Программах его нет, последнее обращение 14 месяцев назад, 1,7 ГБ. Проверьте содержимое перед удалением, правила за этот путь не отвечают."
+        }
+      ]
+    },
+    "model": {
+      "enabled": true,
+      "memory_bytes": 34359738368,
+      "cards": [
+        {
+          "entry_id": "qwen3.5-4b",
+          "class_title": "Компактная",
+          "name": "Qwen3.5-4B",
+          "quantization": "Q4",
+          "size": 2740937888,
+          "min_memory_bytes": 8589934592,
+          "note": "быстрые ответы, проще формулировки",
+          "state": {
+            "kind": "available"
+          }
+        },
+        {
+          "entry_id": "t-lite-it-2.1",
+          "class_title": "Стандартная",
+          "name": "T-lite-it-2.1",
+          "quantization": "Q4",
+          "size": 5027750240,
+          "min_memory_bytes": 17179869184,
+          "note": "точнее разбирает вопросы, отвечает дольше",
+          "state": {
+            "kind": "active"
+          }
+        },
+        {
+          "entry_id": "qwen3-14b",
+          "class_title": "Расширенная",
+          "name": "Qwen3-14B",
+          "quantization": "Q4",
+          "size": 9001752960,
+          "min_memory_bytes": 34359738368,
+          "note": "самые подробные ответы, нужна память",
+          "state": {
+            "kind": "downloading",
+            "received": 3690718714,
+            "bytes_per_second": 11400000
+          }
+        }
+      ],
+      "unload": "five_minutes",
+      "source": "huggingface.co",
+      "orphans": [
+        {
+          "path": "~/Library/Application Support/Domovoi/models/Llama-3-8B-Q4_K_M.gguf",
+          "bytes": 4920000000,
+          "reason": "нет в каталоге"
+        }
+      ]
+    },
+    "model_off": {
+      "enabled": false,
+      "memory_bytes": 17179869184,
+      "cards": [
+        {
+          "entry_id": "qwen3.5-4b",
+          "class_title": "Компактная",
+          "name": "Qwen3.5-4B",
+          "quantization": "Q4",
+          "size": 2740937888,
+          "min_memory_bytes": 8589934592,
+          "note": "быстрые ответы, проще формулировки",
+          "state": {
+            "kind": "installed"
+          }
+        },
+        {
+          "entry_id": "qwen3-4b-instruct-2507",
+          "class_title": "Компактная",
+          "name": "Qwen3-4B-Instruct-2507",
+          "quantization": "Q4",
+          "size": 2497281120,
+          "min_memory_bytes": 8589934592,
+          "note": "быстрые ответы, проще формулировки",
+          "state": {
+            "kind": "failed",
+            "reason": "SHA-256 не совпал с каталогом"
+          }
+        },
+        {
+          "entry_id": "t-lite-it-2.1",
+          "class_title": "Стандартная",
+          "name": "T-lite-it-2.1",
+          "quantization": "Q4",
+          "size": 5027750240,
+          "min_memory_bytes": 17179869184,
+          "note": "точнее разбирает вопросы, отвечает дольше",
+          "state": {
+            "kind": "paused",
+            "received": 2147483648
+          }
+        },
+        {
+          "entry_id": "qwen3-14b",
+          "class_title": "Расширенная",
+          "name": "Qwen3-14B",
+          "quantization": "Q4",
+          "size": 9001752960,
+          "min_memory_bytes": 34359738368,
+          "note": "самые подробные ответы, нужна память",
+          "state": {
+            "kind": "available"
+          }
+        }
+      ],
+      "unload": "never",
+      "source": "hf-mirror.example.ru"
+    }
+  }
 }

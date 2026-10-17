@@ -5,9 +5,11 @@ use domovoi_render::{DiagramTree, ROOT};
 use serde::Deserialize;
 
 use crate::access_state::AccessState;
+use crate::ai_fixture::AiFixture;
 use crate::care_models::CareModels;
 use crate::outline_fixture::OutlineFixture;
 use crate::scan_status::ScanStatus;
+use crate::screen::Screen;
 use crate::shell_data::ShellData;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -25,6 +27,7 @@ pub struct ShellFixture {
     pub scan: ScanStatus,
     pub tree: OutlineFixture,
     pub care: CareModels,
+    pub ai: AiFixture,
 }
 
 impl ShellFixture {
@@ -33,7 +36,7 @@ impl ShellFixture {
         serde_json::from_str(&text).map_err(|error| format!("{}: {error}", path.display()))
     }
 
-    pub fn shell_data(&self) -> Result<ShellData, String> {
+    pub fn shell_data(&self, screen: Screen) -> Result<ShellData, String> {
         let tree = DiagramTree::from_outline(&self.tree.outline()?);
         let used = tree.node(ROOT).size;
         Ok(ShellData {
@@ -45,6 +48,7 @@ impl ShellFixture {
             in_cloud_bytes: self.in_cloud_bytes,
             scan: self.scan.clone(),
             care: self.care.clone(),
+            ai: self.ai.models_for(screen),
             care_ready: true,
             hidden_folders: self.hidden_folders,
             snapshots_present: self.snapshots_present,

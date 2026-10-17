@@ -82,9 +82,10 @@ impl DuplicatesScreen {
         let mut outline = None;
         let mut progress = None;
         match &model.state {
-            DuplicatesState::Idle => frame
-                .pane
-                .addSubview(&placed(empty_state(marker, body.size, DUPLICATES_IDLE, palette), body)),
+            DuplicatesState::Idle => frame.pane.addSubview(&placed(
+                empty_state(marker, body.size, DUPLICATES_IDLE, None, palette),
+                body,
+            )),
             DuplicatesState::Searching { done, total, .. } => {
                 progress = Some(progress_block(
                     marker,
@@ -96,9 +97,10 @@ impl DuplicatesScreen {
                 ));
             }
             DuplicatesState::Found { .. } if groups.is_empty() => {
-                frame
-                    .pane
-                    .addSubview(&placed(empty_state(marker, body.size, NO_DUPLICATES, palette), body));
+                frame.pane.addSubview(&placed(
+                    empty_state(marker, body.size, NO_DUPLICATES, None, palette),
+                    body,
+                ));
             }
             DuplicatesState::Found { .. } => {
                 outline = Some(groups_outline(marker, &frame.pane, body, model, palette, actions));

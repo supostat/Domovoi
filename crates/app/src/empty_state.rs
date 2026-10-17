@@ -16,6 +16,7 @@ pub(crate) fn empty_state(
     marker: MainThreadMarker,
     size: NSSize,
     text: &str,
+    action: Option<&NSView>,
     palette: &ShellPalette,
 ) -> Retained<NSView> {
     let tokens = palette.tokens;
@@ -33,7 +34,8 @@ pub(crate) fn empty_state(
     message.setAlignment(NSTextAlignment::Center);
     message.setPreferredMaxLayoutWidth(WIDTH);
     let message_height = message.fittingSize().height;
-    let block = FieldOrnament::height() + GAP + message_height;
+    let action_height = action.map_or(0.0, |action| GAP + action.frame().size.height);
+    let block = FieldOrnament::height() + GAP + message_height + action_height;
     let top = (size.height - block) / 2.0;
     let left = (size.width - WIDTH) / 2.0;
     let ornament = FieldOrnament::new(
@@ -59,5 +61,16 @@ pub(crate) fn empty_state(
     message.setAutoresizingMask(centered);
     container.addSubview(&ornament);
     container.addSubview(&message);
+    if let Some(action) = action {
+        let action_size = action.frame().size;
+        action.setFrame(from_top(
+            size,
+            (size.width - action_size.width) / 2.0,
+            top + FieldOrnament::height() + GAP + message_height + GAP,
+            action_size,
+        ));
+        action.setAutoresizingMask(centered);
+        container.addSubview(action);
+    }
     container
 }

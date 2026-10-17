@@ -14,12 +14,19 @@ path = "src/main.rs"
 
 [dependencies]
 block2.workspace = true
+domovoi-agent.workspace = true
+domovoi-downloader.workspace = true
 domovoi-dups.workspace = true
+domovoi-grammar.workspace = true
 domovoi-index.workspace = true
+domovoi-inference.workspace = true
+domovoi-inference-proto.workspace = true
 domovoi-render.workspace = true
 domovoi-rules.workspace = true
 domovoi-scanner.workspace = true
 domovoi-theme.workspace = true
+domovoi-xpc-sys.workspace = true
+libc.workspace = true
 objc2.workspace = true
 objc2-app-kit = { workspace = true, features = [
   "NSAccessibility",
@@ -32,6 +39,7 @@ objc2-app-kit = { workspace = true, features = [
   "NSButton",
   "NSButtonCell",
   "NSCell",
+  "NSClipView",
   "NSCollectionView",
   "NSCollectionViewFlowLayout",
   "NSCollectionViewLayout",
@@ -43,17 +51,20 @@ objc2-app-kit = { workspace = true, features = [
   "NSFontDescriptor",
   "NSGraphics",
   "NSGraphicsContext",
+  "NSGridView",
   "NSImage",
   "NSImageRep",
   "NSLayoutAnchor",
   "NSLayoutConstraint",
   "NSMenu",
   "NSMenuItem",
+  "NSOpenPanel",
   "NSOutlineView",
   "NSPanel",
   "NSParagraphStyle",
   "NSResponder",
   "NSRunningApplication",
+  "NSSavePanel",
   "NSScreen",
   "NSScrollView",
   "NSSegmentedControl",
@@ -67,7 +78,9 @@ objc2-app-kit = { workspace = true, features = [
   "NSTableHeaderView",
   "NSTableView",
   "NSText",
+  "NSTextContainer",
   "NSTextField",
+  "NSTextView",
   "NSUserInterfaceLayout",
   "NSView",
   "NSViewController",
@@ -79,13 +92,18 @@ objc2-app-kit = { workspace = true, features = [
 ] }
 objc2-core-foundation = { workspace = true, features = ["CFCGTypes"] }
 objc2-core-graphics = { workspace = true, features = ["CGBitmapContext", "CGColor", "CGColorSpace", "CGContext", "CGImage", "CGPath"] }
-objc2-foundation = { workspace = true, features = ["NSArray", "NSAttributedString", "NSBundle", "NSDate", "NSDictionary", "NSError", "NSGeometry", "NSIndexPath", "NSNotification", "NSObject", "NSOperation", "NSProcessInfo", "NSRunLoop", "NSString", "NSTimer", "NSURL", "NSUserDefaults", "NSValue", "block2"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSAttributedString", "NSBundle", "NSDate", "NSDictionary", "NSError", "NSGeometry", "NSIndexPath", "NSNotification", "NSObject", "NSOperation", "NSProcessInfo", "NSRange", "NSRunLoop", "NSString", "NSTimer", "NSURL", "NSUserDefaults", "NSValue", "block2"] }
 serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
 domovoi-testkit.workspace = true
+domovoi-xpc-sys = { workspace = true, features = ["adhoc"] }
 
 [[test]]
 name = "truncation"
+harness = false
+
+[[test]]
+name = "smoke_inference_client"
 harness = false

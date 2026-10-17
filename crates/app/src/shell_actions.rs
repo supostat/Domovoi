@@ -9,6 +9,7 @@ use objc2_app_kit::{NSMenuItem, NSMenuItemValidation};
 use objc2_foundation::{NSInteger, NSObject};
 
 use crate::action_handler::ActionHandler;
+use crate::section::Section;
 use crate::shell_action::ShellAction;
 
 pub(crate) const SUNBURST_SEGMENT: usize = 0;
@@ -118,6 +119,81 @@ define_class!(
             self.dispatch(ShellAction::Restore(tag_of(sender)));
         }
 
+        #[unsafe(method(askAssistant:))]
+        fn ask_assistant(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::AskAssistant);
+        }
+
+        #[unsafe(method(stopAnswer:))]
+        fn stop_answer(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::StopAnswer);
+        }
+
+        #[unsafe(method(addAnswerToTray:))]
+        fn add_answer_to_tray(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::AddAnswerToTray(tag_of(sender)));
+        }
+
+        #[unsafe(method(openModelSection:))]
+        fn open_model_section(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::Navigate(Section::Model));
+        }
+
+        #[unsafe(method(toggleAssistant:))]
+        fn toggle_assistant(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ToggleAssistant);
+        }
+
+        #[unsafe(method(downloadModel:))]
+        fn download_model(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::DownloadModel(tag_of(sender)));
+        }
+
+        #[unsafe(method(pauseDownload:))]
+        fn pause_download(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::PauseDownload(tag_of(sender)));
+        }
+
+        #[unsafe(method(cancelDownload:))]
+        fn cancel_download(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::CancelDownload(tag_of(sender)));
+        }
+
+        #[unsafe(method(removeModel:))]
+        fn remove_model(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::RemoveModel(tag_of(sender)));
+        }
+
+        #[unsafe(method(activateModel:))]
+        fn activate_model(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::ActivateModel(tag_of(sender)));
+        }
+
+        #[unsafe(method(chooseUnloadDelay:))]
+        fn choose_unload_delay(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ChooseUnloadDelay);
+        }
+
+        #[unsafe(method(selectUnloadDelay:))]
+        fn select_unload_delay(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::SelectUnloadDelay(tag_of(sender)));
+        }
+
+        #[unsafe(method(changeSource:))]
+        fn change_source(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ChangeSource);
+        }
+
+        #[unsafe(method(chooseModelFile:))]
+        fn choose_model_file(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ChooseModelFile);
+        }
+
+        #[unsafe(method(trashOrphan:))]
+        fn trash_orphan(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::TrashOrphan(tag_of(sender)));
+        }
+
         #[unsafe(method(focusNode:))]
         fn focus_node(&self, sender: &AnyObject) {
             self.dispatch(ShellAction::Focus(tag_of(sender)));
@@ -183,6 +259,8 @@ impl ShellActions {
             Some(ShellAction::ShowClickedRowInFinder)
         } else if selector == sel!(focusNode:) {
             node.map(ShellAction::Focus)
+        } else if selector == sel!(selectUnloadDelay:) {
+            node.map(ShellAction::SelectUnloadDelay)
         } else {
             None
         }

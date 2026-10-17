@@ -5,6 +5,7 @@ use domovoi_render::{DiagramTree, NodeOrigin, ROOT};
 use domovoi_theme::{format_count, format_size};
 
 use crate::access_state::AccessState;
+use crate::ai_models::AiModels;
 use crate::care_models::CareModels;
 use crate::crumb::Crumb;
 use crate::disk_overview::{DiskOverview, in_cloud_bytes};
@@ -30,6 +31,7 @@ pub struct ShellData {
     pub in_cloud_bytes: u64,
     pub scan: ScanStatus,
     pub care: CareModels,
+    pub ai: AiModels,
     pub care_ready: bool,
     pub hidden_folders: u64,
     pub snapshots_present: bool,
@@ -43,6 +45,7 @@ impl ShellData {
         expansion: &Expansion,
         scan: ScanStatus,
         care: CareModels,
+        ai: AiModels,
     ) -> Self {
         Self {
             disk_name: overview.name.clone(),
@@ -53,6 +56,7 @@ impl ShellData {
             in_cloud_bytes: index.map_or(0, in_cloud_bytes),
             scan,
             care,
+            ai,
             care_ready: index.is_some(),
             hidden_folders: index.map_or(0, Index::hidden_folders),
             snapshots_present: !overview.volumes.snapshots.is_empty(),

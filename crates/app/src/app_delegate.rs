@@ -7,12 +7,15 @@ use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_se
 use objc2_app_kit::{NSApplication, NSApplicationDelegate};
 use objc2_foundation::{NSNotification, NSObject};
 
+use domovoi_downloader::ModelStore;
+
 use crate::session_paths::SessionPaths;
 use crate::shell_controller::ShellController;
 
 #[derive(Debug)]
 pub(crate) struct AppDelegateState {
     paths: SessionPaths,
+    models: ModelStore,
     controller: OnceCell<Rc<ShellController>>,
 }
 
@@ -28,7 +31,9 @@ define_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn application_did_finish_launching(&self, _notification: &NSNotification) {
-            let controller = ShellController::launch(MainThreadMarker::from(self), self.ivars().paths.clone());
+            let state = self.ivars();
+            let controller =
+                ShellController::launch(MainThreadMarker::from(self), state.paths.clone(), state.models.clone());
             self.ivars()
                 .controller
                 .set(controller)
@@ -57,9 +62,10 @@ define_class!(
 );
 
 impl AppDelegate {
-    pub(crate) fn new(marker: MainThreadMarker, paths: SessionPaths) -> Retained<Self> {
+    pub(crate) fn new(marker: MainThreadMarker, paths: SessionPaths, models: ModelStore) -> Retained<Self> {
         let this = Self::alloc(marker).set_ivars(AppDelegateState {
             paths,
+            models,
             controller: OnceCell::new(),
         });
         unsafe { msg_send![super(this), init] }

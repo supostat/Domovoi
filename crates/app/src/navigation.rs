@@ -9,9 +9,8 @@ pub struct Navigation {
 impl Navigation {
     pub fn allows(self, section: Section) -> bool {
         match section {
-            Section::Disk => true,
-            Section::Recommendations | Section::Duplicates => self.care_ready,
-            Section::Assistant | Section::Model => false,
+            Section::Disk | Section::Model => true,
+            Section::Recommendations | Section::Duplicates | Section::Assistant => self.care_ready,
         }
     }
 }

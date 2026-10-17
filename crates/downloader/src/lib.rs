@@ -30,7 +30,7 @@ mod transfer_session;
 mod transfer_step;
 
 pub use backup_exclusion::{exclude_from_backup, is_excluded_from_backup};
-pub use catalog::Catalog;
+pub use catalog::{Catalog, physical_memory};
 pub use catalog_entry::CatalogEntry;
 pub use catalog_error::CatalogError;
 pub use download_handle::DownloadHandle;

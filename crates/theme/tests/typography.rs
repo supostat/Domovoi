@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use domovoi_theme::{DateSource, FONT_STACKS, PluralForms, format_age, format_count, format_size};
+use domovoi_theme::{DateSource, FONT_STACKS, PluralForms, format_age, format_count, format_memory, format_size};
 use objc2_foundation::{NSDate, NSTimeZone};
 
 const FILES: PluralForms = PluralForms {
@@ -79,6 +79,13 @@ fn sizes_use_decimal_units_a_comma_and_a_no_break_space() {
     assert_eq!(format_size(38_200_000_000), no_break("38,2 ГБ"));
     assert_eq!(format_size(46_000_000), no_break("46 МБ"));
     assert_eq!(format_size(1_234_560_000_000), no_break("1 234,6 ГБ"));
+}
+
+#[test]
+fn memory_counts_whole_binary_gigabytes_as_macos_names_them() {
+    assert_eq!(format_memory(8 * 1024 * 1024 * 1024), no_break("8 ГБ"));
+    assert_eq!(format_memory(34_359_738_368), no_break("32 ГБ"));
+    assert_eq!(format_memory(17_179_869_184 - 1), no_break("16 ГБ"));
 }
 
 #[test]

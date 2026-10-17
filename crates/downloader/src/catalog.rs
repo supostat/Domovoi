@@ -102,7 +102,7 @@ fn is_revision(revision: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn physical_memory() -> u64 {
+pub fn physical_memory() -> u64 {
     let mut memory: u64 = 0;
     let mut size = size_of::<u64>();
     let status = unsafe {

@@ -11,14 +11,20 @@ pub enum ModelEvent {
 
 impl Index {
     pub fn apply_model_event(&mut self, event: &ModelEvent, enrichment: &mut Enrichment) {
+        enrichment.record_model_event(event);
+        self.derive(enrichment);
+    }
+}
+
+impl Enrichment {
+    pub fn record_model_event(&mut self, event: &ModelEvent) {
         match event {
             ModelEvent::Downloaded { path } => {
-                if !enrichment.model_paths.contains(path) {
-                    enrichment.model_paths.push(path.clone());
+                if !self.model_paths.contains(path) {
+                    self.model_paths.push(path.clone());
                 }
             }
-            ModelEvent::Removed { path } => enrichment.model_paths.retain(|known| known != path),
+            ModelEvent::Removed { path } => self.model_paths.retain(|known| known != path),
         }
-        self.derive(enrichment);
     }
 }

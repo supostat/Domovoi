@@ -2,12 +2,14 @@ use std::io;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+use domovoi_index::ModelEvent;
 use domovoi_render::{DiagramMode, NodeOrigin, ROOT};
 use domovoi_theme::Palette;
 use objc2::rc::Retained;
 use objc2::runtime::{NSObjectProtocol, ProtocolObject};
 
 use crate::access_state::AccessState;
+use crate::assistant::Assistant;
 use crate::care_models::CareModels;
 use crate::disk_overview::DiskOverview;
 use crate::duplicate_job::DuplicateJob;
@@ -53,10 +55,12 @@ pub(crate) struct ShellState {
     pub settings_opened: bool,
     pub scan_without_access: bool,
     pub contrast_observer: Option<Retained<ProtocolObject<dyn NSObjectProtocol>>>,
+    pub assistant: Assistant,
+    pub pending_model_events: Vec<ModelEvent>,
 }
 
 impl ShellState {
-    pub(crate) fn new(mode: DiagramMode) -> Self {
+    pub(crate) fn new(mode: DiagramMode, assistant: Assistant) -> Self {
         Self {
             stage: Stage::Access(AccessState::Missing),
             section: Section::Disk,
@@ -83,6 +87,8 @@ impl ShellState {
             settings_opened: false,
             scan_without_access: false,
             contrast_observer: None,
+            assistant,
+            pending_model_events: Vec::new(),
         }
     }
 
@@ -102,6 +108,11 @@ impl ShellState {
     }
 
     pub(crate) fn rebuild_data(&mut self, now: SystemTime) -> io::Result<()> {
+        if let Some(session) = self.session.as_mut() {
+            for event in self.pending_model_events.drain(..) {
+                session.apply_model_event(&event)?;
+            }
+        }
         let previous = self.data.take().map(|data| data.care);
         let care = self.care_models(previous.as_ref(), now)?;
         let index = self.session.as_ref().and_then(Session::index);
@@ -116,6 +127,7 @@ impl ShellState {
             &self.expansion,
             self.scan_status(),
             care,
+            self.assistant.models(),
         );
         self.focus = focus_node
             .and_then(|node| data.tree_position(NodeOrigin::Indexed(node)))

@@ -1,6 +1,7 @@
 mod anonymous_service;
 mod backend_error;
 mod backend_kind;
+mod bundled_service;
 mod cancel_flag;
 mod device_profile;
 mod fake_backend;
@@ -18,6 +19,7 @@ mod utf8_assembler;
 pub use anonymous_service::AnonymousService;
 pub use backend_error::BackendError;
 pub use backend_kind::BackendKind;
+pub use bundled_service::serve_bundled;
 pub use cancel_flag::CancelFlag;
 pub use device_profile::DeviceProfile;
 pub use fake_backend::FakeBackend;

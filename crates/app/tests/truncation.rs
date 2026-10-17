@@ -3,8 +3,8 @@ use std::process::ExitCode;
 
 use domovoi_app::{
     Breadcrumbs, CardModel, Crumb, HoverPanel, HoverTip, LevelRow, LevelRowView, MemberModel, Provenance,
-    RecommendationCard, SafetyBadge, ScanningScreen, Section, ShellActions, ShellFixture, ShellPalette, SidebarEntry,
-    SidebarItemView, development_fonts, member_row, strings,
+    RecommendationCard, SafetyBadge, ScanningScreen, Screen, Section, ShellActions, ShellFixture, ShellPalette,
+    SidebarEntry, SidebarItemView, development_fonts, member_row, strings,
 };
 use domovoi_index::Category;
 use domovoi_render::register_fonts;
@@ -185,7 +185,7 @@ fn crumbs(checks: &mut Checks, marker: MainThreadMarker) {
 fn scanning(checks: &mut Checks, marker: MainThreadMarker) {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shell_state.json");
     let mut data = ShellFixture::read(&fixture)
-        .and_then(|fixture| fixture.shell_data())
+        .and_then(|fixture| fixture.shell_data(Screen::Main))
         .expect("the fixture reads");
     LONG_PATH.clone_into(&mut data.scan.current);
     let actions = ShellActions::new(marker);

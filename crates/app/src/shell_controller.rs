@@ -3,9 +3,10 @@ use std::path::Path;
 use std::process::Command;
 use std::ptr::NonNull;
 use std::rc::{Rc, Weak};
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use block2::RcBlock;
+use domovoi_downloader::{Catalog, ModelStore};
 use domovoi_dups::SearchError;
 use domovoi_render::{
     DiagramChange, DiagramGraphics, DiagramObserver, DiagramRenderer, DiagramState, DiagramView, GlyphAtlas, NodeOrigin,
@@ -27,6 +28,9 @@ use objc2_foundation::{
 use crate::access_screen::AccessScreen;
 use crate::access_state::AccessState;
 use crate::action_handler::ActionHandler;
+use crate::assistant::Assistant;
+use crate::assistant_screen::AssistantScreen;
+use crate::assistant_settings::AssistantSettings;
 use crate::bundle_resources::diagram_metallib;
 use crate::cache_opening::CacheOpening;
 use crate::care_models::CareModels;
@@ -44,6 +48,7 @@ use crate::event_watch::EventWatch;
 use crate::expansion::Expansion;
 use crate::hover_panel::HoverPanel;
 use crate::main_screen::MainScreen;
+use crate::model_screen::ModelScreen;
 use crate::navigation::Navigation;
 use crate::recommendations_screen::RecommendationsScreen;
 use crate::scan_job::ScanJob;
@@ -75,6 +80,8 @@ const SEARCH_TICK: f64 = 1.0 / 10.0;
 const EVENTS_TICK: f64 = 0.5;
 const OPEN: &str = "/usr/bin/open";
 
+mod assistant_actions;
+
 #[derive(Debug)]
 pub(crate) struct ShellController {
     marker: MainThreadMarker,
@@ -88,7 +95,7 @@ pub(crate) struct ShellController {
 }
 
 impl ShellController {
-    pub(crate) fn launch(marker: MainThreadMarker, paths: SessionPaths) -> Rc<Self> {
+    pub(crate) fn launch(marker: MainThreadMarker, paths: SessionPaths, models: ModelStore) -> Rc<Self> {
         let window = unsafe {
             NSWindow::initWithContentRect_styleMask_backing_defer(
                 NSWindow::alloc(marker),
@@ -113,7 +120,10 @@ impl ShellController {
             actions: ShellActions::new(marker),
             hover: HoverPanel::new(marker),
             paths,
-            state: RefCell::new(ShellState::new(remembered_mode())),
+            state: RefCell::new(ShellState::new(
+                remembered_mode(),
+                Assistant::new(models, Catalog::bundled(), AssistantSettings::load()),
+            )),
         });
         let handler: Weak<dyn ActionHandler> = controller.this.clone();
         controller.actions.connect(handler);
@@ -126,6 +136,7 @@ impl ShellController {
         controller.observe_contrast();
         controller.window.center();
         controller.window.makeKeyAndOrderFront(None);
+        controller.watch_library();
         controller.start();
         controller
     }
@@ -147,6 +158,7 @@ impl ShellController {
     }
 
     pub(crate) fn application_will_terminate(&self) {
+        self.state.borrow_mut().assistant.shutdown();
         let state = self.state.borrow();
         if let Some(job) = &state.scan {
             job.stop();
@@ -338,6 +350,7 @@ impl ShellController {
         state.palette = self.palette();
         let palette = state.palette;
         let previous = state.views.take();
+        sync_assistant(&mut state, previous.as_ref());
         let views = match (state.stage, state.section) {
             (Stage::Access(access), _) => {
                 let screen = AccessScreen::build(marker, access, &palette, &self.actions);
@@ -354,6 +367,7 @@ impl ShellController {
                     &Expansion::default(),
                     status,
                     CareModels::default(),
+                    state.assistant.models(),
                 );
                 let screen = ScanningScreen::build(marker, &data, &palette, &self.actions);
                 let diagram = match previous {
@@ -379,7 +393,17 @@ impl ShellController {
                 let data = state.data.as_ref().expect("the main stage has data");
                 ScreenViews::Duplicates(DuplicatesScreen::build(marker, data, &palette, &self.actions))
             }
-            (Stage::Main, Section::Disk | Section::Assistant | Section::Model) => {
+            (Stage::Main, Section::Assistant) => {
+                self.size_window(WINDOW, true);
+                let data = state.data.as_ref().expect("the main stage has data");
+                ScreenViews::Assistant(AssistantScreen::build(marker, data, &palette, &self.actions))
+            }
+            (Stage::Main, Section::Model) => {
+                self.size_window(WINDOW, true);
+                let data = state.data.as_ref().expect("the main stage has data");
+                ScreenViews::Model(ModelScreen::build(marker, data, &palette, &self.actions))
+            }
+            (Stage::Main, Section::Disk) => {
                 self.size_window(WINDOW, true);
                 let data = state.data.as_ref().expect("the main stage has data");
                 let screen = MainScreen::build(marker, data, state.focus, state.mode, &palette, &self.actions);
@@ -402,12 +426,19 @@ impl ShellController {
             ScreenViews::Scanning { screen, .. } => screen.frame.root(),
             ScreenViews::Main { screen, .. } => screen.frame.root(),
             ScreenViews::Recommendations(screen) => screen.frame.root(),
+            ScreenViews::Assistant(screen) => screen.frame.root(),
             ScreenViews::Duplicates(screen) => screen.frame.root(),
+            ScreenViews::Model(screen) => screen.frame.root(),
         };
         content.setAutoresizingMask(
             NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
         self.root.show(&content);
+        if let ScreenViews::Assistant(screen) = &views
+            && let Some(input) = screen.input.as_ref().filter(|input| input.isEditable())
+        {
+            self.window.makeFirstResponder(Some(input));
+        }
         state.views = Some(views);
     }
 
@@ -490,11 +521,7 @@ impl ShellController {
         };
         if allowed {
             self.hover.hide();
-            {
-                let mut state = self.state.borrow_mut();
-                state.section = section;
-                state.views = None;
-            }
+            self.state.borrow_mut().section = section;
             self.show_current();
         }
     }
@@ -873,13 +900,21 @@ impl ShellController {
     }
 
     fn repeating(&self, interval: f64, tick: fn(&ShellController)) -> Retained<NSTimer> {
+        self.timer(interval, true, tick)
+    }
+
+    fn once(&self, delay: Duration, tick: fn(&ShellController)) -> Retained<NSTimer> {
+        self.timer(delay.as_secs_f64(), false, tick)
+    }
+
+    fn timer(&self, interval: f64, repeats: bool, tick: fn(&ShellController)) -> Retained<NSTimer> {
         let controller = self.this.clone();
         let block = RcBlock::new(move |_: NonNull<NSTimer>| {
             if let Some(controller) = controller.upgrade() {
                 tick(&controller);
             }
         });
-        unsafe { NSTimer::scheduledTimerWithTimeInterval_repeats_block(interval, true, &block) }
+        unsafe { NSTimer::scheduledTimerWithTimeInterval_repeats_block(interval, repeats, &block) }
     }
 }
 
@@ -952,6 +987,20 @@ impl ActionHandler for ShellController {
                 }
             }
             ShellAction::Restore(position) => self.restore(position),
+            ShellAction::AskAssistant => self.ask_assistant(),
+            ShellAction::StopAnswer => self.stop_answer(),
+            ShellAction::AddAnswerToTray(position) => self.add_answer_to_tray(position),
+            ShellAction::ToggleAssistant => self.toggle_assistant(),
+            ShellAction::DownloadModel(position) => self.download_model(position),
+            ShellAction::PauseDownload(position) => self.pause_download(position),
+            ShellAction::CancelDownload(position) => self.cancel_download(position),
+            ShellAction::RemoveModel(position) => self.remove_model(position),
+            ShellAction::ActivateModel(position) => self.activate_model(position),
+            ShellAction::ChooseUnloadDelay => self.choose_unload_delay(),
+            ShellAction::SelectUnloadDelay(position) => self.select_unload_delay(position),
+            ShellAction::ChangeSource => self.change_source(),
+            ShellAction::ChooseModelFile => self.choose_model_file(),
+            ShellAction::TrashOrphan(position) => self.trash_orphan(position),
         }
     }
 
@@ -963,6 +1012,16 @@ impl ActionHandler for ShellController {
                 .is_some_and(|node| self.state.borrow().node_path(node).is_some()),
             _ => true,
         }
+    }
+}
+
+fn sync_assistant(state: &mut ShellState, previous: Option<&ScreenViews>) {
+    if let Some(ScreenViews::Assistant(screen)) = previous {
+        state.assistant.chat.draft = screen.draft();
+    }
+    let ai = state.assistant.models();
+    if let Some(data) = state.data.as_mut() {
+        data.ai = ai;
     }
 }
 

@@ -4,13 +4,16 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread;
 
+use domovoi_agent::{Agent, AgentAnswer, AgentContext, AgentError, AgentLimits, ToolStep};
+use domovoi_downloader::CatalogEntry;
 use domovoi_dups::{
     CloneJournal, ClonePlan, CloneReplaceError, CloneReplaced, CloudFolders, DuplicateGroup, DuplicateOptions,
     DuplicateProgress, Duplicates, HashingPool, SearchError, find_duplicates,
 };
 use domovoi_index::{
-    CacheError, CacheHeader, Enrichment, Index, IndexRoot, NodeId, Reclaimable, open_cache, write_cache,
+    CacheError, CacheHeader, Enrichment, Index, IndexRoot, ModelEvent, NodeId, Reclaimable, open_cache, write_cache,
 };
+use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_rules::{
     CaseRule, ConfigOverrides, Denylist, Recommendations, RestoreError, RuleSet, TrashJournal, TrashOutcome, Tray,
     running_bundle_ids,
@@ -209,6 +212,44 @@ impl Session {
         };
         self.duplicates = Some(find_duplicates(index, &pool, &options)?);
         Ok(())
+    }
+
+    pub fn ask(
+        &self,
+        backend: &mut dyn InferenceBackend,
+        model: &CatalogEntry,
+        question: &str,
+        cancel: &CancelFlag,
+        observer: &mut dyn FnMut(&ToolStep),
+    ) -> Result<AgentAnswer, AgentError> {
+        let index = self.index.as_ref().expect("questions are asked about a scanned volume");
+        let context = AgentContext {
+            index,
+            rules: &self.rules,
+            denylist: &self.denylist,
+            totals: self
+                .recommendations
+                .as_ref()
+                .map(|recommendations| recommendations.totals)
+                .unwrap_or_default(),
+        };
+        Agent::new(
+            backend,
+            model.template,
+            AgentLimits::for_context_length(model.context_length),
+        )
+        .calling_a_tool_first()
+        .ask(&context, question, cancel, observer)
+    }
+
+    pub fn apply_model_event(&mut self, event: &ModelEvent) -> io::Result<()> {
+        if let Some(index) = self.index.as_mut() {
+            index.apply_model_event(event, &mut self.enrichment);
+            self.refresh_recommendations()
+        } else {
+            self.enrichment.record_model_event(event);
+            Ok(())
+        }
     }
 
     pub fn add_to_tray(&mut self, node: NodeId, rule_id: Option<&str>) {

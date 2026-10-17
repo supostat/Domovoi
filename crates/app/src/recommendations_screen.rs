@@ -106,7 +106,7 @@ impl RecommendationsScreen {
         head.addSubview(&send);
         let body = NSRect::new(NSPoint::ZERO, NSSize::new(pane.width, pane.height - HEAD_HEIGHT));
         let collection = if model.cards.is_empty() {
-            let empty = empty_state(marker, body.size, NO_RECOMMENDATIONS, palette);
+            let empty = empty_state(marker, body.size, NO_RECOMMENDATIONS, None, palette);
             frame.pane.addSubview(&empty);
             None
         } else {

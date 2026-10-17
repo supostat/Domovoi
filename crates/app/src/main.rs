@@ -1,7 +1,9 @@
 use std::env;
 use std::process::ExitCode;
 
-use domovoi_app::{CommandLine, ShellFixture, development_fonts, run_end_to_end, run_interactive, write_snapshots};
+use domovoi_app::{
+    CommandLine, ShellFixture, SnapshotOptions, development_fonts, run_end_to_end, run_interactive, write_snapshots,
+};
 use domovoi_render::register_fonts;
 use objc2::MainThreadMarker;
 
@@ -29,8 +31,15 @@ fn run(arguments: &[String]) -> Result<(), String> {
             options,
             state,
         } => {
-            let data = ShellFixture::read(&state)?.shell_data()?;
-            write_snapshots(marker, &data, &screens, &options).map(drop)
+            let fixture = ShellFixture::read(&state)?;
+            for screen in screens {
+                let options = SnapshotOptions {
+                    screen,
+                    ..options.clone()
+                };
+                write_snapshots(marker, &fixture.shell_data(screen)?, &[screen], &options)?;
+            }
+            Ok(())
         }
         CommandLine::EndToEnd { scenario, report } => run_end_to_end(marker, &scenario, &report),
     }

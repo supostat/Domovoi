@@ -3,8 +3,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use domovoi_app::{
-    AccessState, CacheOpening, CareModels, DiskOverview, Expansion, NODE_BUDGET, ScanStatus, Session, SessionPaths,
-    ShellData, strings,
+    AccessState, AiModels, CacheOpening, CareModels, DiskOverview, Expansion, NODE_BUDGET, ScanStatus, Session,
+    SessionPaths, ShellData, strings,
 };
 use domovoi_index::{Category, Source};
 use domovoi_render::{DiagramMode, DiagramRenderer, DiagramState, GlyphAtlas, NodeOrigin, ROOT};
@@ -72,6 +72,7 @@ fn session_feeds_the_real_scanner_index_and_renderer_on_a_volume() {
         &expansion,
         scan_status(&session),
         CareModels::default(),
+        AiModels::default(),
     );
 
     let names: Vec<&str> = data

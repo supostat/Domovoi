@@ -8,6 +8,7 @@ mod digits;
 mod ffi;
 #[rustfmt::skip]
 mod generated;
+mod memory;
 mod motion;
 mod plural;
 mod reduce_motion;
@@ -19,6 +20,7 @@ pub use age::{DateSource, format_age};
 pub use appearance::palette_for;
 pub use count::format_count;
 pub use generated::{FONT_STACKS, FontStacks, Palette, RADII, Radii};
+pub use memory::format_memory;
 pub use motion::Motion;
 pub use plural::PluralForms;
 pub use reduce_motion::{ReduceMotionObservation, observe_reduce_motion, reduce_motion};

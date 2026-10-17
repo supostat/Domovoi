@@ -5,8 +5,10 @@ use objc2_app_kit::NSView;
 use objc2_foundation::{NSRect, NSSize};
 
 use crate::access_screen::AccessScreen;
+use crate::assistant_screen::AssistantScreen;
 use crate::duplicates_screen::DuplicatesScreen;
 use crate::main_screen::MainScreen;
+use crate::model_screen::ModelScreen;
 use crate::probes::Probes;
 use crate::recommendations_screen::RecommendationsScreen;
 use crate::scanning_screen::ScanningScreen;
@@ -24,7 +26,9 @@ pub(crate) enum BuiltScreen {
     Scanning(ScanningScreen),
     Main(MainScreen),
     Recommendations(RecommendationsScreen),
+    Assistant(AssistantScreen),
     Duplicates(DuplicatesScreen),
+    Model(ModelScreen),
     Tray(TrayScreen),
 }
 
@@ -50,7 +54,9 @@ impl BuiltScreen {
             Screen::Recommendations => {
                 Self::Recommendations(RecommendationsScreen::build(marker, data, palette, actions))
             }
+            Screen::Assistant(_) => Self::Assistant(AssistantScreen::build(marker, data, palette, actions)),
             Screen::Duplicates => Self::Duplicates(DuplicatesScreen::build(marker, data, palette, actions)),
+            Screen::Model(_) => Self::Model(ModelScreen::build(marker, data, palette, actions)),
             Screen::Tray => Self::Tray(TrayScreen::build(marker, &data.care.tray, palette, actions)),
         }
     }
@@ -61,7 +67,9 @@ impl BuiltScreen {
             Self::Scanning(screen) => screen.frame.root(),
             Self::Main(screen) => screen.frame.root(),
             Self::Recommendations(screen) => screen.frame.root(),
+            Self::Assistant(screen) => screen.frame.root(),
             Self::Duplicates(screen) => screen.frame.root(),
+            Self::Model(screen) => screen.frame.root(),
             Self::Tray(screen) => screen.root.clone().into_super(),
         }
     }
@@ -72,7 +80,9 @@ impl BuiltScreen {
             Self::Scanning(screen) => &screen.probes,
             Self::Main(screen) => &screen.probes,
             Self::Recommendations(screen) => &screen.probes,
+            Self::Assistant(screen) => &screen.probes,
             Self::Duplicates(screen) => &screen.probes,
+            Self::Model(screen) => &screen.probes,
             Self::Tray(screen) => &screen.probes,
         }
     }
@@ -81,13 +91,23 @@ impl BuiltScreen {
         match self {
             Self::Access(screen) => screen.size(),
             Self::Tray(screen) => screen.size(),
-            Self::Scanning(_) | Self::Main(_) | Self::Recommendations(_) | Self::Duplicates(_) => WINDOW,
+            Self::Scanning(_)
+            | Self::Main(_)
+            | Self::Recommendations(_)
+            | Self::Assistant(_)
+            | Self::Duplicates(_)
+            | Self::Model(_) => WINDOW,
         }
     }
 
     pub(crate) fn diagram(&self, data: &ShellData, palette: &ShellPalette) -> Option<(NSRect, DiagramState)> {
         let (frame, state) = match self {
-            Self::Access(_) | Self::Recommendations(_) | Self::Duplicates(_) | Self::Tray(_) => return None,
+            Self::Access(_)
+            | Self::Recommendations(_)
+            | Self::Assistant(_)
+            | Self::Duplicates(_)
+            | Self::Model(_)
+            | Self::Tray(_) => return None,
             Self::Scanning(screen) => (screen.diagram_frame, ScanningScreen::diagram_state(data, palette)),
             Self::Main(screen) => (
                 screen.diagram_frame,

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use domovoi_app::{RecommendationsModel, ShellFixture, TrayModel, strings};
+use domovoi_app::{RecommendationsModel, Screen, ShellFixture, TrayModel, strings};
 use domovoi_rules::{ConfigOverrides, rule_table};
 
 const STRINGS_SOURCE: &str = include_str!("../src/strings.rs");
@@ -92,7 +92,7 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
     );
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shell_state.json");
     let mut data = ShellFixture::read(&fixture)
-        .and_then(|fixture| fixture.shell_data())
+        .and_then(|fixture| fixture.shell_data(Screen::Main))
         .expect("the fixture reads");
     assert_eq!(data.hidden_notice(), None);
     data.hidden_folders = 3;
