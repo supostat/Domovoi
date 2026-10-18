@@ -99,22 +99,11 @@ pub fn write_cache(path: &Path, header: &CacheHeader, last_event_id: u64, index:
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "cache path has no directory"))?;
     fs::create_dir_all(directory)?;
-    let temporary = path.with_extension(format!("{TEMPORARY_SUFFIX}-{}", std::process::id()));
-    let written = File::create(&temporary).and_then(|mut output| {
-        output.write_all(&bytes)?;
-        output.sync_all()
-    });
-    match written.and_then(|()| fs::rename(&temporary, path)) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            if let Err(cleanup) = fs::remove_file(&temporary)
-                && cleanup.kind() != io::ErrorKind::NotFound
-            {
-                eprintln!("partial cache {} was not removed: {cleanup}", temporary.display());
-            }
-            Err(error)
-        }
-    }
+    let temporary = path.with_extension(TEMPORARY_SUFFIX);
+    let mut output = File::create(&temporary)?;
+    output.write_all(&bytes)?;
+    output.sync_all()?;
+    fs::rename(&temporary, path)
 }
 
 pub fn open_cache(path: &Path, expected: &CacheHeader) -> Result<CachedIndex, CacheError> {

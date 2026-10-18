@@ -422,6 +422,18 @@
   `generate_appcast` копятся в `dist/appcast`. `xtask release`: чистое дерево → инкремент патча → бандл release,
   нотаризация zip и DMG со степлингом → appcast → CHANGELOG → коммит `Release X.Y.Z` и аннотированный тег; загрузка
   артефактов в GitHub Release — вручную.
+- [wire] `--e2e` дополнен шагами `create_file {path, bytes}`, `download_model {catalog, entry, mirror, models}` и
+  `ask_assistant {question, max_tokens_per_step?}`; `wire_main_path` запускает бинарь из ad-hoc бандла на
+  browsable-образе (FSEvents), докачка идёт с подложенной половиной файла и xattr-валидатором — сервер видит 302 и 206
+  с `If-Range`. Промпт агента в настоящих токенах tiny-random ≈ 5,6 тыс., поэтому тестовая запись каталога держит
+  контекст 65 536; случайная модель под грамматикой заполняет строки до лимита шага, поэтому `Session::ask` принимает
+  `AgentLimits`, а сценарий поднимает лимит токенов шага до 32 768 (приложение — 512 по умолчанию). Сервис из бандла
+  запускает launchd: окружение `GGML_METAL_DEVICES` процесса-хоста до него не доходит, в e2e модель считается на
+  Metal. Тестовый HF-сервер живёт в `domovoi-testkit`. `check-sources` запрещает `remove_file`, `remove_dir*`, `unlink`
+  и `removeItem` вне тестов (каталоги `tests`, модули после `#[cfg(test)]`, крейт testkit); кэш скана пишется через
+  постоянный `scan.partial`, который следующая запись перезаписывает. Замена клоном кладёт в Корзину старое тело под
+  скрытым именем `.domovoi-tmp-<UUID>` — возврат идёт по журналу, но в Finder имя неузнаваемо (открытый вопрос).
+  Живое окно, онбординг FDA на VM macOS 15 и нотаризация — приёмка человеком.
 
 # Gameplan
 

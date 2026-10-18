@@ -1,45 +1,38 @@
-#![allow(dead_code)]
-
-use std::io::{self, Read};
+use std::fmt;
+use std::io;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tiny_http::{Header, Request, Response, Server, StatusCode};
 
+use crate::recorded_request::RecordedRequest;
+use crate::server_behaviour::ServerBehaviour;
+use crate::throttled_body::ThrottledBody;
+
 const CDN_PREFIX: &str = "/cdn/";
 const RESOLVE_MARKER: &str = "/resolve/";
 const LINK_LIFETIME: Duration = Duration::from_secs(3600);
-pub(crate) const CDN_ETAG: &str = "\"cdn-object-1\"";
+pub const CDN_ETAG: &str = "\"cdn-object-1\"";
 
-#[derive(Clone, Debug)]
-pub(crate) struct ServerBehaviour {
-    pub(crate) content: Vec<u8>,
-    pub(crate) revision: String,
-    pub(crate) linked_etag: String,
-    pub(crate) expired_links: u32,
-    pub(crate) ignore_ranges: bool,
-    pub(crate) chunk: usize,
-    pub(crate) chunk_delay: Duration,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RecordedRequest {
-    pub(crate) path: String,
-    pub(crate) range: Option<String>,
-    pub(crate) if_range: Option<String>,
-    pub(crate) status: u16,
-}
-
-pub(crate) struct HfServer {
+pub struct HfServer {
     server: Arc<Server>,
     base: String,
     requests: Arc<Mutex<Vec<RecordedRequest>>>,
     listener: Option<JoinHandle<()>>,
 }
 
+impl fmt::Debug for HfServer {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("HfServer")
+            .field("base", &self.base)
+            .finish_non_exhaustive()
+    }
+}
+
 impl HfServer {
-    pub(crate) fn start(behaviour: ServerBehaviour) -> Self {
+    pub fn start(behaviour: ServerBehaviour) -> Self {
         let server = Arc::new(Server::http("127.0.0.1:0").expect("the local server binds"));
         let address = server
             .server_addr()
@@ -70,22 +63,22 @@ impl HfServer {
         }
     }
 
-    pub(crate) fn base(&self) -> &str {
+    pub fn base(&self) -> &str {
         &self.base
     }
 
-    pub(crate) fn requests(&self) -> Vec<RecordedRequest> {
+    pub fn requests(&self) -> Vec<RecordedRequest> {
         self.requests.lock().expect("the request log is never poisoned").clone()
     }
 
-    pub(crate) fn resolves(&self) -> usize {
+    pub fn resolves(&self) -> usize {
         self.requests()
             .iter()
             .filter(|request| request.path.contains(RESOLVE_MARKER))
             .count()
     }
 
-    pub(crate) fn transfers(&self) -> Vec<RecordedRequest> {
+    pub fn transfers(&self) -> Vec<RecordedRequest> {
         self.requests()
             .into_iter()
             .filter(|request| request.path.starts_with(CDN_PREFIX))
@@ -173,7 +166,7 @@ fn answer(
         _ => (200, 0),
     };
     record(status);
-    let body = Throttled {
+    let body = ThrottledBody {
         content: behaviour.content[offset..].to_vec(),
         position: 0,
         chunk: behaviour.chunk,
@@ -198,26 +191,4 @@ fn header_value(request: &Request, name: &'static str) -> Option<String> {
 
 fn header(name: &str, value: &str) -> Header {
     Header::from_bytes(name.as_bytes(), value.as_bytes()).expect("test headers are valid")
-}
-
-struct Throttled {
-    content: Vec<u8>,
-    position: usize,
-    chunk: usize,
-    delay: Duration,
-}
-
-impl Read for Throttled {
-    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-        if self.position >= self.content.len() {
-            return Ok(0);
-        }
-        if self.position > 0 {
-            thread::sleep(self.delay);
-        }
-        let length = buffer.len().min(self.chunk).min(self.content.len() - self.position);
-        buffer[..length].copy_from_slice(&self.content[self.position..self.position + length]);
-        self.position += length;
-        Ok(length)
-    }
 }

@@ -1,5 +1,3 @@
-mod hf_server;
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
@@ -11,8 +9,9 @@ use domovoi_downloader::{
     ModelStore, Sha256Hasher,
 };
 use domovoi_index::ModelEvent;
-use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat, test_timeout};
-use hf_server::{CDN_ETAG, HfServer, ServerBehaviour};
+use domovoi_testkit::{
+    CDN_ETAG, HfServer, ImageVolume, ServerBehaviour, TempTree, Visibility, VolumeFormat, test_timeout,
+};
 
 const THROTTLED_CHUNK: usize = 4096;
 const THROTTLE_DELAY: Duration = Duration::from_millis(15);

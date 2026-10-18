@@ -11,7 +11,7 @@
       "license": "LicenseRef-domovoi-generated",
       "license_source": "research/tiny_gguf.py",
       "min_memory_bytes": 0,
-      "context_length": 2048,
+      "context_length": 65536,
       "primary": true,
       "template": {
         "family": "chatml",

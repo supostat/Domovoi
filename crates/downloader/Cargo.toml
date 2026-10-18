@@ -39,4 +39,3 @@ serde_json.workspace = true
 [dev-dependencies]
 domovoi-scanner.workspace = true
 domovoi-testkit.workspace = true
-tiny_http.workspace = true

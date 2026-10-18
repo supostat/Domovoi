@@ -1,9 +1,15 @@
-use std::fs;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant, SystemTime};
 
-use domovoi_downloader::{Catalog, ModelStore};
+use domovoi_agent::AgentLimits;
+use domovoi_downloader::{
+    Catalog, CatalogEntry, DownloadOutcome, Downloader, ModelSource, ModelStore, Sha256Hasher, is_excluded_from_backup,
+};
+use domovoi_index::ModelEvent;
+use domovoi_inference::{CancelFlag, InferenceBackend};
+use domovoi_inference_proto::Timeouts;
 use domovoi_scanner::CancelToken;
 use objc2::MainThreadMarker;
 use serde_json::{Value, json};
@@ -13,17 +19,20 @@ use crate::assistant::Assistant;
 use crate::assistant_settings::AssistantSettings;
 use crate::cache_opening::CacheOpening;
 use crate::care_models::CareModels;
+use crate::chat_model::ChatModel;
 use crate::disk_overview::DiskOverview;
 use crate::duplicate_summary::DuplicateSummary;
 use crate::duplicates_model::DuplicatesModel;
 use crate::event_effect::EventEffect;
 use crate::expansion::{Expansion, NODE_BUDGET};
+use crate::inference_client::InferenceClient;
 use crate::recommendations_model::RecommendationsModel;
 use crate::safety_badge::SafetyBadge;
 use crate::scan_status::ScanStatus;
 use crate::scenario::Scenario;
 use crate::scenario_step::ScenarioStep;
 use crate::screen::Screen;
+use crate::service_address::ServiceAddress;
 use crate::session::Session;
 use crate::session_paths::SessionPaths;
 use crate::shell_data::ShellData;
@@ -69,6 +78,7 @@ struct EndToEnd {
     paths: SessionPaths,
     session: Session,
     duplicates: Option<DuplicateSummary>,
+    model: Option<(CatalogEntry, PathBuf)>,
     snapshots: Vec<PathBuf>,
 }
 
@@ -80,6 +90,7 @@ impl EndToEnd {
             session: Session::open(&scenario.root, &paths, APP_VERSION).map_err(|error| error.to_string())?,
             paths,
             duplicates: None,
+            model: None,
             snapshots: Vec::new(),
         })
     }
@@ -104,6 +115,10 @@ impl EndToEnd {
                 self.session = reopened;
                 Ok(json!({ "step": "reopen_cache", "last_event_id": self.session.last_event_id() }))
             }
+            ScenarioStep::CreateFile { path, bytes } => {
+                fs::write(path, vec![b'x'; *bytes]).map_err(|error| format!("{}: {error}", path.display()))?;
+                Ok(json!({ "step": "create_file", "path": path, "bytes": bytes }))
+            }
             ScenarioStep::AwaitChange { path, timeout_seconds } => {
                 let allocated = self.await_change(path, Duration::from_secs(*timeout_seconds))?;
                 Ok(json!({ "step": "await_change", "path": path, "allocated": allocated }))
@@ -111,7 +126,8 @@ impl EndToEnd {
             ScenarioStep::Recommendations => {
                 let model = self.recommendations();
                 let rules: Vec<String> = model.cards.iter().map(|card| card.provenance.label()).collect();
-                Ok(json!({ "step": "recommendations", "cards": rules, "total": model.total() }))
+                let blocked: Vec<&str> = model.cards.iter().filter_map(|card| card.blocked.as_deref()).collect();
+                Ok(json!({ "step": "recommendations", "cards": rules, "blocked": blocked, "total": model.total() }))
             }
             ScenarioStep::TrashRecommendations { level } => self.trash_recommendations(*level),
             ScenarioStep::RestoreLast => {
@@ -139,6 +155,16 @@ impl EndToEnd {
                 Ok(json!({ "step": "find_duplicates", "groups": groups }))
             }
             ScenarioStep::ReplaceWithClone => self.replace_with_clone(),
+            ScenarioStep::DownloadModel {
+                catalog,
+                entry,
+                mirror,
+                models,
+            } => self.download_model(catalog, entry, mirror, models),
+            ScenarioStep::AskAssistant {
+                question,
+                max_tokens_per_step,
+            } => self.ask_assistant(question, *max_tokens_per_step),
             ScenarioStep::Snapshots { directory, scale } => {
                 let written = self.snapshots(marker, directory, *scale)?;
                 self.snapshots.extend(written.iter().cloned());
@@ -220,6 +246,78 @@ impl EndToEnd {
             .replace_with_clone(keep, copy)
             .map_err(|error| format!("{error:?}"))?;
         Ok(json!({ "step": "replace_with_clone", "trashed": replaced.trashed }))
+    }
+
+    fn download_model(&mut self, catalog: &Path, entry: &str, mirror: &str, models: &Path) -> Result<Value, String> {
+        let catalog = Catalog::from_path(catalog).map_err(|error| error.to_string())?;
+        let entry = catalog
+            .entry(entry)
+            .ok_or_else(|| format!("{entry} is not in the catalog"))?
+            .clone();
+        let store = ModelStore::open(models).map_err(|error| error.to_string())?;
+        let handle = Downloader::new(ModelSource::mirror(mirror), store.clone()).start(&entry, |_| {});
+        let event = match handle.wait() {
+            DownloadOutcome::Installed(event) => event,
+            other => return Err(format!("the download ended as {other:?}")),
+        };
+        self.session
+            .apply_model_event(&event)
+            .map_err(|error| error.to_string())?;
+        let ModelEvent::Downloaded { path } = event else {
+            return Err("an installed model reports its path".to_owned());
+        };
+        let digest = Sha256Hasher::digest_of_file(&path).map_err(|error| error.to_string())?;
+        let excluded = is_excluded_from_backup(store.directory()).map_err(|error| error.to_string())?;
+        let report = json!({
+            "step": "download_model",
+            "path": path,
+            "sha256_matches": digest == entry.sha256,
+            "excluded_from_backup": excluded,
+        });
+        self.model = Some((entry, path));
+        Ok(report)
+    }
+
+    fn ask_assistant(&mut self, question: &str, max_tokens_per_step: Option<u32>) -> Result<Value, String> {
+        let (entry, weights) = self.model.clone().ok_or("a question needs a downloaded model")?;
+        let timeouts = Timeouts::from_environment().map_err(|error| error.to_string())?;
+        let mut client =
+            InferenceClient::connect(ServiceAddress::bundled(), timeouts).map_err(|error| error.to_string())?;
+        let file = File::open(&weights).map_err(|error| format!("{}: {error}", weights.display()))?;
+        client
+            .load(file.into(), entry.class, entry.context_length, &CancelFlag::default())
+            .map_err(|error| error.to_string())?;
+        let defaults = AgentLimits::for_context_length(entry.context_length);
+        let limits = AgentLimits {
+            max_tokens_per_step: max_tokens_per_step.unwrap_or(defaults.max_tokens_per_step),
+            ..defaults
+        };
+        let mut chat = ChatModel::default();
+        chat.ask(question);
+        let answer = self
+            .session
+            .ask(
+                &mut client,
+                &entry,
+                limits,
+                question,
+                &CancelFlag::default(),
+                &mut |step| {
+                    chat.record_step(step);
+                },
+            )
+            .map_err(|error| error.to_string())?;
+        chat.record_answer(&answer);
+        let tools: Vec<&str> = answer.steps.iter().map(|step| step.tool.name()).collect();
+        Ok(json!({
+            "step": "ask_assistant",
+            "service_pid": client.service_pid(),
+            "tools": tools,
+            "answer_characters": answer.text.chars().count(),
+            "hypotheses": answer.hypotheses.len(),
+            "actions": answer.actions.len(),
+            "chat_entries": chat.entries.len(),
+        }))
     }
 
     fn await_change(&mut self, path: &Path, timeout: Duration) -> Result<u64, String> {
@@ -304,12 +402,15 @@ fn step_name(step: &ScenarioStep) -> &'static str {
     match step {
         ScenarioStep::Scan => "scan",
         ScenarioStep::ReopenCache => "reopen_cache",
+        ScenarioStep::CreateFile { .. } => "create_file",
         ScenarioStep::AwaitChange { .. } => "await_change",
         ScenarioStep::Recommendations => "recommendations",
         ScenarioStep::TrashRecommendations { .. } => "trash_recommendations",
         ScenarioStep::RestoreLast => "restore_last",
         ScenarioStep::FindDuplicates => "find_duplicates",
         ScenarioStep::ReplaceWithClone => "replace_with_clone",
+        ScenarioStep::DownloadModel { .. } => "download_model",
+        ScenarioStep::AskAssistant { .. } => "ask_assistant",
         ScenarioStep::Snapshots { .. } => "snapshots",
     }
 }

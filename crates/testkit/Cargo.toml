@@ -11,3 +11,4 @@ workspace = true
 [dependencies]
 domovoi-apfs-sys.workspace = true
 libc.workspace = true
+tiny_http.workspace = true

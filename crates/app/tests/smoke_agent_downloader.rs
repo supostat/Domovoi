@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
+use domovoi_agent::AgentLimits;
 use domovoi_app::{AssistantSettings, ChatEntry, ChatModel, ModelCardState, ModelLibrary, Session, SessionPaths};
 use domovoi_downloader::{Catalog, CatalogEntry, ModelSource, ModelStore};
 use domovoi_index::{Category, ModelEvent};
@@ -14,7 +15,6 @@ const BUILD_OUTPUT: usize = 2 * MEGABYTE;
 const MODELS: &str = "Models";
 const QUESTION: &str = "Что из разработки можно убрать?";
 const ANSWER: &str = "Результаты сборки Rust пересоздаются, их можно убрать.";
-const CONTEXT_FOR_BYTE_TOKENS: u32 = 16_384;
 
 fn assets() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets")
@@ -50,16 +50,13 @@ fn chat_over_fake_model(session: &Session, entry: &CatalogEntry, model_path: &Pa
             &CancelFlag::default(),
         )
         .expect("the installed weights load");
-    let byte_tokenized = CatalogEntry {
-        context_length: CONTEXT_FOR_BYTE_TOKENS,
-        ..entry.clone()
-    };
     let mut chat = ChatModel::default();
     chat.ask(QUESTION);
     let answer = session
         .ask(
             &mut backend,
-            &byte_tokenized,
+            entry,
+            AgentLimits::for_context_length(entry.context_length),
             QUESTION,
             &CancelFlag::default(),
             &mut |step| chat.record_step(step),

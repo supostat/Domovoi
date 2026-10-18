@@ -1,14 +1,21 @@
 mod directory;
 mod fill;
+mod hf_server;
 mod image_backend;
 mod image_volume;
+mod recorded_request;
+mod server_behaviour;
 mod system_tool;
 mod temp_tree;
 mod test_timeout;
+mod throttled_body;
 
 pub use directory::Directory;
 pub use fill::Fill;
+pub use hf_server::{CDN_ETAG, HfServer};
 pub use image_backend::ImageBackend;
 pub use image_volume::{ImageVolume, Visibility, VolumeFormat};
+pub use recorded_request::RecordedRequest;
+pub use server_behaviour::ServerBehaviour;
 pub use temp_tree::TempTree;
 pub use test_timeout::test_timeout;

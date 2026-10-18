@@ -351,7 +351,6 @@ dependencies = [
  "objc2-foundation",
  "serde",
  "serde_json",
- "tiny_http",
 ]
 
 [[package]]
@@ -508,6 +507,7 @@ version = "0.1.0"
 dependencies = [
  "domovoi-apfs-sys",
  "libc",
+ "tiny_http",
 ]
 
 [[package]]

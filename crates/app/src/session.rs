@@ -218,6 +218,7 @@ impl Session {
         &self,
         backend: &mut dyn InferenceBackend,
         model: &CatalogEntry,
+        limits: AgentLimits,
         question: &str,
         cancel: &CancelFlag,
         observer: &mut dyn FnMut(&ToolStep),
@@ -233,13 +234,9 @@ impl Session {
                 .map(|recommendations| recommendations.totals)
                 .unwrap_or_default(),
         };
-        Agent::new(
-            backend,
-            model.template,
-            AgentLimits::for_context_length(model.context_length),
-        )
-        .calling_a_tool_first()
-        .ask(&context, question, cancel, observer)
+        Agent::new(backend, model.template, limits)
+            .calling_a_tool_first()
+            .ask(&context, question, cancel, observer)
     }
 
     pub fn apply_model_event(&mut self, event: &ModelEvent) -> io::Result<()> {

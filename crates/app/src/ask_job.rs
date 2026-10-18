@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
-use domovoi_agent::AgentError;
+use domovoi_agent::{AgentError, AgentLimits};
 use domovoi_downloader::CatalogEntry;
 use domovoi_inference::{BackendError, CancelFlag, InferenceBackend};
 use domovoi_inference_proto::{ErrorCode, Timeouts};
@@ -118,7 +118,8 @@ fn answer(
         }
     }
     let _ = events.send(AskEvent::Loaded);
-    let answer = session.ask(&mut client, model, question, cancel, &mut |step| {
+    let limits = AgentLimits::for_context_length(model.context_length);
+    let answer = session.ask(&mut client, model, limits, question, cancel, &mut |step| {
         let _ = events.send(AskEvent::Step(step.clone()));
     });
     AskOutcome {

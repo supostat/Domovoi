@@ -9,11 +9,34 @@ use crate::safety_badge::SafetyBadge;
 pub enum ScenarioStep {
     Scan,
     ReopenCache,
-    AwaitChange { path: PathBuf, timeout_seconds: u64 },
+    CreateFile {
+        path: PathBuf,
+        bytes: usize,
+    },
+    AwaitChange {
+        path: PathBuf,
+        timeout_seconds: u64,
+    },
     Recommendations,
-    TrashRecommendations { level: SafetyBadge },
+    TrashRecommendations {
+        level: SafetyBadge,
+    },
     RestoreLast,
     FindDuplicates,
     ReplaceWithClone,
-    Snapshots { directory: PathBuf, scale: f64 },
+    DownloadModel {
+        catalog: PathBuf,
+        entry: String,
+        mirror: String,
+        models: PathBuf,
+    },
+    AskAssistant {
+        question: String,
+        #[serde(default)]
+        max_tokens_per_step: Option<u32>,
+    },
+    Snapshots {
+        directory: PathBuf,
+        scale: f64,
+    },
 }
