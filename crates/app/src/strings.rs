@@ -29,6 +29,8 @@ pub const RELAUNCH: &str = "Перезапустить";
 pub const RELAUNCH_HINT: &str = "Доступ выдан. macOS увидит его после перезапуска.";
 pub const SCANNING: &str = "Сканирование";
 pub const STOP: &str = "Остановить";
+pub const RESCAN: &str = "Пересканировать";
+pub const RESCAN_DISK: &str = "Пересканировать диск";
 pub const SCAN_ENGINE: &str = "getattrlistbulk";
 pub const THREADS: PluralForms = PluralForms {
     one: "поток",

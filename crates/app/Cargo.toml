@@ -112,5 +112,9 @@ name = "cards_layout"
 harness = false
 
 [[test]]
+name = "sidebar_rescan"
+harness = false
+
+[[test]]
 name = "smoke_inference_client"
 harness = false

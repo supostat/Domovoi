@@ -9,6 +9,9 @@ use crate::safety_badge::SafetyBadge;
 pub enum ScenarioStep {
     Scan,
     ReopenCache,
+    Rescan {
+        path: PathBuf,
+    },
     CreateFile {
         path: PathBuf,
         bytes: usize,

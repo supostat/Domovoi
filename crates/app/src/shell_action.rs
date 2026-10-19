@@ -7,6 +7,7 @@ pub enum ShellAction {
     OpenSettings,
     ScanWithoutAccess,
     Relaunch,
+    Rescan,
     StopScan,
     ChangeMode(DiagramMode),
     Focus(usize),
@@ -45,7 +46,8 @@ impl ShellAction {
     pub fn needs_session(self) -> bool {
         matches!(
             self,
-            Self::OpenTray
+            Self::Rescan
+                | Self::OpenTray
                 | Self::SendCardsToTray
                 | Self::ConfirmTray
                 | Self::AddAnswerToTray(_)

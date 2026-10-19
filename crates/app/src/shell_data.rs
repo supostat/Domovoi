@@ -33,6 +33,7 @@ pub struct ShellData {
     pub care: CareModels,
     pub ai: AiModels,
     pub care_ready: bool,
+    pub rescan_allowed: bool,
     pub hidden_folders: u64,
     pub snapshots_present: bool,
 }
@@ -58,6 +59,7 @@ impl ShellData {
             care,
             ai,
             care_ready: index.is_some(),
+            rescan_allowed: false,
             hidden_folders: index.map_or(0, Index::hidden_folders),
             snapshots_present: !overview.volumes.snapshots.is_empty(),
         }

@@ -1,24 +1,33 @@
 use objc2::Message;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
-use objc2::{MainThreadMarker, MainThreadOnly};
+use objc2::{MainThreadMarker, MainThreadOnly, sel};
 use objc2_app_kit::{
     NSOutlineView, NSScrollView, NSTableColumn, NSTableViewColumnAutoresizingStyle, NSTableViewSelectionHighlightStyle,
     NSTableViewStyle, NSTextField,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
+use crate::button_style::ButtonStyle;
 use crate::fill_view::{FillStyle, FillView};
 use crate::label::measure_label;
+use crate::navigation::Navigation;
 use crate::shell_actions::ShellActions;
+use crate::shell_button::ShellButton;
+use crate::shell_data::ShellData;
 use crate::shell_palette::ShellPalette;
 use crate::sidebar_entry::SidebarEntry;
 use crate::sidebar_source::{SidebarModel, SidebarSource};
-use crate::ui_font::mono_font;
+use crate::strings::RESCAN;
+use crate::ui_font::{interface_font, mono_font};
 
-const DISK_BLOCK: f64 = 56.0;
+const DISK_BLOCK: f64 = 96.0;
 const INSET: f64 = 14.0;
+const FREE_BOTTOM: f64 = 10.0;
+const BAR_BOTTOM: f64 = 36.0;
 const BAR_HEIGHT: f64 = 6.0;
+const RESCAN_BOTTOM: f64 = 54.0;
+const RESCAN_HEIGHT: f64 = 28.0;
 
 #[derive(Debug)]
 pub struct SidebarPanel {
@@ -26,18 +35,19 @@ pub struct SidebarPanel {
     pub outline: Retained<NSOutlineView>,
     pub source: Retained<SidebarSource>,
     pub free: Retained<NSTextField>,
+    pub rescan: Retained<ShellButton>,
 }
 
 impl SidebarPanel {
     pub fn build(
         marker: MainThreadMarker,
         size: NSSize,
-        groups: Vec<SidebarEntry>,
-        used_share: f64,
-        free_text: &str,
+        data: &ShellData,
+        navigation: Navigation,
         palette: ShellPalette,
         actions: &ShellActions,
     ) -> Self {
+        let groups = data.sidebar(navigation);
         let tokens = palette.tokens;
         let view = FillView::new(
             marker,
@@ -52,7 +62,7 @@ impl SidebarPanel {
         let bar_track = FillView::new(
             marker,
             NSRect::new(
-                NSPoint::new(INSET, DISK_BLOCK - 20.0),
+                NSPoint::new(INSET, BAR_BOTTOM),
                 NSSize::new(size.width - 2.0 * INSET, BAR_HEIGHT),
             ),
             FillStyle {
@@ -65,8 +75,11 @@ impl SidebarPanel {
         let bar_fill = FillView::new(
             marker,
             NSRect::new(
-                NSPoint::new(INSET, DISK_BLOCK - 20.0),
-                NSSize::new((size.width - 2.0 * INSET) * used_share.clamp(0.0, 1.0), BAR_HEIGHT),
+                NSPoint::new(INSET, BAR_BOTTOM),
+                NSSize::new(
+                    (size.width - 2.0 * INSET) * data.used_share().clamp(0.0, 1.0),
+                    BAR_HEIGHT,
+                ),
             ),
             FillStyle {
                 fill: Some(tokens.wax.ns_color()),
@@ -75,11 +88,18 @@ impl SidebarPanel {
                 dashed: false,
             },
         );
-        let free = measure_label(marker, free_text, &mono_font(11.5, 400.0), &tokens.dim.ns_color());
-        free.setFrameOrigin(NSPoint::new(INSET, 10.0));
+        let free = measure_label(
+            marker,
+            &data.free_line(),
+            &mono_font(11.5, 400.0),
+            &tokens.dim.ns_color(),
+        );
+        free.setFrameOrigin(NSPoint::new(INSET, FREE_BOTTOM));
+        let rescan = rescan_button(marker, palette, actions, data.rescan_allowed);
         view.addSubview(&bar_track);
         view.addSubview(&bar_fill);
         view.addSubview(&free);
+        view.addSubview(&rescan);
 
         let outline_frame = NSRect::new(
             NSPoint::new(0.0, DISK_BLOCK),
@@ -117,8 +137,32 @@ impl SidebarPanel {
             outline,
             source,
             free,
+            rescan,
         }
     }
+}
+
+fn rescan_button(
+    marker: MainThreadMarker,
+    palette: ShellPalette,
+    actions: &ShellActions,
+    enabled: bool,
+) -> Retained<ShellButton> {
+    let rescan = ShellButton::new(
+        marker,
+        RESCAN,
+        NSPoint::new(INSET, RESCAN_BOTTOM),
+        RESCAN_HEIGHT,
+        ButtonStyle {
+            fill: None,
+            border: Some(palette.line()),
+            text: palette.tokens.text.ns_color(),
+            font: interface_font(13.0, 500.0),
+        },
+    );
+    rescan.on_click(actions, sel!(rescanDisk:));
+    rescan.setEnabled(enabled);
+    rescan
 }
 
 fn selected_row(groups: &[SidebarEntry]) -> Option<usize> {

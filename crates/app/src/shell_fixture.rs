@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 use crate::access_state::AccessState;
 use crate::ai_fixture::AiFixture;
+use crate::availability::Availability;
 use crate::care_models::CareModels;
 use crate::measure_progress::MeasureProgress;
 use crate::outline_fixture::OutlineFixture;
@@ -57,6 +58,10 @@ impl ShellFixture {
             care,
             ai: self.ai.models_for(screen),
             care_ready: true,
+            rescan_allowed: !matches!(
+                screen,
+                Screen::Scanning | Screen::Assistant(Availability::Answering) | Screen::Tray(_)
+            ),
             hidden_folders: self.hidden_folders,
             snapshots_present: self.snapshots_present,
         })

@@ -167,6 +167,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     let content = fs::read(manifest_path(TINY_MODEL)).expect("the tiny model reads");
     seed_partial(&models, &entry, &content);
     let server = serve(&entry, content);
+    let unwatched = mount_point.join("unwatched.txt");
     let fresh_in_root = mount_point.join("fresh.txt");
     let fresh_in_depth = mount_point.join(DEEP_FOLDER).join("fresh.o");
     let next_to_trashed = mount_point.join("Projects/engine/after-trash.txt");
@@ -176,6 +177,8 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
         "steps": [
             {"step": "scan"},
             {"step": "reopen_cache"},
+            {"step": "create_file", "path": unwatched, "bytes": FRESH_FILE_BYTES},
+            {"step": "rescan", "path": unwatched},
             {"step": "create_file", "path": fresh_in_root, "bytes": FRESH_FILE_BYTES},
             {"step": "await_change", "path": fresh_in_root, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
             {"step": "create_file", "path": fresh_in_depth, "bytes": FRESH_FILE_BYTES},
@@ -232,7 +235,20 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
 
 fn assert_index_and_care(report: &Value, mount_point: &Path) {
     assert!(step(report, "scan")["files"].as_u64().is_some_and(|files| files > 0));
-    assert!(step(report, "reopen_cache")["last_event_id"].as_u64().is_some());
+    let cached_event = step(report, "reopen_cache")["last_event_id"]
+        .as_u64()
+        .expect("the cache carries an event id");
+    let rescan = step(report, "rescan");
+    assert_eq!(
+        rescan["found"], true,
+        "the rescan finds a file no event delivered: {rescan}"
+    );
+    assert!(
+        rescan["last_event_id"]
+            .as_u64()
+            .is_some_and(|event| event > cached_event),
+        "events resume from the rescan, not from the cache: {rescan}"
+    );
     let changes = steps(report, "await_change");
     assert_eq!(changes.len(), 3, "{report:#}");
     for change in &changes[..2] {

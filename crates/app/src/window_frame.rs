@@ -36,12 +36,11 @@ impl WindowFrame {
         let sidebar = SidebarPanel::build(
             marker,
             NSSize::new(SIDEBAR_WIDTH, WINDOW.height),
-            data.sidebar(Navigation {
+            data,
+            Navigation {
                 current,
                 care_ready: data.care_ready,
-            }),
-            data.used_share(),
-            &data.free_line(),
+            },
             *palette,
             actions,
         );

@@ -1,8 +1,12 @@
 use std::fs::{self, File};
 use std::iter;
 use std::path::{Path, PathBuf};
+use std::ptr::NonNull;
 use std::sync::mpsc::RecvTimeoutError;
+use std::thread;
 use std::time::{Duration, Instant, SystemTime};
+
+use block2::RcBlock;
 
 use domovoi_agent::AgentLimits;
 use domovoi_downloader::{
@@ -13,6 +17,7 @@ use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::Timeouts;
 use domovoi_scanner::{CancelToken, VolumeEvent};
 use objc2::MainThreadMarker;
+use objc2_foundation::NSTimer;
 use serde_json::{Value, json};
 
 use crate::access_state::AccessState;
@@ -31,6 +36,7 @@ use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
 use crate::recommendations_model::RecommendationsModel;
 use crate::safety_badge::SafetyBadge;
+use crate::scan_job::ScanJob;
 use crate::scan_stage::ScanStage;
 use crate::scan_status::ScanStatus;
 use crate::scenario::Scenario;
@@ -47,6 +53,7 @@ use crate::tray_model::TrayModel;
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const EVENT_POLL: Duration = Duration::from_millis(50);
+const SCAN_POLL: Duration = Duration::from_millis(50);
 const SESSION_BETWEEN_STEPS: &str = "the session is home between steps";
 
 pub fn run_end_to_end(marker: MainThreadMarker, scenario: &Path, report: &Path) -> Result<(), String> {
@@ -122,6 +129,7 @@ impl EndToEnd {
                 self.session = Some(reopened);
                 Ok(json!({ "step": "reopen_cache", "last_event_id": self.session().last_event_id() }))
             }
+            ScenarioStep::Rescan { path } => self.rescan(path),
             ScenarioStep::CreateFile { path, bytes } => {
                 fs::write(path, vec![b'x'; *bytes]).map_err(|error| format!("{}: {error}", path.display()))?;
                 Ok(json!({ "step": "create_file", "path": path, "bytes": bytes }))
@@ -187,6 +195,39 @@ impl EndToEnd {
 
     fn session(&self) -> &Session {
         self.session.as_ref().expect(SESSION_BETWEEN_STEPS)
+    }
+
+    fn rescan(&mut self, path: &Path) -> Result<Value, String> {
+        let expected = DiskOverview::measure(&self.root)
+            .map_err(|error| error.to_string())?
+            .volumes
+            .data_used
+            .value;
+        let timer = unsafe {
+            NSTimer::timerWithTimeInterval_repeats_block(
+                SCAN_POLL.as_secs_f64(),
+                true,
+                &RcBlock::new(|_: NonNull<NSTimer>| {}),
+            )
+        };
+        let session = self.session.take().expect(SESSION_BETWEEN_STEPS);
+        let mut job = ScanJob::start(session, false, expected, timer);
+        while !job.is_finished() {
+            job.absorb_progress();
+            thread::sleep(SCAN_POLL);
+        }
+        job.absorb_progress();
+        let files = job.status.files;
+        let (session, outcome) = job.finish();
+        self.session = Some(session);
+        outcome.map_err(|error| error.to_string())?;
+        let index = self.session().index().expect("a finished rescan installs an index");
+        Ok(json!({
+            "step": "rescan",
+            "found": index.find(path).is_some(),
+            "files": files,
+            "last_event_id": self.session().last_event_id(),
+        }))
     }
 
     fn session_mut(&mut self) -> &mut Session {
@@ -430,15 +471,18 @@ impl EndToEnd {
         let models = ModelStore::open(&self.paths.models).map_err(|error| error.to_string())?;
         let mut assistant = Assistant::new(models, Catalog::bundled(), AssistantSettings::default());
         assistant.library.finish_scan()?;
-        let data = ShellData::measured(
-            AccessState::probe(),
-            &overview,
-            Some(index),
-            &expansion,
-            scan,
-            care,
-            assistant.models(),
-        );
+        let data = ShellData {
+            rescan_allowed: true,
+            ..ShellData::measured(
+                AccessState::probe(),
+                &overview,
+                Some(index),
+                &expansion,
+                scan,
+                care,
+                assistant.models(),
+            )
+        };
         let mut written = Vec::new();
         for dark in [true, false] {
             let options = SnapshotOptions {
@@ -458,6 +502,7 @@ fn step_name(step: &ScenarioStep) -> &'static str {
     match step {
         ScenarioStep::Scan => "scan",
         ScenarioStep::ReopenCache => "reopen_cache",
+        ScenarioStep::Rescan { .. } => "rescan",
         ScenarioStep::CreateFile { .. } => "create_file",
         ScenarioStep::AwaitChange { .. } => "await_change",
         ScenarioStep::Recommendations => "recommendations",

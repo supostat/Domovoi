@@ -28,6 +28,7 @@ use crate::screen_views::ScreenViews;
 use crate::section::Section;
 use crate::session::Session;
 use crate::shell_data::ShellData;
+use crate::shell_gate::ShellGate;
 use crate::shell_palette::ShellPalette;
 use crate::stage::Stage;
 use crate::tray_measurement::TrayMeasurement;
@@ -96,6 +97,14 @@ impl ShellState {
             contrast_observer: None,
             assistant,
             pending_model_events: Vec::new(),
+        }
+    }
+
+    pub(crate) fn gate(&self) -> ShellGate {
+        ShellGate {
+            session_open: self.session.is_some(),
+            tray_open: self.tray.is_some(),
+            searching: self.search.is_some(),
         }
     }
 

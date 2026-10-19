@@ -9,7 +9,9 @@ use objc2_foundation::{NSNotification, NSObject};
 
 use domovoi_downloader::ModelStore;
 
+use crate::action_handler::ActionHandler;
 use crate::session_paths::SessionPaths;
+use crate::shell_action::ShellAction;
 use crate::shell_controller::ShellController;
 use crate::updater_controller::UpdaterController;
 
@@ -37,12 +39,27 @@ define_class!(
                 updater.check_for_updates();
             }
         }
+
+        #[unsafe(method(rescanDisk:))]
+        fn rescan_disk(&self, _sender: Option<&AnyObject>) {
+            if let Some(controller) = self.ivars().controller.get() {
+                controller.dispatch(ShellAction::Rescan);
+            }
+        }
     }
 
     unsafe impl NSMenuItemValidation for AppDelegate {
         #[unsafe(method(validateMenuItem:))]
         fn validate_menu_item(&self, item: &NSMenuItem) -> bool {
-            item.action() != Some(sel!(checkForUpdates:)) || self.updater().is_some()
+            match item.action() {
+                Some(action) if action == sel!(checkForUpdates:) => self.updater().is_some(),
+                Some(action) if action == sel!(rescanDisk:) => self
+                    .ivars()
+                    .controller
+                    .get()
+                    .is_some_and(|controller| controller.allows(ShellAction::Rescan)),
+                _ => true,
+            }
         }
     }
 

@@ -53,6 +53,11 @@ define_class!(
             self.dispatch(ShellAction::Relaunch);
         }
 
+        #[unsafe(method(rescanDisk:))]
+        fn rescan_disk(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::Rescan);
+        }
+
         #[unsafe(method(stopScan:))]
         fn stop_scan(&self, _sender: Option<&AnyObject>) {
             self.dispatch(ShellAction::StopScan);

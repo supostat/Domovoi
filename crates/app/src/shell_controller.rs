@@ -161,6 +161,10 @@ impl ShellController {
         }
     }
 
+    pub(crate) fn dispatch(&self, action: ShellAction) {
+        self.actions.dispatch(action);
+    }
+
     pub(crate) fn application_will_terminate(&self) {
         self.state.borrow_mut().assistant.shutdown();
         let mut state = self.state.borrow_mut();
@@ -200,6 +204,19 @@ impl ShellController {
             Ok(CacheOpening::Reset) => self.begin_scan(session, true),
             Err(error) => self.fail(&error.to_string()),
         }
+    }
+
+    fn rescan(&self) {
+        let overview = match DiskOverview::measure(Path::new(SYSTEM_DATA_ROOT)) {
+            Ok(overview) => overview,
+            Err(error) => return self.fail(&error.to_string()),
+        };
+        let session = {
+            let mut state = self.state.borrow_mut();
+            state.overview = Some(overview);
+            state.session.take().expect("a rescan starts from an open session")
+        };
+        self.begin_scan(session, false);
     }
 
     fn begin_scan(&self, session: Session, full_first_scan: bool) {
@@ -395,6 +412,10 @@ impl ShellController {
         let palette = state.palette;
         let previous = state.views.take();
         sync_assistant(&mut state, previous.as_ref());
+        let rescan_allowed = state.gate().allows(ShellAction::Rescan);
+        if let Some(data) = state.data.as_mut() {
+            data.rescan_allowed = rescan_allowed;
+        }
         let views = match (state.stage, state.section) {
             (Stage::Access(access), _) => {
                 let screen = AccessScreen::build(marker, access, &palette, &self.actions);
@@ -1032,6 +1053,7 @@ impl ActionHandler for ShellController {
                 }
             }
             ShellAction::Relaunch => self.relaunch(),
+            ShellAction::Rescan => self.rescan(),
             ShellAction::StopScan => {
                 if let Some(job) = &self.state.borrow().scan {
                     job.stop();
@@ -1106,11 +1128,7 @@ impl ActionHandler for ShellController {
             ShellAction::ShowClickedRowInFinder => self
                 .clicked_row()
                 .is_some_and(|node| self.state.borrow().node_path(node).is_some()),
-            ShellAction::ToggleDuplicateSearch => {
-                let state = self.state.borrow();
-                state.search.is_some() || state.session.is_some()
-            }
-            _ => !action.needs_session() || self.state.borrow().session.is_some(),
+            _ => self.state.borrow().gate().allows(action),
         }
     }
 }
