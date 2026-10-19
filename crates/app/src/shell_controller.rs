@@ -14,7 +14,7 @@ use domovoi_render::{
 use domovoi_rules::{RestoreError, open_trash};
 use domovoi_scanner::ScanError;
 use domovoi_theme::{Palette, format_size, reduce_motion};
-use objc2::rc::Retained;
+use objc2::rc::{Retained, autoreleasepool};
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
     NSAlert, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication,
@@ -385,6 +385,10 @@ impl ShellController {
     }
 
     fn show_current(&self) {
+        autoreleasepool(|_| self.rebuild_current_views());
+    }
+
+    fn rebuild_current_views(&self) {
         let marker = self.marker;
         let mut state = self.state.borrow_mut();
         state.palette = self.palette();

@@ -1,16 +1,15 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use domovoi_theme::format_size;
 use objc2::Message;
 use objc2::rc::Retained;
 use objc2::{ClassType, MainThreadMarker, MainThreadOnly, sel};
-use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSCollectionView, NSCollectionViewFlowLayout, NSLineBreakMode, NSScrollView, NSTextField,
-};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSCollectionView, NSLineBreakMode, NSScrollView, NSTextField};
 use objc2_foundation::{NSArray, NSEdgeInsets, NSPoint, NSRect, NSSize, NSString};
 
 use crate::button_style::ButtonStyle;
 use crate::card_item::CardItem;
+use crate::cards_layout::CardsLayout;
 use crate::cards_model::CardsModel;
 use crate::cards_source::{CARD_ITEM, CardsSource};
 use crate::empty_state::empty_state;
@@ -159,9 +158,10 @@ fn cards(
             palette: *palette,
             actions: actions.retain(),
             heights: RefCell::new((0.0, Vec::new())),
+            measurements: Cell::new(0),
         },
     );
-    let layout = NSCollectionViewFlowLayout::new(marker);
+    let layout = CardsLayout::new(marker);
     layout.setMinimumLineSpacing(CARD_SPACING);
     layout.setSectionInset(NSEdgeInsets {
         top: LIST_INSET,

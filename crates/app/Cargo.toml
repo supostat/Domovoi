@@ -69,6 +69,7 @@ objc2-app-kit = { workspace = true, features = [
   "NSSavePanel",
   "NSScreen",
   "NSScrollView",
+  "NSScroller",
   "NSSegmentedControl",
   "NSSplitView",
   "NSSplitViewController",
@@ -104,6 +105,10 @@ domovoi-xpc-sys = { workspace = true, features = ["adhoc"] }
 
 [[test]]
 name = "truncation"
+harness = false
+
+[[test]]
+name = "cards_layout"
 harness = false
 
 [[test]]

@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use objc2::rc::Retained;
 
@@ -13,4 +13,5 @@ pub struct CardsModel {
     pub palette: ShellPalette,
     pub actions: Retained<ShellActions>,
     pub heights: RefCell<(f64, Vec<f64>)>,
+    pub measurements: Cell<usize>,
 }

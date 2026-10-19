@@ -1,9 +1,10 @@
 use objc2::rc::Retained;
 use objc2::runtime::NSObjectProtocol;
-use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
+use objc2::{ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{
     NSCollectionView, NSCollectionViewDataSource, NSCollectionViewDelegate, NSCollectionViewDelegateFlowLayout,
-    NSCollectionViewItem, NSCollectionViewLayout, NSIndexPathNSCollectionViewAdditions,
+    NSCollectionViewItem, NSCollectionViewLayout, NSControlSize, NSIndexPathNSCollectionViewAdditions, NSScrollView,
+    NSScroller,
 };
 use objc2_foundation::{NSIndexPath, NSInteger, NSObject, NSSize, NSString};
 
@@ -11,6 +12,7 @@ use crate::cards_model::CardsModel;
 use crate::recommendation_card::RecommendationCard;
 
 pub(crate) const CARD_ITEM: &str = "recommendation-card";
+const FLOW_LAYOUT_MARGIN: f64 = 1.0;
 
 define_class!(
     #[unsafe(super(NSObject))]
@@ -72,14 +74,22 @@ impl CardsSource {
         unsafe { msg_send![super(this), init] }
     }
 
+    pub fn measurements(&self) -> usize {
+        self.ivars().measurements.get()
+    }
+
     fn card_width(&self, collection: &NSCollectionView) -> f64 {
-        (collection.bounds().size.width - 2.0 * self.ivars().inset).max(0.0)
+        let scroll = collection
+            .enclosingScrollView()
+            .expect("the cards sit in a scroll view");
+        (content_width(&scroll) - 2.0 * self.ivars().inset - FLOW_LAYOUT_MARGIN).max(0.0)
     }
 
     fn heights(&self, width: f64) -> Vec<f64> {
         let model = self.ivars();
         let mut cached = model.heights.borrow_mut();
         if cached.0.to_bits() != width.to_bits() || cached.1.len() != model.cards.len() {
+            model.measurements.set(model.measurements.get() + 1);
             let marker = MainThreadMarker::from(self);
             cached.1 = model
                 .cards
@@ -93,4 +103,19 @@ impl CardsSource {
         }
         cached.1.clone()
     }
+}
+
+fn content_width(scroll: &NSScrollView) -> f64 {
+    let size = unsafe {
+        NSScrollView::contentSizeForFrameSize_horizontalScrollerClass_verticalScrollerClass_borderType_controlSize_scrollerStyle(
+            scroll.frame().size,
+            None,
+            Some(NSScroller::class()),
+            scroll.borderType(),
+            NSControlSize::Regular,
+            scroll.scrollerStyle(),
+            MainThreadMarker::from(scroll),
+        )
+    };
+    size.width
 }
