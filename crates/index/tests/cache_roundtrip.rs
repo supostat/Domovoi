@@ -1,10 +1,10 @@
 mod synthetic_tree;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use domovoi_index::{CacheError, CacheHeader, Enrichment, Index, IndexRoot, open_cache, write_cache};
+use domovoi_index::{CacheError, CacheHeader, ChangedPath, Enrichment, Index, IndexRoot, open_cache, write_cache};
 use domovoi_scanner::{Node, ScanOptions, scan};
 use domovoi_testkit::{Fill, TempTree};
 use synthetic_tree::{data_volume, directory, file, opened_file};
@@ -32,6 +32,30 @@ fn small_index() -> Index {
         vec![directory("igor", vec![file("a", 3), opened_file("b", 2, opened)])],
     )]);
     Index::build(&report, root, &Enrichment::default())
+}
+
+fn scanned(root: &Path) -> Index {
+    let report = scan(root, &ScanOptions::default()).expect("temp tree scans");
+    Index::build(
+        &report,
+        IndexRoot::for_path(root).expect("root kind"),
+        &Enrichment::default(),
+    )
+}
+
+fn apply(index: &mut Index, changed: &Path) {
+    let request = index.delta_request(&[ChangedPath {
+        path: changed.to_path_buf(),
+        subtree: false,
+    }]);
+    let listings = request
+        .targets()
+        .iter()
+        .map(|target| target.read(&ScanOptions::default()).expect("the target reads"))
+        .collect();
+    index
+        .apply_delta(&request, listings, &Enrichment::default())
+        .expect("the request is current");
 }
 
 #[test]
@@ -101,25 +125,21 @@ fn a_million_node_cache_opens_within_a_second() {
 }
 
 #[test]
-fn a_file_system_delta_rescans_the_changed_subtree() {
+fn a_file_system_delta_reads_the_changed_directory() {
     let tree = TempTree::new().expect("temp tree is created");
-    let root = tree.root().expect("root opens");
-    let project = root.directory("project").expect("directory is created");
+    let project = tree
+        .root()
+        .expect("root opens")
+        .directory("project")
+        .expect("directory is created");
     project.file("old", 8_192, Fill::Byte(1)).expect("file is written");
-    let report = scan(tree.path(), &ScanOptions::default()).expect("temp tree scans");
-    let mut index = Index::build(
-        &report,
-        IndexRoot::for_path(tree.path()).expect("root kind"),
-        &Enrichment::default(),
-    );
+    let mut index = scanned(tree.path());
     let before = index.node(index.root()).allocated;
     project
         .file("new", 40_960, Fill::Noise(5))
         .expect("file is written after the scan");
     let changed: PathBuf = fs::canonicalize(tree.path().join("project")).expect("path canonicalizes");
-    index
-        .rescan(&changed, &ScanOptions::default(), &Enrichment::default())
-        .expect("subtree rescans");
+    apply(&mut index, &changed);
     let project_node = index.find(&changed).expect("project is indexed");
     assert!(index.child_named(project_node, "new".as_ref()).is_some());
     assert!(index.node(index.root()).allocated > before);
@@ -127,24 +147,48 @@ fn a_file_system_delta_rescans_the_changed_subtree() {
 }
 
 #[test]
-fn a_deleted_folder_is_dropped_by_rescanning_its_parent() {
+fn a_deleted_folder_is_dropped_by_reading_its_parent() {
     let tree = TempTree::new().expect("temp tree is created");
-    let root = tree.root().expect("root opens");
-    let project = root.directory("project").expect("directory is created");
+    let project = tree
+        .root()
+        .expect("root opens")
+        .directory("project")
+        .expect("directory is created");
     let build = project.directory("build").expect("directory is created");
     build.file("artifact", 40_960, Fill::Noise(9)).expect("file is written");
     project.file("source", 8_192, Fill::Byte(2)).expect("file is written");
-    let report = scan(tree.path(), &ScanOptions::default()).expect("temp tree scans");
-    let mut index = Index::build(
-        &report,
-        IndexRoot::for_path(tree.path()).expect("root kind"),
-        &Enrichment::default(),
-    );
+    let mut index = scanned(tree.path());
     let removed: PathBuf = fs::canonicalize(tree.path().join("project/build")).expect("path canonicalizes");
     fs::remove_dir_all(&removed).expect("the build folder is removed");
-    index
-        .rescan(&removed, &ScanOptions::default(), &Enrichment::default())
-        .expect("the parent of the removed folder rescans");
+    apply(&mut index, &removed);
     assert!(index.find(&removed).is_none());
     assert_eq!(index.node(index.root()).files, 1);
+}
+
+#[test]
+fn a_cache_written_after_a_delta_opens_with_the_same_live_tree_and_takes_new_deltas() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let project = tree
+        .root()
+        .expect("root opens")
+        .directory("project")
+        .expect("directory is created");
+    project.file("old", 8_192, Fill::Byte(1)).expect("file is written");
+    let mut index = scanned(tree.path());
+    let changed: PathBuf = fs::canonicalize(tree.path().join("project")).expect("path canonicalizes");
+    project.file("second", 4_096, Fill::Byte(2)).expect("file is written");
+    apply(&mut index, &changed);
+    let path = tree.path().join("delta.cache");
+    write_cache(&path, &header("1.0"), LAST_EVENT, &index).expect("cache is written");
+    let mut cached = open_cache(&path, &header("1.0")).expect("cache opens").index;
+    assert_eq!(cached, index);
+    assert_eq!(cached.len(), index.len());
+    assert_eq!(cached.hidden_folders(), index.hidden_folders());
+    assert_ne!(cached.generation(), index.generation());
+    project.file("third", 4_096, Fill::Byte(3)).expect("file is written");
+    apply(&mut cached, &changed);
+    assert_eq!(cached.node(cached.root()).files, 3);
+    assert!(cached.compact_garbage());
+    assert_eq!(cached.node(cached.root()).files, 3);
+    assert!(!cached.compact_garbage());
 }

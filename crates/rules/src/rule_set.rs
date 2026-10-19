@@ -7,6 +7,8 @@ use std::path::{Component, Path};
 use domovoi_apfs_sys::volume_capabilities;
 use domovoi_index::{Index, NodeId, SafetyLevel, SafetyLevels};
 
+use crate::claim_frame::ClaimFrame;
+use crate::claim_scope::ClaimScope;
 use crate::config_overrides::ConfigOverrides;
 use crate::name_match::{CaseRule, normalized};
 use crate::rule::{Condition, Rule};
@@ -90,26 +92,72 @@ impl RuleSet {
     }
 
     pub fn claims(&self, index: &Index) -> Vec<Claim> {
-        let mut claims = Vec::new();
-        let mut components = self.root_components(index);
-        let root_depth = components.len();
-        let mut pending: Vec<(NodeId, usize, Option<usize>)> = index
+        let components = self.root_components(index);
+        index
             .children(index.root())
-            .map(|child| (child, root_depth + 1, None))
-            .collect();
+            .flat_map(|child| self.claims_from(index, &components, child, None))
+            .collect()
+    }
+
+    pub(crate) fn claims_from(
+        &self,
+        index: &Index,
+        parent_components: &[String],
+        top: NodeId,
+        inherited: Option<usize>,
+    ) -> Vec<Claim> {
+        let mut claims = Vec::new();
+        let mut components = parent_components.to_vec();
+        let mut pending = vec![(top, parent_components.len() + 1, inherited)];
         while let Some((node, depth, inherited)) = pending.pop() {
             components.truncate(depth - 1);
             components.push(normalized(index.name(node), self.case));
-            let effective = self.matching_rule(index, node, &components).or(inherited);
-            let has_children = index.children(node).next().is_some();
-            match effective {
-                Some(rule) if !has_children || !self.deeper_rule_possible(&components) => {
-                    claims.push(Claim { node, rule });
+            match self.frame(index, node, &components, inherited) {
+                ClaimFrame::Claimed(rule) => claims.push(Claim { node, rule }),
+                ClaimFrame::Open(effective) => {
+                    pending.extend(index.children(node).map(|child| (child, depth + 1, effective)));
                 }
-                _ => pending.extend(index.children(node).map(|child| (child, depth + 1, effective))),
             }
         }
         claims
+    }
+
+    pub(crate) fn scope_of(&self, index: &Index, directory: NodeId) -> ClaimScope {
+        let mut chain = vec![directory];
+        let mut current = directory;
+        while let Some(parent) = index.parent(current) {
+            chain.push(parent);
+            current = parent;
+        }
+        chain.pop();
+        let mut components = self.root_components(index);
+        let mut effective = None;
+        for member in chain.into_iter().rev() {
+            components.push(normalized(index.name(member), self.case));
+            match self.frame(index, member, &components, effective) {
+                ClaimFrame::Claimed(rule) => return ClaimScope::Inside(Claim { node: member, rule }),
+                ClaimFrame::Open(rule) => effective = rule,
+            }
+        }
+        ClaimScope::Open { components, effective }
+    }
+
+    pub(crate) fn follows_siblings(&self, index: &Index, node: NodeId, siblings: &[&OsStr]) -> bool {
+        let name = normalized(index.name(node), self.case);
+        self.any_depth.iter().any(|(rule, pattern)| {
+            let pattern = &self.rules[*rule].patterns[*pattern];
+            siblings.iter().any(|sibling| pattern.follows_sibling(&name, sibling))
+        })
+    }
+
+    fn frame(&self, index: &Index, node: NodeId, components: &[String], inherited: Option<usize>) -> ClaimFrame {
+        let effective = self.matching_rule(index, node, components).or(inherited);
+        match effective {
+            Some(rule) if index.children(node).next().is_none() || !self.deeper_rule_possible(components) => {
+                ClaimFrame::Claimed(rule)
+            }
+            _ => ClaimFrame::Open(effective),
+        }
     }
 
     fn deeper_rule_possible(&self, components: &[String]) -> bool {

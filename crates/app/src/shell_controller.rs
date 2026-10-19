@@ -44,6 +44,7 @@ use crate::duplicates_model::DuplicatesModel;
 use crate::duplicates_screen::DuplicatesScreen;
 use crate::duplicates_state::DuplicatesState;
 use crate::event_effect::EventEffect;
+use crate::event_queue::EventQueue;
 use crate::event_watch::EventWatch;
 use crate::expansion::Expansion;
 use crate::hover_panel::HoverPanel;
@@ -159,14 +160,14 @@ impl ShellController {
 
     pub(crate) fn application_will_terminate(&self) {
         self.state.borrow_mut().assistant.shutdown();
-        let state = self.state.borrow();
+        let mut state = self.state.borrow_mut();
         if let Some(job) = &state.scan {
             job.stop();
         }
         if let Some(job) = &state.search {
             job.stop();
         }
-        if let Some(session) = &state.session
+        if let Some(session) = state.session.as_mut()
             && let Err(error) = session.persist()
         {
             eprintln!("domovoi: {error}");
@@ -258,6 +259,7 @@ impl ShellController {
                     _stream: stream,
                     events,
                     timer: self.repeating(EVENTS_TICK, ShellController::events_tick),
+                    queue: EventQueue::default(),
                 }),
                 Err(error) => return self.fail(&error.to_string()),
             },
@@ -277,14 +279,10 @@ impl ShellController {
         let effect = {
             let mut state = self.state.borrow_mut();
             let ShellState { watch, session, .. } = &mut *state;
-            let (Some(watch), Some(session)) = (watch.as_ref(), session.as_mut()) else {
+            let (Some(watch), Some(session)) = (watch.as_mut(), session.as_mut()) else {
                 return;
             };
-            let events: Vec<_> = watch.events.try_iter().collect();
-            if events.is_empty() {
-                return;
-            }
-            session.apply_events(&events)
+            watch.queue.advance(watch.events.try_iter(), session)
         };
         match effect {
             Ok(EventEffect::Ignored) => {}

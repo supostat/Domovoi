@@ -22,7 +22,11 @@ pub struct TempTree {
 
 impl TempTree {
     pub fn new() -> io::Result<Self> {
-        let template = Path::new(TEMP_BASE).join(TEMPLATE_NAME);
+        Self::under(Path::new(TEMP_BASE))
+    }
+
+    pub fn under(base: &Path) -> io::Result<Self> {
+        let template = base.join(TEMPLATE_NAME);
         let mut template = CString::new(template.as_os_str().as_bytes())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "temp directory path contains NUL"))?
             .into_bytes_with_nul();

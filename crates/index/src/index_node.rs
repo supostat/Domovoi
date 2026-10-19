@@ -25,6 +25,7 @@ pub struct IndexNode {
     pub clone_refcount: u32,
     pub shares_with: u32,
     pub files: u32,
+    pub flags_in_subtree: u32,
     pub app: AppId,
     pub file_id: u64,
     pub link_id: u64,

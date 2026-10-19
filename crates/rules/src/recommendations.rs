@@ -3,6 +3,8 @@ use std::path::PathBuf;
 
 use domovoi_index::{Index, NodeId, Reclaimable, SafetyLevel};
 
+use crate::card_item::CardItem;
+use crate::claim_ledger::ClaimLedger;
 use crate::deny_reason::DenyReason;
 use crate::denylist::Denylist;
 use crate::rule_set::RuleSet;
@@ -10,7 +12,7 @@ use crate::rule_set::RuleSet;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuleCard {
     pub rule: usize,
-    pub items: Vec<NodeId>,
+    pub items: Vec<CardItem>,
     pub blocked: Vec<(NodeId, DenyReason)>,
     pub reclaimable: Reclaimable,
     pub owner_running: bool,
@@ -34,6 +36,18 @@ impl HypothesisCard {
     pub fn level(&self) -> SafetyLevel {
         SafetyLevel::CheckYourself
     }
+
+    pub(crate) fn assess(index: &Index, denylist: &Denylist, hypothesis: Hypothesis) -> Option<Self> {
+        let node = index.find(&hypothesis.path)?;
+        if denylist.verdict(index, node).is_some() {
+            return None;
+        }
+        Some(Self {
+            reclaimable: index.reclaimable_estimate(node),
+            hypothesis,
+            node,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -44,7 +58,7 @@ pub struct LevelTotals {
 }
 
 impl LevelTotals {
-    fn add(&mut self, level: SafetyLevel, bytes: u64) {
+    pub(crate) fn add(&mut self, level: SafetyLevel, bytes: u64) {
         match level {
             SafetyLevel::Safe => self.safe += bytes,
             SafetyLevel::Recoverable => self.recoverable += bytes,
@@ -72,58 +86,16 @@ impl Recommendations {
         running_bundle_ids: &BTreeSet<String>,
         hypotheses: Vec<Hypothesis>,
     ) -> Self {
-        let mut cards: Vec<RuleCard> = Vec::new();
-        for claim in rules.claims(index) {
-            let position = if let Some(position) = cards.iter().position(|card| card.rule == claim.rule) {
-                position
-            } else {
-                let rule = rules.rule(claim.rule);
-                cards.push(RuleCard {
-                    rule: claim.rule,
-                    items: Vec::new(),
-                    blocked: Vec::new(),
-                    reclaimable: Reclaimable::default(),
-                    owner_running: rule
-                        .owner_bundle
-                        .is_some_and(|owner| running_bundle_ids.contains(owner)),
-                    preselected: rule.level == SafetyLevel::Safe && !rule.is_info_only(),
-                });
-                cards.len() - 1
-            };
-            let card = &mut cards[position];
-            if let Some(reason) = denylist.verdict(index, claim.node) {
-                card.blocked.push((claim.node, reason));
-            } else {
-                card.reclaimable += index.reclaimable_estimate(claim.node);
-                card.items.push(claim.node);
-            }
-        }
-        let mut totals = LevelTotals::default();
-        for card in &cards {
-            let rule = rules.rule(card.rule);
-            if !rule.is_info_only() {
-                totals.add(rule.level, card.reclaimable.bytes);
-            }
-        }
-        cards.retain(|card| !card.items.is_empty() || !card.blocked.is_empty());
-        cards.sort_by_key(|card| std::cmp::Reverse(card.reclaimable.bytes));
-        let hypotheses = hypotheses
-            .into_iter()
-            .filter_map(|hypothesis| {
-                let node = index.find(&hypothesis.path)?;
-                Some((hypothesis, node))
-            })
-            .filter(|(_, node)| denylist.verdict(index, *node).is_none())
-            .map(|(hypothesis, node)| HypothesisCard {
-                reclaimable: index.reclaimable_estimate(node),
-                hypothesis,
-                node,
-            })
-            .collect();
+        let mut ledger = ClaimLedger::of_claims(rules.claims(index));
+        ledger.settle(index, denylist);
+        let (cards, totals) = ledger.into_cards(rules, running_bundle_ids);
         Self {
             cards,
             totals,
-            hypotheses,
+            hypotheses: hypotheses
+                .into_iter()
+                .filter_map(|hypothesis| HypothesisCard::assess(index, denylist, hypothesis))
+                .collect(),
         }
     }
 }

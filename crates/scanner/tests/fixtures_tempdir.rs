@@ -9,7 +9,10 @@ use std::time::Duration;
 
 use domovoi_apfs_sys::ObjectKind;
 use domovoi_apfs_sys::sys::{EF_SHARES_ALL_BLOCKS, UF_COMPRESSED};
-use domovoi_scanner::{Node, NodeState, Onboarding, ProtectedFolders, ScanError, ScanOptions, ScanProgress, scan};
+use domovoi_scanner::{
+    Node, NodeState, Onboarding, ProtectedFolders, ScanError, ScanOptions, ScanProgress, list_directory, scan,
+    scan_entry,
+};
 use domovoi_testkit::{Fill, TempTree};
 
 const SIGNAL_DELAY: Duration = Duration::from_millis(200);
@@ -229,6 +232,55 @@ fn progress_reports_firmlink_paths_and_ends_with_the_walked_totals() {
             .iter()
             .all(|event| matches!(event, ScanProgress::Walking { current, .. } if current.starts_with(&root_path)))
     );
+}
+
+#[test]
+fn a_directory_is_listed_one_level_deep_with_the_walk_attributes() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.root().expect("root opens");
+    root.file("note", 8_192, Fill::Byte(3)).expect("file is written");
+    root.directory("nested")
+        .expect("directory is created")
+        .file("deep", 4_096, Fill::Byte(4))
+        .expect("file is written");
+    let walked = scan_tree(&tree);
+    let listed = list_directory(tree.path(), &ScanOptions::default()).expect("the directory lists");
+    let mut names: Vec<_> = listed.iter().map(|entry| entry.name.clone()).collect();
+    names.sort();
+    assert_eq!(names, ["nested", "note"]);
+    let note = listed
+        .iter()
+        .find(|entry| entry.name == "note")
+        .expect("the file is listed");
+    assert_eq!(note, child(&walked, "note"));
+    let nested = listed
+        .iter()
+        .find(|entry| entry.name == "nested")
+        .expect("the folder is listed");
+    assert_eq!(nested.state, NodeState::Listed);
+    assert!(nested.children.is_empty());
+    assert_eq!(nested.attributes, child(&walked, "nested").attributes);
+}
+
+#[test]
+fn an_entry_is_scanned_to_the_bottom_or_keeps_the_reason_it_could_not_open() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.root().expect("root opens");
+    root.directory("nested")
+        .expect("directory is created")
+        .directory("inner")
+        .expect("directory is created")
+        .file("deep", 4_096, Fill::Byte(5))
+        .expect("file is written");
+    let listed = list_directory(tree.path(), &ScanOptions::default()).expect("the directory lists");
+    let nested = listed.into_iter().next().expect("the folder is listed");
+    let scanned = scan_entry(tree.path(), nested.clone(), &ScanOptions::default()).expect("the folder scans");
+    assert_eq!(scanned.attributes, nested.attributes);
+    assert_eq!(child(child(&scanned, "inner"), "deep").state, NodeState::Leaf);
+    fs::remove_dir_all(tree.path().join("nested")).expect("the folder is removed");
+    let vanished = scan_entry(tree.path(), nested, &ScanOptions::default()).expect("a vanished folder is a state");
+    assert_eq!(vanished.state, NodeState::Vanished);
+    assert!(vanished.children.is_empty());
 }
 
 #[test]

@@ -22,7 +22,7 @@ pub use node::Node;
 pub use node_state::NodeState;
 pub use onboarding::Onboarding;
 pub use protected_folders::ProtectedFolders;
-pub use scan::scan;
+pub use scan::{list_directory, scan, scan_entry};
 pub use scan_error::ScanError;
 pub use scan_options::ScanOptions;
 pub use scan_progress::ScanProgress;

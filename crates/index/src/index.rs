@@ -2,19 +2,20 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use domovoi_apfs_sys::sys::{EF_MAY_SHARE_BLOCKS, EF_SHARES_ALL_BLOCKS, UF_COMPRESSED};
 use domovoi_scanner::{Node, ScanReport};
 
 use crate::app::{App, AppId};
 use crate::badges::Badges;
 use crate::category::Category;
+use crate::copy_groups::CopyGroups;
 use crate::enrichment::Enrichment;
 use crate::file_types::FileTypes;
 use crate::index_node::IndexNode;
 use crate::index_root::IndexRoot;
 use crate::last_opened_source::LastOpenedSource;
-use crate::name_table::{NameInterner, NameTable};
+use crate::name_table::{NameId, NameInterner, NameTable};
 use crate::node_id::NodeId;
 use crate::node_kind::NodeKind;
 use crate::path_rules::{AppDataNaming, RuleProgress};
@@ -42,13 +43,31 @@ const PROJECT_MARKERS: [&str; 6] = [
     "Package.swift",
 ];
 
-#[derive(Clone, Debug, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+static GENERATIONS: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Clone, Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct Index {
     pub(crate) nodes: Vec<IndexNode>,
     pub(crate) names: NameTable,
     pub(crate) root: IndexRoot,
     pub(crate) apps: Vec<App>,
+    #[rkyv(with = rkyv::with::Skip)]
+    pub(crate) generation: u64,
+    #[rkyv(with = rkyv::with::Skip)]
+    pub(crate) copy_groups: CopyGroups,
+    #[rkyv(with = rkyv::with::Skip)]
+    pub(crate) hidden_folders: u64,
+    #[rkyv(with = rkyv::with::Skip)]
+    pub(crate) garbage: usize,
 }
+
+impl PartialEq for Index {
+    fn eq(&self, other: &Self) -> bool {
+        self.nodes == other.nodes && self.names == other.names && self.root == other.root && self.apps == other.apps
+    }
+}
+
+impl Eq for Index {}
 
 impl Index {
     pub fn build(report: &ScanReport, root: IndexRoot, enrichment: &Enrichment) -> Self {
@@ -60,6 +79,10 @@ impl Index {
             names: interner.finish(),
             root,
             apps: Vec::new(),
+            generation: next_generation(),
+            copy_groups: CopyGroups::default(),
+            hidden_folders: 0,
+            garbage: 0,
         };
         index.derive(enrichment);
         index
@@ -70,11 +93,26 @@ impl Index {
     }
 
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        self.nodes.len() - self.garbage
     }
 
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.len() == 0
+    }
+
+    pub fn is_live(&self, id: NodeId) -> bool {
+        if id.index() >= self.nodes.len() {
+            return false;
+        }
+        let mut current = id;
+        while let Some(parent) = self.parent(current) {
+            let first = self.node(parent).first_child.0;
+            if !(first..first + self.node(parent).child_count).contains(&current.0) {
+                return false;
+            }
+            current = parent;
+        }
+        current == NodeId::ROOT
     }
 
     pub fn node(&self, id: NodeId) -> &IndexNode {
@@ -129,9 +167,14 @@ impl Index {
         &self.apps
     }
 
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
     pub fn unique_inode_allocation(&self) -> u64 {
         let mut by_inode = HashMap::new();
-        for node in &self.nodes {
+        for id in self.subtree(self.root()) {
+            let node = self.node(id);
             if node.kind != NodeKind::Unknown {
                 by_inode.insert((node.real_dev, node.file_id), node.alloc_size);
             }
@@ -140,7 +183,21 @@ impl Index {
     }
 
     pub fn hidden_folders(&self) -> u64 {
-        self.nodes.iter().filter(|node| node.reach.hides_content()).count() as u64
+        self.hidden_folders
+    }
+
+    pub(crate) fn count_hidden(&self, ids: &[NodeId]) -> u64 {
+        ids.iter().filter(|id| self.node(**id).reach.hides_content()).count() as u64
+    }
+
+    pub fn depth_of(&self, id: NodeId) -> usize {
+        let mut depth = 0;
+        let mut current = id;
+        while let Some(parent) = self.parent(current) {
+            depth += 1;
+            current = parent;
+        }
+        depth
     }
 
     pub(crate) fn relative_path(&self, id: NodeId) -> PathBuf {
@@ -164,11 +221,36 @@ impl Index {
     }
 
     pub(crate) fn derive(&mut self, enrichment: &Enrichment) {
+        let live = self.subtree(self.root());
         self.apply_spotlight_dates(enrichment);
-        self.assign_categories_and_owners(enrichment);
+        self.assign_categories_and_owners(&live, enrichment);
         self.mark_models(enrichment);
-        let counted = self.choose_canonical_copies();
-        self.aggregate(&counted);
+        let counted = self.choose_canonical_copies(&live);
+        self.aggregate(&live, &counted);
+        self.hidden_folders = self.count_hidden(&live);
+    }
+
+    pub fn compact_garbage(&mut self) -> bool {
+        if self.garbage == 0 {
+            return false;
+        }
+        self.compact();
+        let live = self.subtree(self.root());
+        self.copy_groups = self.collect_copy_groups(&live);
+        self.generation = next_generation();
+        true
+    }
+
+    pub(crate) fn advance_generation(&mut self) {
+        self.generation = next_generation();
+    }
+
+    pub(crate) fn restore_derived_state(&mut self) {
+        self.generation = next_generation();
+        let live = self.subtree(self.root());
+        self.garbage = self.nodes.len() - live.len();
+        self.hidden_folders = self.count_hidden(&live);
+        self.copy_groups = self.collect_copy_groups(&live);
     }
 
     pub(crate) fn compact(&mut self) {
@@ -196,20 +278,10 @@ impl Index {
         }
         self.nodes = nodes;
         self.names = interner.finish();
+        self.garbage = 0;
     }
 
-    pub(crate) fn replace_children(&mut self, id: NodeId, source: &Node) {
-        let mut interner = NameInterner::from_table(std::mem::take(&mut self.names));
-        let mut nodes = std::mem::take(&mut self.nodes);
-        let reach = Reach::from(source.state);
-        append_children(&mut nodes, &mut interner, id, source);
-        nodes[id.index()].reach = reach;
-        self.nodes = nodes;
-        self.names = interner.finish();
-        self.compact();
-    }
-
-    fn apply_spotlight_dates(&mut self, enrichment: &Enrichment) {
+    pub(crate) fn apply_spotlight_dates(&mut self, enrichment: &Enrichment) {
         for (path, date) in &enrichment.spotlight_last_used {
             let Some(id) = self.find(path) else {
                 continue;
@@ -222,48 +294,81 @@ impl Index {
         }
     }
 
-    fn assign_categories_and_owners(&mut self, enrichment: &Enrichment) {
+    fn assign_categories_and_owners(&mut self, live: &[NodeId], enrichment: &Enrichment) {
         let count = self.nodes.len();
         let mut progress = vec![RuleProgress::default(); count];
         let mut depth = vec![0_usize; count];
         let mut file_types = FileTypes::default();
-        let mut app_ids: HashMap<String, AppId> = HashMap::new();
         self.apps.clear();
         let (root_progress, root_category) = self.root_rules();
         progress[0] = root_progress;
         depth[0] = self.root.root_components().len();
         self.nodes[0].category = root_category;
         self.nodes[0].app = AppId::NONE;
-        for index in 1..count {
+        for id in &live[1..] {
+            let index = id.index();
             let parent = self.nodes[index].parent.index();
-            let name = self.names.get(self.nodes[index].name).to_owned();
+            progress[index] = self.categorize(*id, progress[parent], depth[parent], &mut file_types, enrichment);
             depth[index] = depth[parent] + 1;
-            progress[index] = progress[parent].descend(depth[index], &name);
-            let category = self.category_of(index, parent, &name, progress[index], depth[index], &mut file_types);
-            self.nodes[index].category = category;
-            let app_data = progress[parent]
-                .completed(depth[parent])
-                .and_then(|parent_rule| parent_rule.app_data);
-            self.nodes[index].app = match app_data.and_then(|naming| bundle_id(&name, naming)) {
-                Some(bundle_id) => {
-                    let next = AppId(u32::try_from(self.apps.len()).expect("app count fits in u32"));
-                    *app_ids.entry(bundle_id.clone()).or_insert_with(|| {
-                        let installation = enrichment.applications.resolve(&bundle_id);
-                        let last_opened = application_last_opened(&installation, enrichment);
-                        self.apps.push(App {
-                            bundle_id,
-                            installation,
-                            last_opened,
-                        });
-                        next
-                    })
-                }
-                None => self.nodes[parent].app,
-            };
         }
     }
 
-    fn root_rules(&self) -> (RuleProgress, Category) {
+    pub(crate) fn categorize(
+        &mut self,
+        id: NodeId,
+        parent_progress: RuleProgress,
+        parent_depth: usize,
+        file_types: &mut FileTypes,
+        enrichment: &Enrichment,
+    ) -> RuleProgress {
+        let index = id.index();
+        let parent = self.nodes[index].parent.index();
+        let name = self.names.get(self.nodes[index].name).to_owned();
+        let depth = parent_depth + 1;
+        let progress = parent_progress.descend(depth, &name);
+        let category = self.category_of(index, parent, &name, progress, depth, file_types);
+        self.nodes[index].category = category;
+        let app_data = parent_progress
+            .completed(parent_depth)
+            .and_then(|parent_rule| parent_rule.app_data);
+        self.nodes[index].app = match app_data.and_then(|naming| bundle_id(&name, naming)) {
+            Some(bundle_id) => self.owner_of(bundle_id, enrichment),
+            None => self.nodes[parent].app,
+        };
+        progress
+    }
+
+    pub(crate) fn rule_progress_of(&self, id: NodeId) -> (RuleProgress, usize) {
+        let mut chain = Vec::new();
+        let mut current = id;
+        while let Some(parent) = self.parent(current) {
+            chain.push(current);
+            current = parent;
+        }
+        let (mut progress, _) = self.root_rules();
+        let mut depth = self.root.root_components().len();
+        for member in chain.into_iter().rev() {
+            depth += 1;
+            progress = progress.descend(depth, self.name(member));
+        }
+        (progress, depth)
+    }
+
+    fn owner_of(&mut self, bundle_id: String, enrichment: &Enrichment) -> AppId {
+        if let Some(position) = self.apps.iter().position(|app| app.bundle_id == bundle_id) {
+            return AppId(u32::try_from(position).expect("app count fits in u32"));
+        }
+        let installation = enrichment.applications.resolve(&bundle_id);
+        let last_opened = application_last_opened(&installation, enrichment);
+        self.apps.push(App {
+            bundle_id,
+            installation,
+            last_opened,
+        });
+        AppId(u32::try_from(self.apps.len() - 1).expect("app count fits in u32"))
+    }
+
+    pub(crate) fn root_rules(&self) -> (RuleProgress, Category) {
         let mut progress = RuleProgress::start();
         let mut category = Category::Home;
         for (position, component) in self.root.root_components().iter().enumerate() {
@@ -314,7 +419,7 @@ impl Index {
                 .any(|marker| self.child_named(id, OsStr::new(marker)).is_some())
     }
 
-    fn mark_models(&mut self, enrichment: &Enrichment) {
+    pub(crate) fn mark_models(&mut self, enrichment: &Enrichment) {
         for path in &enrichment.model_paths {
             if let Some(id) = self.find(path) {
                 for member in self.subtree(id) {
@@ -322,68 +427,6 @@ impl Index {
                 }
             }
         }
-    }
-
-    fn choose_canonical_copies(&mut self) -> Vec<bool> {
-        let mut counted: Vec<bool> = self.nodes.iter().map(|node| node.kind != NodeKind::Unknown).collect();
-        for node in &mut self.nodes {
-            node.shares_with = 0;
-            node.badges.remove(Badges::HARD_LINK);
-            node.badges.remove(Badges::CLONE);
-            node.badges.remove(Badges::CLONE_CANONICAL);
-            if node.flags & UF_COMPRESSED != 0 {
-                node.badges.insert(Badges::COMPRESSED);
-            }
-        }
-        let mut entries_by_inode: HashMap<(u32, u64), Vec<NodeId>> = HashMap::new();
-        for (index, node) in self.nodes.iter().enumerate() {
-            if node.link_count > 1 && node.kind != NodeKind::Directory {
-                entries_by_inode
-                    .entry((node.real_dev, node.file_id))
-                    .or_default()
-                    .push(NodeId::from_index(index));
-            }
-        }
-        for entries in entries_by_inode.values().filter(|entries| entries.len() > 1) {
-            let canonical = *entries
-                .iter()
-                .min_by_key(|entry| self.relative_path(**entry))
-                .expect("a hard-link group is not empty");
-            for entry in entries {
-                self.nodes[entry.index()].badges.insert(Badges::HARD_LINK);
-                counted[entry.index()] = *entry == canonical;
-            }
-        }
-        let mut members_by_stream: HashMap<(u32, u64), Vec<NodeId>> = HashMap::new();
-        for (index, node) in self.nodes.iter().enumerate() {
-            if counted[index] && node.kind == NodeKind::File && may_share_blocks(node) {
-                members_by_stream
-                    .entry((node.real_dev, node.clone_id))
-                    .or_default()
-                    .push(NodeId::from_index(index));
-            }
-        }
-        for members in members_by_stream.values().filter(|members| members.len() > 1) {
-            let canonical = *members
-                .iter()
-                .min_by_key(|member| {
-                    let node = self.node(**member);
-                    (self.inside_dependency_store(**member), node.real_dev, node.file_id)
-                })
-                .expect("a clone group is not empty");
-            let shares_with = u32::try_from(members.len() - 1).expect("clone group size fits in u32");
-            for member in members {
-                let node = &mut self.nodes[member.index()];
-                node.shares_with = shares_with;
-                if *member == canonical {
-                    node.badges.insert(Badges::CLONE_CANONICAL);
-                } else {
-                    node.badges.insert(Badges::CLONE);
-                    counted[member.index()] = false;
-                }
-            }
-        }
-        counted
     }
 
     pub fn inside_dependency_store(&self, id: NodeId) -> bool {
@@ -398,33 +441,51 @@ impl Index {
         false
     }
 
-    fn aggregate(&mut self, counted: &[bool]) {
-        for (index, node) in self.nodes.iter_mut().enumerate() {
-            let is_directory = node.kind == NodeKind::Directory;
-            node.allocated = if counted[index] { node.alloc_size } else { 0 };
-            node.files = u32::from(!is_directory && node.kind != NodeKind::Unknown);
-            node.newest_modified = if is_directory {
-                Timestamp::UNKNOWN
-            } else {
-                node.modified
-            };
-            node.newest_opened = node.last_opened;
+    fn aggregate(&mut self, live: &[NodeId], counted: &[bool]) {
+        for id in live {
+            self.reset_own_totals(*id, counted[id.index()]);
         }
-        for index in (1..self.nodes.len()).rev() {
-            let child = self.nodes[index].clone();
-            let parent = &mut self.nodes[child.parent.index()];
-            parent.allocated += child.allocated;
-            parent.files += child.files;
-            parent.newest_modified = parent.newest_modified.max(child.newest_modified);
-            parent.newest_opened = parent.newest_opened.max(child.newest_opened);
+        for id in live[1..].iter().rev() {
+            let child = self.nodes[id.index()].clone();
+            add_child_totals(&mut self.nodes[child.parent.index()], &child);
         }
+    }
+
+    pub(crate) fn reset_own_totals(&mut self, id: NodeId, counted: bool) {
+        let node = &mut self.nodes[id.index()];
+        let is_directory = node.kind == NodeKind::Directory;
+        node.allocated = if counted { node.alloc_size } else { 0 };
+        node.files = u32::from(!is_directory && node.kind != NodeKind::Unknown);
+        node.newest_modified = if is_directory {
+            Timestamp::UNKNOWN
+        } else {
+            node.modified
+        };
+        node.newest_opened = node.last_opened;
+        node.flags_in_subtree = node.flags;
     }
 }
 
-fn may_share_blocks(node: &IndexNode) -> bool {
-    node.ext_flags & u64::from(EF_MAY_SHARE_BLOCKS | EF_SHARES_ALL_BLOCKS) != 0
-        || node.clone_refcount > 1
-        || node.flags & UF_COMPRESSED != 0
+fn next_generation() -> u64 {
+    GENERATIONS.fetch_add(1, Ordering::Relaxed)
+}
+
+pub(crate) fn add_child_totals(parent: &mut IndexNode, child: &IndexNode) {
+    parent.allocated += child.allocated;
+    parent.files += child.files;
+    parent.newest_modified = parent.newest_modified.max(child.newest_modified);
+    parent.newest_opened = parent.newest_opened.max(child.newest_opened);
+    parent.flags_in_subtree |= child.flags_in_subtree;
+}
+
+pub(crate) fn totals(node: &IndexNode) -> (u64, u32, Timestamp, Timestamp, u32) {
+    (
+        node.allocated,
+        node.files,
+        node.newest_modified,
+        node.newest_opened,
+        node.flags_in_subtree,
+    )
 }
 
 fn bundle_id(name: &OsStr, naming: AppDataNaming) -> Option<String> {
@@ -456,19 +517,19 @@ fn application_last_opened(installation: &crate::app::Installation, enrichment: 
 
 fn append_subtree(nodes: &mut Vec<IndexNode>, interner: &mut NameInterner, source: &Node, parent: NodeId) -> NodeId {
     let id = NodeId::from_index(nodes.len());
-    nodes.push(record(source, parent, interner));
+    nodes.push(record(source, parent, interner.intern(&source.name)));
     append_children(nodes, interner, id, source);
     id
 }
 
-fn append_children(nodes: &mut Vec<IndexNode>, interner: &mut NameInterner, id: NodeId, source: &Node) {
+pub(crate) fn append_children(nodes: &mut Vec<IndexNode>, interner: &mut NameInterner, id: NodeId, source: &Node) {
     let mut pending = vec![(id, source)];
     while let Some((parent, parent_source)) = pending.pop() {
         let mut children: Vec<&Node> = parent_source.children.iter().collect();
         children.sort_by(|left, right| left.name.as_bytes().cmp(right.name.as_bytes()));
         let first = NodeId::from_index(nodes.len());
         for child in &children {
-            nodes.push(record(child, parent, interner));
+            nodes.push(record(child, parent, interner.intern(&child.name)));
         }
         let parent_node = &mut nodes[parent.index()];
         parent_node.first_child = first;
@@ -479,7 +540,7 @@ fn append_children(nodes: &mut Vec<IndexNode>, interner: &mut NameInterner, id: 
     }
 }
 
-fn record(source: &Node, parent: NodeId, interner: &mut NameInterner) -> IndexNode {
+pub(crate) fn record(source: &Node, parent: NodeId, name: NameId) -> IndexNode {
     let attributes = source.attributes.as_ref();
     let created = attributes.map_or(Timestamp::UNKNOWN, |attributes| {
         Timestamp::from_system_time(attributes.created)
@@ -500,7 +561,7 @@ fn record(source: &Node, parent: NodeId, interner: &mut NameInterner) -> IndexNo
         None => (Timestamp::UNKNOWN, LastOpenedSource::Unknown),
     };
     IndexNode {
-        name: interner.intern(&source.name),
+        name,
         parent,
         first_child: NodeId::NONE,
         child_count: 0,
@@ -515,6 +576,7 @@ fn record(source: &Node, parent: NodeId, interner: &mut NameInterner) -> IndexNo
         clone_refcount: attributes.and_then(|attributes| attributes.clone_refcount).unwrap_or(0),
         shares_with: 0,
         files: 0,
+        flags_in_subtree: 0,
         app: AppId::NONE,
         file_id: attributes.map_or(0, |attributes| attributes.file_id),
         link_id: attributes.and_then(|attributes| attributes.link_id).unwrap_or(0),

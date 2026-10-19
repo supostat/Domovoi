@@ -111,7 +111,10 @@ impl Denylist {
         if let Some(reason) = self.path_reason(&path) {
             return Some(reason);
         }
-        if let Some(flag) = protected_flag_in_subtree(index, node) {
+        if let Some((_, flag)) = PROTECTED_FLAGS
+            .iter()
+            .find(|(flag, _)| record.flags_in_subtree & flag != 0)
+        {
             return Some(DenyReason::ProtectedFlag(flag));
         }
         if let Some(bundle) = self
@@ -186,16 +189,4 @@ fn read_only_mounts() -> io::Result<Vec<PathBuf>> {
         .filter(|volume| volume.read_only && volume.mount_point != Path::new(SYSTEM_ROOT))
         .map(|volume| volume.mount_point)
         .collect())
-}
-
-fn protected_flag_in_subtree(index: &Index, node: NodeId) -> Option<&'static str> {
-    let mut pending = vec![node];
-    while let Some(current) = pending.pop() {
-        let flags = index.node(current).flags;
-        if let Some((_, name)) = PROTECTED_FLAGS.iter().find(|(flag, _)| flags & flag != 0) {
-            return Some(name);
-        }
-        pending.extend(index.children(current));
-    }
-    None
 }

@@ -1,4 +1,5 @@
 use std::fs::{self, File};
+use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant, SystemTime};
@@ -10,7 +11,7 @@ use domovoi_downloader::{
 use domovoi_index::ModelEvent;
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::Timeouts;
-use domovoi_scanner::CancelToken;
+use domovoi_scanner::{CancelToken, VolumeEvent};
 use objc2::MainThreadMarker;
 use serde_json::{Value, json};
 
@@ -24,6 +25,7 @@ use crate::disk_overview::DiskOverview;
 use crate::duplicate_summary::DuplicateSummary;
 use crate::duplicates_model::DuplicatesModel;
 use crate::event_effect::EventEffect;
+use crate::event_queue::EventQueue;
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
 use crate::recommendations_model::RecommendationsModel;
@@ -42,6 +44,7 @@ use crate::snapshot_options::SnapshotOptions;
 use crate::tray_model::TrayModel;
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+const EVENT_POLL: Duration = Duration::from_millis(50);
 
 pub fn run_end_to_end(marker: MainThreadMarker, scenario: &Path, report: &Path) -> Result<(), String> {
     let scenario = Scenario::read(scenario)?;
@@ -121,8 +124,7 @@ impl EndToEnd {
                 Ok(json!({ "step": "create_file", "path": path, "bytes": bytes }))
             }
             ScenarioStep::AwaitChange { path, timeout_seconds } => {
-                let allocated = self.await_change(path, Duration::from_secs(*timeout_seconds))?;
-                Ok(json!({ "step": "await_change", "path": path, "allocated": allocated }))
+                self.await_change(path, Duration::from_secs(*timeout_seconds))
             }
             ScenarioStep::Recommendations => {
                 let model = self.recommendations();
@@ -319,26 +321,34 @@ impl EndToEnd {
         }))
     }
 
-    fn await_change(&mut self, path: &Path, timeout: Duration) -> Result<u64, String> {
+    fn await_change(&mut self, path: &Path, timeout: Duration) -> Result<Value, String> {
         let (_stream, events) = self.session.watch().map_err(|error| error.to_string())?;
+        let mut queue = EventQueue::default();
         let deadline = Instant::now() + timeout;
         loop {
             if let Some(index) = self.session.index()
                 && let Some(node) = index.find(path)
             {
-                return Ok(index.node(node).allocated);
+                return Ok(json!({
+                    "step": "await_change",
+                    "path": path,
+                    "allocated": index.node(node).allocated,
+                    "descended": queue.descended(),
+                }));
             }
             let remaining = deadline.saturating_duration_since(Instant::now());
-            let event = match events.recv_timeout(remaining) {
-                Ok(event) => event,
-                Err(RecvTimeoutError::Timeout) => {
-                    return Err(format!("{} did not reach the index in {timeout:?}", path.display()));
-                }
+            if remaining.is_zero() {
+                return Err(format!("{} did not reach the index in {timeout:?}", path.display()));
+            }
+            let arrived: Vec<VolumeEvent> = match events.recv_timeout(remaining.min(EVENT_POLL)) {
+                Ok(event) => iter::once(event).chain(events.try_iter()).collect(),
+                Err(RecvTimeoutError::Timeout) => Vec::new(),
                 Err(RecvTimeoutError::Disconnected) => return Err("the volume event stream stopped".to_owned()),
             };
-            let mut batch = vec![event];
-            batch.extend(events.try_iter());
-            match self.session.apply_events(&batch).map_err(|error| error.to_string())? {
+            match queue
+                .advance(arrived, &mut self.session)
+                .map_err(|error| error.to_string())?
+            {
                 EventEffect::Applied | EventEffect::Ignored => {}
                 EventEffect::RescanRequired => return Err("the volume asked for a full rescan".to_owned()),
             }

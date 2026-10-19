@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::path::{Component, Path};
 
 use crate::name_match::{CaseRule, Segment};
@@ -77,6 +78,16 @@ impl PathPattern {
                         .all(|(segment, component)| segment.matches(component))
             }
             Self::AnyDepth { .. } => false,
+        }
+    }
+
+    pub(crate) fn follows_sibling(&self, name: &str, sibling: &OsStr) -> bool {
+        match self {
+            Self::AnyDepth {
+                name: pattern,
+                sibling_marker: Some(marker),
+            } => pattern.matches(name) && OsStr::new(marker) == sibling,
+            _ => false,
         }
     }
 

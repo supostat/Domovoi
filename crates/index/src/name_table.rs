@@ -26,14 +26,11 @@ pub(crate) struct NameInterner {
 }
 
 impl NameInterner {
-    pub(crate) fn from_table(table: NameTable) -> Self {
-        let known = (0..table.ends.len())
-            .map(|index| {
-                let id = NameId(u32::try_from(index).expect("name count fits in u32"));
-                (table.get(id).as_bytes().to_vec(), id)
-            })
-            .collect();
-        Self { table, known }
+    pub(crate) fn appending(table: NameTable) -> Self {
+        Self {
+            table,
+            known: HashMap::new(),
+        }
     }
 
     pub(crate) fn intern(&mut self, name: &OsStr) -> NameId {

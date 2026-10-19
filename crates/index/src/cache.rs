@@ -12,7 +12,7 @@ use rkyv::rancor;
 use crate::index::Index;
 
 const MAGIC: [u8; 8] = *b"DOMOVOI\0";
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 const CACHE_DIRECTORY: &str = "Library/Caches/com.domovoi.app";
 const TEMPORARY_SUFFIX: &str = "partial";
 
@@ -115,8 +115,9 @@ pub fn open_cache(path: &Path, expected: &CacheHeader) -> Result<CachedIndex, Ca
     if header != *expected {
         return Err(CacheError::Mismatch);
     }
-    let index = rkyv::deserialize::<Index, rancor::Error>(&archived.index)
+    let mut index = rkyv::deserialize::<Index, rancor::Error>(&archived.index)
         .map_err(|error| CacheError::Corrupt(error.to_string()))?;
+    index.restore_derived_state();
     Ok(CachedIndex {
         index,
         last_event_id: archived.last_event_id.to_native(),

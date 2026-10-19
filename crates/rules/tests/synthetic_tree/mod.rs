@@ -1,14 +1,24 @@
 #![allow(dead_code)]
 
 use std::ffi::OsString;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, UNIX_EPOCH};
 
 use domovoi_apfs_sys::{EntryAttributes, ObjectKind};
 use domovoi_index::{Enrichment, FirmlinkPair, Index, IndexRoot};
+use domovoi_rules::SimulatorRuntimes;
 use domovoi_scanner::{Node, NodeState, ScanReport};
 
 pub(crate) const FILE_ALLOCATION: u64 = 4096;
+
+pub(crate) struct NoSimulators;
+
+impl SimulatorRuntimes for NoSimulators {
+    fn device_runtime_missing(&self, _device: &Path) -> bool {
+        false
+    }
+}
 
 static NEXT_FILE_ID: AtomicU64 = AtomicU64::new(1_000);
 

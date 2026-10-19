@@ -1,11 +1,16 @@
 #![forbid(unsafe_code)]
 
+mod card_item;
+mod claim_frame;
+mod claim_ledger;
+mod claim_scope;
 mod config_overrides;
 mod deny_reason;
 mod denylist;
 mod name_match;
 mod path_pattern;
 mod recommendations;
+mod recommendations_delta;
 mod rule;
 mod rule_set;
 mod rule_table;
@@ -17,6 +22,7 @@ mod trash_journal;
 mod trash_subject;
 mod tray;
 
+pub use card_item::CardItem;
 pub use config_overrides::ConfigOverrides;
 pub use deny_reason::DenyReason;
 pub use denylist::Denylist;

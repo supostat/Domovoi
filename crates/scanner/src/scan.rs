@@ -1,5 +1,5 @@
 use std::ffi::OsStr;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io;
 use std::mem;
 use std::num::NonZeroUsize;
@@ -74,6 +74,36 @@ pub fn scan(root: &Path, options: &ScanOptions) -> Result<ScanReport, ScanError>
         files,
         bytes,
     })
+}
+
+pub fn list_directory(path: &Path, options: &ScanOptions) -> Result<Vec<Node>, ScanError> {
+    raise_nofile_limit().map_err(ScanError::Setup)?;
+    set_vfs_policies().map_err(ScanError::Setup)?;
+    let directory = OwnedFd::from(File::open(path).map_err(ScanError::Root)?);
+    let entries = BulkListing::new(directory.as_fd(), options.attributes)
+        .collect::<io::Result<Vec<_>>>()
+        .map_err(ScanError::Root)?;
+    Ok(entries
+        .into_iter()
+        .map(|entry| listed_node(directory.as_fd(), entry))
+        .collect())
+}
+
+pub fn scan_entry(parent: &Path, entry: Node, options: &ScanOptions) -> Result<Node, ScanError> {
+    let path = parent.join(&entry.name);
+    match scan(&path, options) {
+        Ok(report) => Ok(Node {
+            state: report.root.state,
+            children: report.root.children,
+            ..entry
+        }),
+        Err(ScanError::Root(error)) => Ok(Node {
+            state: NodeState::of_open_error(&error, || fs::symlink_metadata(&path).map(drop)),
+            children: Vec::new(),
+            ..entry
+        }),
+        Err(error) => Err(error),
+    }
 }
 
 struct Walk<'options> {

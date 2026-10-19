@@ -84,7 +84,7 @@ fn rule_card(index: &Index, rules: &RuleSet, card: &RuleCard) -> CardModel {
         title: rule_title(rule.id)
             .expect("every rule of the table has a title")
             .to_owned(),
-        paths: card.items.iter().map(|node| tilde(&index.path(*node))).collect(),
+        paths: card.items.iter().map(|item| tilde(&index.path(item.node))).collect(),
         explanation: rule.explanation.to_owned(),
         level: SafetyBadge::from(rule.level),
         provenance: Provenance::Rule(rule.id.to_owned()),
@@ -100,8 +100,8 @@ fn rule_card(index: &Index, rules: &RuleSet, card: &RuleCard) -> CardModel {
         targets: card
             .items
             .iter()
-            .map(|node| TrayTarget {
-                node: *node,
+            .map(|item| TrayTarget {
+                node: item.node,
                 rule_id: Some(rule.id.to_owned()),
             })
             .collect(),

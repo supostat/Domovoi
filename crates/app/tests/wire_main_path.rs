@@ -21,6 +21,7 @@ const METAL_DEVICES: &str = "GGML_METAL_DEVICES";
 const MEGABYTE: usize = 1024 * 1024;
 const SPARSE_LENGTH: u64 = 64 * 1024 * 1024;
 const FRESH_FILE_BYTES: usize = 64 * 1024;
+const DEEP_FOLDER: &str = "Users/tester/Library/Developer/Xcode/DerivedData/App-abc/Build/Intermediates";
 const CHANGE_TIMEOUT_SECONDS: u64 = 10;
 const SNAPSHOTS: usize = 16;
 const PARTIAL_STATUS: u16 = 206;
@@ -52,10 +53,7 @@ fn run(program: &str, arguments: &[&str], path: &Path) {
 }
 
 fn populate(root: &Path) {
-    write(
-        &root.join("Users/tester/Library/Developer/Xcode/DerivedData/App-abc/Build/Intermediates/main.o"),
-        &noise(MEGABYTE, 1),
-    );
+    write(&root.join(DEEP_FOLDER).join("main.o"), &noise(MEGABYTE, 1));
     write(
         &root.join("Projects/engine/Cargo.toml"),
         b"[package]\nname = \"engine\"\n",
@@ -93,7 +91,6 @@ fn populate(root: &Path) {
         .expect("the sparse file grows without data");
     write(&root.join("Locked/secret.txt"), b"closed");
     run(CHMOD, &["000"], &root.join("Locked"));
-    fs::create_dir_all(root.join("Notes")).expect("the notes folder is created");
 }
 
 fn tiny_entry() -> CatalogEntry {
@@ -129,6 +126,15 @@ fn seed_partial(models: &Path, entry: &CatalogEntry, content: &[u8]) {
     assert!(status.success(), "the partial file remembers its validator");
 }
 
+fn steps<'a>(report: &'a Value, name: &str) -> Vec<&'a Value> {
+    report["steps"]
+        .as_array()
+        .expect("the report lists steps")
+        .iter()
+        .filter(|step| step["step"] == name)
+        .collect()
+}
+
 fn step<'a>(report: &'a Value, name: &str) -> &'a Value {
     report["steps"]
         .as_array()
@@ -156,15 +162,18 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     let content = fs::read(manifest_path(TINY_MODEL)).expect("the tiny model reads");
     seed_partial(&models, &entry, &content);
     let server = serve(&entry, content);
-    let fresh = mount_point.join("Notes/fresh.txt");
+    let fresh_in_root = mount_point.join("fresh.txt");
+    let fresh_in_depth = mount_point.join(DEEP_FOLDER).join("fresh.o");
     let scenario = json!({
         "root": mount_point,
         "state": state.path().join("session"),
         "steps": [
             {"step": "scan"},
             {"step": "reopen_cache"},
-            {"step": "create_file", "path": fresh, "bytes": FRESH_FILE_BYTES},
-            {"step": "await_change", "path": fresh, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
+            {"step": "create_file", "path": fresh_in_root, "bytes": FRESH_FILE_BYTES},
+            {"step": "await_change", "path": fresh_in_root, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
+            {"step": "create_file", "path": fresh_in_depth, "bytes": FRESH_FILE_BYTES},
+            {"step": "await_change", "path": fresh_in_depth, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
             {"step": "recommendations"},
             {"step": "trash_recommendations", "level": "safe"},
             {"step": "restore_last"},
@@ -211,11 +220,16 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
 fn assert_index_and_care(report: &Value, mount_point: &Path) {
     assert!(step(report, "scan")["files"].as_u64().is_some_and(|files| files > 0));
     assert!(step(report, "reopen_cache")["last_event_id"].as_u64().is_some());
-    assert!(
-        step(report, "await_change")["allocated"]
-            .as_u64()
-            .is_some_and(|bytes| bytes > 0)
-    );
+    let changes = steps(report, "await_change");
+    assert_eq!(changes.len(), 2, "{report:#}");
+    for change in changes {
+        assert!(change["allocated"].as_u64().is_some_and(|bytes| bytes > 0), "{change}");
+        assert_eq!(
+            change["descended"].as_u64(),
+            Some(0),
+            "only one level is read: {change}"
+        );
+    }
     let recommendations = step(report, "recommendations");
     let cards: Vec<&str> = recommendations["cards"]
         .as_array()

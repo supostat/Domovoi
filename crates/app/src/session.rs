@@ -1,4 +1,5 @@
 use std::io;
+use std::mem;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, SyncSender};
@@ -11,7 +12,8 @@ use domovoi_dups::{
     DuplicateProgress, Duplicates, HashingPool, SearchError, find_duplicates,
 };
 use domovoi_index::{
-    CacheError, CacheHeader, Enrichment, Index, IndexRoot, ModelEvent, NodeId, Reclaimable, open_cache, write_cache,
+    CacheError, CacheHeader, ChangedPath, DeltaApplied, DirectoryListing, Enrichment, Index, IndexRoot, ModelEvent,
+    NodeId, Reclaimable, open_cache, write_cache,
 };
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_rules::{
@@ -24,7 +26,10 @@ use domovoi_scanner::{
 
 use crate::cache_opening::CacheOpening;
 use crate::event_effect::EventEffect;
+use crate::event_request::EventRequest;
 use crate::group_paths::GroupPaths;
+use crate::pending_delta::PendingDelta;
+use crate::remapping::Remapping;
 use crate::session_error::SessionError;
 use crate::session_paths::SessionPaths;
 
@@ -149,36 +154,85 @@ impl Session {
         Ok((stream, events))
     }
 
-    pub fn apply_events(&mut self, events: &[VolumeEvent]) -> Result<EventEffect, SessionError> {
-        if self.index.is_none() {
-            return Ok(EventEffect::Ignored);
-        }
+    pub fn delta_request(&self, events: &[VolumeEvent]) -> EventRequest {
+        let index = self.index.as_ref().expect("events are watched on a scanned volume");
         let mut changed = Vec::new();
         let mut last_event_id = self.last_event_id;
         for event in events {
             match event {
-                VolumeEvent::Changed { path, id, .. } => {
-                    changed.push(path.clone());
+                VolumeEvent::Changed {
+                    path,
+                    rescan_subtree,
+                    id,
+                } => {
+                    changed.push(ChangedPath {
+                        path: path.clone(),
+                        subtree: *rescan_subtree,
+                    });
                     last_event_id = last_event_id.max(*id);
                 }
                 VolumeEvent::HistoryDone { id } => last_event_id = last_event_id.max(*id),
-                VolumeEvent::RootChanged | VolumeEvent::Unmount { .. } => return Ok(EventEffect::RescanRequired),
+                VolumeEvent::RootChanged | VolumeEvent::Unmount { .. } => return EventRequest::RescanRequired,
             }
         }
-        self.rescan_paths(&changed)?;
-        self.last_event_id = last_event_id;
-        Ok(if changed.is_empty() {
-            EventEffect::Ignored
-        } else {
-            EventEffect::Applied
+        EventRequest::Delta(PendingDelta {
+            request: index.delta_request(&changed),
+            last_event_id,
         })
     }
 
-    pub fn persist(&self) -> io::Result<()> {
-        match &self.index {
-            Some(index) => write_cache(&self.paths.cache, &self.header, self.last_event_id, index),
-            None => Ok(()),
+    pub fn apply_listings(
+        &mut self,
+        pending: &PendingDelta,
+        listings: Vec<DirectoryListing>,
+    ) -> Result<EventEffect, SessionError> {
+        if pending.request.is_empty() {
+            self.last_event_id = self.last_event_id.max(pending.last_event_id);
+            return Ok(EventEffect::Ignored);
         }
+        let duplicate_paths = self.duplicate_paths();
+        let index = self.index.as_mut().expect("deltas apply to a scanned volume");
+        let applied = index
+            .apply_delta(&pending.request, listings, &self.enrichment)
+            .map_err(SessionError::Stale)?;
+        self.last_event_id = self.last_event_id.max(pending.last_event_id);
+        match &applied {
+            DeltaApplied::Spliced { .. } => self.remap(duplicate_paths, Remapping::Detached),
+            DeltaApplied::Compacted { .. } => self.remap(duplicate_paths, Remapping::Everything),
+        }
+        .map_err(SessionError::Io)?;
+        let index = self.index.as_ref().expect("deltas apply to a scanned volume");
+        self.recommendations
+            .as_mut()
+            .expect("a scanned volume has recommendations")
+            .apply_delta(index, &self.rules, &self.denylist, &running_bundle_ids(), &applied);
+        Ok(EventEffect::Applied)
+    }
+
+    pub fn apply_events(&mut self, events: &[VolumeEvent]) -> Result<EventEffect, SessionError> {
+        if self.index.is_none() {
+            return Ok(EventEffect::Ignored);
+        }
+        match self.delta_request(events) {
+            EventRequest::RescanRequired => Ok(EventEffect::RescanRequired),
+            EventRequest::Delta(pending) => {
+                let listings = pending.read(&ScanOptions::default())?;
+                self.apply_listings(&pending, listings)
+            }
+        }
+    }
+
+    pub fn persist(&mut self) -> io::Result<()> {
+        let duplicate_paths = self.duplicate_paths();
+        let Some(index) = self.index.as_mut() else {
+            return Ok(());
+        };
+        if index.compact_garbage() {
+            self.remap(duplicate_paths, Remapping::Everything)?;
+            self.refresh_recommendations();
+        }
+        let index = self.index.as_ref().expect("a persisted session holds an index");
+        write_cache(&self.paths.cache, &self.header, self.last_event_id, index)
     }
 
     pub fn refresh_recommendations(&mut self) {
@@ -302,10 +356,9 @@ impl Session {
     }
 
     fn install(&mut self, index: Index) -> io::Result<()> {
-        let tray_paths = self.tray_paths();
         let duplicate_paths = self.duplicate_paths();
         self.index = Some(index);
-        self.remap(&tray_paths, duplicate_paths)?;
+        self.remap(duplicate_paths, Remapping::Everything)?;
         self.refresh_recommendations();
         Ok(())
     }
@@ -314,26 +367,20 @@ impl Session {
         if paths.is_empty() {
             return Ok(());
         }
-        let tray_paths = self.tray_paths();
-        let duplicate_paths = self.duplicate_paths();
-        let index = self.index.as_mut().expect("only a scanned volume is rescanned");
-        let mut outermost: Vec<&PathBuf> = paths.iter().collect();
-        outermost.sort();
-        outermost.dedup_by(|inner, outer| inner.starts_with(outer.as_path()));
-        for path in outermost {
-            index.rescan(path, &ScanOptions::default(), &self.enrichment)?;
-        }
-        self.remap(&tray_paths, duplicate_paths).map_err(SessionError::Io)?;
-        self.refresh_recommendations();
-        Ok(())
-    }
-
-    fn tray_paths(&self) -> Vec<(PathBuf, Option<String>)> {
-        self.tray
-            .items()
+        let index = self.index.as_ref().expect("only a scanned volume is rescanned");
+        let changed: Vec<ChangedPath> = paths
             .iter()
-            .map(|item| (item.path.clone(), item.rule_id.clone()))
-            .collect()
+            .map(|path| ChangedPath {
+                path: path.clone(),
+                subtree: false,
+            })
+            .collect();
+        let pending = PendingDelta {
+            request: index.delta_request(&changed),
+            last_event_id: self.last_event_id,
+        };
+        let listings = pending.read(&ScanOptions::default())?;
+        self.apply_listings(&pending, listings).map(drop)
     }
 
     fn duplicate_paths(&self) -> Option<Vec<GroupPaths>> {
@@ -348,35 +395,46 @@ impl Session {
                     fully_hashed: group.fully_hashed,
                     members: std::iter::once(group.keep)
                         .chain(group.copies.iter().map(|copy| copy.node))
-                        .map(|member| index.path(member))
+                        .map(|member| (member, index.path(member)))
                         .collect(),
                 })
                 .collect(),
         )
     }
 
-    fn remap(
-        &mut self,
-        tray_paths: &[(PathBuf, Option<String>)],
-        duplicate_paths: Option<Vec<GroupPaths>>,
-    ) -> io::Result<()> {
+    fn remap(&mut self, duplicate_paths: Option<Vec<GroupPaths>>, remapping: Remapping) -> io::Result<()> {
         let index = self.index.as_ref().expect("remapping follows a new index");
+        let resolve = |node: NodeId, path: &Path| match remapping {
+            Remapping::Detached if index.is_live(node) => Some(node),
+            Remapping::Detached | Remapping::Everything => index.find(path),
+        };
         let mut tray = Tray::default();
-        for (path, rule_id) in tray_paths {
-            if let Some(node) = index.find(path) {
-                tray.add(index, node, rule_id.as_deref());
+        for item in self.tray.items() {
+            if let Some(node) = resolve(item.node, &item.path) {
+                tray.add(index, node, item.rule_id.as_deref());
             }
         }
         self.tray = tray;
         if let (Some(groups), Some(duplicates)) = (duplicate_paths, self.duplicates.as_mut()) {
             let mut remapped = Vec::new();
-            for group in groups {
-                let members: Vec<NodeId> = group.members.iter().filter_map(|member| index.find(member)).collect();
-                if members.len() > 1 {
+            for (group, paths) in mem::take(&mut duplicates.groups).into_iter().zip(groups) {
+                let members: Vec<NodeId> = paths
+                    .members
+                    .iter()
+                    .filter_map(|(node, path)| resolve(*node, path))
+                    .collect();
+                let unchanged = members.len() == paths.members.len()
+                    && members
+                        .iter()
+                        .zip(&paths.members)
+                        .all(|(member, (node, _))| member == node);
+                if unchanged && remapping == Remapping::Detached {
+                    remapped.push(group);
+                } else if members.len() > 1 {
                     remapped.push(DuplicateGroup::of_members(
                         index,
-                        group.size,
-                        group.fully_hashed,
+                        paths.size,
+                        paths.fully_hashed,
                         &members,
                     )?);
                 }
