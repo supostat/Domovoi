@@ -16,8 +16,8 @@ use crate::shell_button::ShellButton;
 use crate::shell_layout::NARROW_WINDOW;
 use crate::shell_palette::ShellPalette;
 use crate::strings::{
-    CANCEL, CLOSE, FREED_AFTER_EMPTYING, MOVE_TO_TRASH, NOT_MOVED, OPEN_TRASH, RECENTLY_MOVED, RESTORE, TRAY,
-    TRAY_EMPTY, TRAY_NOTE, WILL_MOVE,
+    CANCEL, CLOSE, ESTIMATE_MARK, FREED_AFTER_EMPTYING, MOVE_TO_TRASH, NOT_MOVED, OPEN_TRASH, RECENTLY_MOVED, RESTORE,
+    TRAY, TRAY_EMPTY, TRAY_NOTE, WILL_MOVE,
 };
 use crate::tray_column::{MARGIN, TrayColumn};
 use crate::tray_model::TrayModel;
@@ -83,7 +83,7 @@ impl TrayScreen {
             column.top += FieldOrnament::height() + SECTION_GAP;
             ornament = Some(stitched);
             column.paragraph(
-                &TrayModel::moved_line(outcome.moved),
+                &outcome.moved_line(),
                 &interface_font(22.0, 600.0),
                 &tokens.text.ns_color(),
             );
@@ -152,9 +152,14 @@ fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) {
         &interface_font(13.5, 400.0),
         &tokens.mute.ns_color(),
     );
+    let total_text = if model.measuring.is_some() {
+        format!("{ESTIMATE_MARK} {}", format_size(model.total()))
+    } else {
+        format_size(model.total())
+    };
     let total = measure_label(
         column.marker,
-        &format_size(model.total()),
+        &total_text,
         &mono_font(26.0, 600.0),
         &tokens.wax.ns_color(),
     );
@@ -173,6 +178,10 @@ fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) {
         total_size,
     );
     column.top += line + GAP;
+    if let Some(measuring) = model.measuring_line() {
+        column.paragraph(&measuring, &interface_font(12.5, 400.0), &tokens.mute.ns_color());
+        column.top += GAP / 2.0;
+    }
     if let Some(held) = model.held_line() {
         column.paragraph(&held, &interface_font(12.5, 400.0), &tokens.dim.ns_color());
         column.top += GAP / 2.0;

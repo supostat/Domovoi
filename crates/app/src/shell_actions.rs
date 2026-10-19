@@ -241,7 +241,9 @@ impl ShellActions {
 
     pub(crate) fn dispatch(&self, action: ShellAction) {
         let handler = self.ivars().handler.borrow().as_ref().and_then(Weak::upgrade);
-        if let Some(handler) = handler {
+        if let Some(handler) = handler
+            && handler.allows(action)
+        {
             handler.perform(action);
         }
     }

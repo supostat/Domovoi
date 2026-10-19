@@ -5,7 +5,10 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use domovoi_app::{EventEffect, EventQueue, EventRequest, PendingDelta, Session, SessionError, SessionPaths};
+use domovoi_app::{
+    ApplyJob, EventEffect, EventQueue, EventRequest, HEAVY_DELTA_NODES, PendingDelta, Session, SessionError,
+    SessionPaths,
+};
 use domovoi_index::{DirectoryListing, Reclaimable};
 use domovoi_scanner::{CancelToken, ScanOptions, VolumeEvent};
 use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat, test_timeout};
@@ -14,6 +17,8 @@ const MEGABYTE: usize = 1024 * 1024;
 const QUIET: Duration = Duration::from_millis(600);
 const POLL: Duration = Duration::from_millis(50);
 const NEW_DIRECTORIES: u64 = 2;
+const LOW_HEAVY_NODES: usize = 100;
+const BULK_FILES: usize = 300;
 
 type CardsView = BTreeMap<&'static str, (BTreeMap<PathBuf, Reclaimable>, BTreeSet<PathBuf>, Reclaimable)>;
 
@@ -198,7 +203,7 @@ fn the_event_queue_reads_in_the_background_and_retries_a_stale_delta() {
         Session::open(&root, &SessionPaths::in_directory(state.path()), "0.0.0-test").expect("the session opens");
     session.scan(None, CancelToken::default()).expect("the volume scans");
     let (_stream, events) = session.watch().expect("the volume is watched");
-    let mut queue = EventQueue::default();
+    let mut queue = EventQueue::new(HEAVY_DELTA_NODES);
 
     let modules = root.join("Projects/site/node_modules");
     write(&root.join("Projects/site/README.md"), b"site\n");
@@ -220,5 +225,54 @@ fn the_event_queue_reads_in_the_background_and_retries_a_stale_delta() {
     assert!(indexed(&session, &root.join("Projects/site/README.md")));
     assert!(!indexed(&session, &modules));
     assert!(!cards(&session).0.contains_key("dev.deps"));
+    assert_cards_match_a_full_build(&mut session);
+}
+
+#[test]
+fn a_heavy_batch_is_applied_with_the_session_in_a_background_job() {
+    let volume = ImageVolume::create(VolumeFormat::Apfs, Visibility::Browsable).expect("the image attaches");
+    let root = fs::canonicalize(volume.mount_point()).expect("the mount point resolves");
+    populate(&root);
+    let state = TempTree::new().expect("a temp tree is created");
+    let mut session =
+        Session::open(&root, &SessionPaths::in_directory(state.path()), "0.0.0-test").expect("the session opens");
+    session.scan(None, CancelToken::default()).expect("the volume scans");
+    let (_stream, events) = session.watch().expect("the volume is watched");
+    let mut queue = EventQueue::new(LOW_HEAVY_NODES);
+
+    for file in 0..BULK_FILES {
+        write(&root.join(format!("Bulk.partial/file-{file}")), &vec![6; 8_192]);
+    }
+    fs::rename(root.join("Bulk.partial"), root.join("Bulk")).expect("the folder appears at once");
+    let deadline = Instant::now() + test_timeout();
+    while queue
+        .advance(events.try_iter(), &mut session)
+        .expect("the queue advances")
+        != EventEffect::Heavy
+    {
+        assert!(Instant::now() < deadline, "no heavy batch arrived in time");
+        thread::sleep(POLL);
+    }
+    let batch = queue.take_heavy().expect("the heavy batch waits for its session");
+    assert!(batch.nodes() >= LOW_HEAVY_NODES, "{} nodes", batch.nodes());
+    let (mut session, applied) = ApplyJob::start(session, batch).finish();
+    assert_eq!(queue.settle(applied).expect("the batch applies"), EventEffect::Applied);
+    assert!(indexed(&session, &root.join(format!("Bulk/file-{}", BULK_FILES - 1))));
+    while !queue.is_idle() {
+        assert!(Instant::now() < deadline, "the queue did not drain in time");
+        match queue
+            .advance(events.try_iter(), &mut session)
+            .expect("the queue advances")
+        {
+            EventEffect::Heavy => {
+                let batch = queue.take_heavy().expect("the heavy batch waits for its session");
+                let applied = batch.apply(&mut session);
+                queue.settle(applied).expect("the batch applies");
+            }
+            EventEffect::Applied | EventEffect::Ignored => {}
+            EventEffect::RescanRequired => panic!("the volume asked for a full rescan"),
+        }
+        thread::sleep(POLL);
+    }
     assert_cards_match_a_full_build(&mut session);
 }

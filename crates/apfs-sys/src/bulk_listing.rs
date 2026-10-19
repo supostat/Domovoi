@@ -107,7 +107,7 @@ impl Iterator for BulkListing<'_> {
     }
 }
 
-fn request(attributes: AttributeSet) -> libc::attrlist {
+pub(crate) fn request(attributes: AttributeSet) -> libc::attrlist {
     let extended = match attributes {
         AttributeSet::Base => 0,
         AttributeSet::Extended => EXTENDED_ATTRIBUTES,

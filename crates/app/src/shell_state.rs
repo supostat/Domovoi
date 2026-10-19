@@ -9,6 +9,7 @@ use objc2::rc::Retained;
 use objc2::runtime::{NSObjectProtocol, ProtocolObject};
 
 use crate::access_state::AccessState;
+use crate::apply_job::ApplyJob;
 use crate::assistant::Assistant;
 use crate::care_models::CareModels;
 use crate::disk_overview::DiskOverview;
@@ -29,6 +30,7 @@ use crate::session::Session;
 use crate::shell_data::ShellData;
 use crate::shell_palette::ShellPalette;
 use crate::stage::Stage;
+use crate::tray_measurement::TrayMeasurement;
 use crate::tray_model::TrayModel;
 use crate::tray_sheet::TraySheet;
 
@@ -53,6 +55,8 @@ pub(crate) struct ShellState {
     pub last_scan: Option<ScanStatus>,
     pub watch: Option<EventWatch>,
     pub tray: Option<TraySheet>,
+    pub tray_measurement: Option<TrayMeasurement>,
+    pub applying: Option<ApplyJob>,
     pub settings_opened: bool,
     pub scan_without_access: bool,
     pub contrast_observer: Option<Retained<ProtocolObject<dyn NSObjectProtocol>>>,
@@ -85,6 +89,8 @@ impl ShellState {
             last_scan: None,
             watch: None,
             tray: None,
+            tray_measurement: None,
+            applying: None,
             settings_opened: false,
             scan_without_access: false,
             contrast_observer: None,
@@ -223,7 +229,7 @@ impl ShellState {
                 }
             }
         }
-        let tray = TrayModel::build(index, session.tray(), session.trash_journal())?;
+        let tray = TrayModel::estimated(index, session.tray(), session.trash_journal());
         Ok(CareModels {
             recommendations,
             duplicates,

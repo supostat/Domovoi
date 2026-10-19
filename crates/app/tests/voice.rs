@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use domovoi_app::{RecommendationsModel, Screen, ShellFixture, TrayModel, strings};
+use domovoi_app::{MeasureProgress, RecommendationsModel, Screen, ShellFixture, TrayModel, TrayOutcome, strings};
 use domovoi_rules::{ConfigOverrides, rule_table};
 
 const STRINGS_SOURCE: &str = include_str!("../src/strings.rs");
@@ -86,9 +86,24 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
         cards: Vec::new(),
     };
     assert_eq!(spoken(&total.total_line()), "Можно освободить 222,1 ГБ");
+    let outcome = TrayOutcome {
+        moved: 80_800_000_000,
+        estimated: false,
+        failures: Vec::new(),
+    };
+    assert_eq!(spoken(&outcome.moved_line()), "Перемещено в Корзину: 80,8 ГБ");
+    let estimated = TrayOutcome {
+        estimated: true,
+        ..outcome
+    };
+    assert_eq!(spoken(&estimated.moved_line()), "Перемещено в Корзину: ≈ 80,8 ГБ");
+    let measuring = TrayModel::default().with_progress(MeasureProgress {
+        files: 182_340,
+        bytes: 41_800_000_000,
+    });
     assert_eq!(
-        spoken(&TrayModel::moved_line(80_800_000_000)),
-        "Перемещено в Корзину: 80,8 ГБ"
+        measuring.measuring_line().map(|line| spoken(&line)).as_deref(),
+        Some("Уточняю размер: 182 340 файлов")
     );
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shell_state.json");
     let mut data = ShellFixture::read(&fixture)

@@ -1,12 +1,16 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::io;
 use std::ops::AddAssign;
 
 use domovoi_apfs_sys::private_size;
 use domovoi_apfs_sys::sys::{EF_SHARES_ALL_BLOCKS, UF_COMPRESSED};
+use domovoi_scanner::Node;
 
-use crate::index::Index;
+use crate::copy_groups::{InodeKey, is_link_member, is_stream_candidate, link_key, stream_key};
+use crate::index::{Index, record};
+use crate::index_node::IndexNode;
+use crate::name_table::NameId;
 use crate::node_id::NodeId;
 use crate::node_kind::NodeKind;
 
@@ -58,15 +62,101 @@ pub(crate) fn reclaimable_file(
     if facts.compressed {
         return Ok(estimate_file(facts));
     }
-    let private = private_size()?.min(facts.alloc_size);
+    Ok(split_private(facts, private_size()?))
+}
+
+fn split_private(facts: FileFacts, private_size: u64) -> Reclaimable {
+    let private = private_size.min(facts.alloc_size);
     let held = facts.alloc_size - private;
     let held_by_clone = facts.clone_refcount > 1 || facts.shares_all_blocks;
-    Ok(Reclaimable {
+    Reclaimable {
         bytes: private,
         held_by_clones: if held_by_clone { held } else { 0 },
         held_by_snapshots: if held_by_clone { 0 } else { held },
         held_by_hard_links: 0,
-    })
+    }
+}
+
+impl FileFacts {
+    fn of(node: &IndexNode, stream_inodes: u32) -> Self {
+        Self {
+            compressed: node.flags & UF_COMPRESSED != 0,
+            shares_all_blocks: node.ext_flags & u64::from(EF_SHARES_ALL_BLOCKS) != 0,
+            clone_refcount: node.clone_refcount,
+            stream_inodes,
+            alloc_size: node.alloc_size,
+        }
+    }
+}
+
+pub fn measure_reclaimable(root: &Node) -> Reclaimable {
+    let files = scanned_files(root);
+    let mut linked = HashSet::new();
+    let mut streams: HashMap<InodeKey, u32> = HashMap::new();
+    for (file, _) in &files {
+        let counted = !is_link_member(file) || linked.insert(link_key(file));
+        if counted && is_stream_candidate(file) {
+            *streams.entry(stream_key(file)).or_default() += 1;
+        }
+    }
+    let Ok(total) = sum_over_files(files.iter().map(|(file, private)| (file, *private)), |file, private| {
+        let stream_inodes = if is_stream_candidate(file) {
+            streams[&stream_key(file)]
+        } else {
+            1
+        };
+        Ok::<_, Infallible>(measured_file(FileFacts::of(file, stream_inodes), private))
+    });
+    total
+}
+
+fn scanned_files(root: &Node) -> Vec<(IndexNode, Option<u64>)> {
+    let mut files = Vec::new();
+    let mut pending = vec![root];
+    while let Some(node) = pending.pop() {
+        let file = record(node, NodeId::NONE, NameId::NONE);
+        if file.kind == NodeKind::File {
+            files.push((
+                file,
+                node.attributes.as_ref().and_then(|attributes| attributes.private_size),
+            ));
+        }
+        pending.extend(&node.children);
+    }
+    files
+}
+
+fn measured_file(facts: FileFacts, private_size: Option<u64>) -> Reclaimable {
+    match private_size {
+        Some(private) if !facts.compressed => split_private(facts, private),
+        _ => estimate_file(facts),
+    }
+}
+
+fn sum_over_files<'file, T, E>(
+    files: impl IntoIterator<Item = (&'file IndexNode, T)>,
+    mut reclaim: impl FnMut(&'file IndexNode, T) -> Result<Reclaimable, E>,
+) -> Result<Reclaimable, E> {
+    let mut total = Reclaimable::default();
+    let mut linked: HashMap<InodeKey, (usize, &'file IndexNode, T)> = HashMap::new();
+    for (file, item) in files {
+        if file.link_count > 1 {
+            linked
+                .entry(link_key(file))
+                .and_modify(|group| group.0 += 1)
+                .or_insert((1, file, item));
+        } else {
+            total += reclaim(file, item)?;
+        }
+    }
+    for (seen, file, item) in linked.into_values() {
+        if file.link_count as usize > seen {
+            total.held_by_hard_links += file.alloc_size;
+        } else {
+            total += reclaim(file, item)?;
+        }
+    }
+    Ok(total)
 }
 
 impl Index {
@@ -90,42 +180,14 @@ impl Index {
         id: NodeId,
         mut reclaim: impl FnMut(NodeId, FileFacts) -> Result<Reclaimable, E>,
     ) -> Result<Reclaimable, E> {
-        let mut total = Reclaimable::default();
-        let mut linked_entries: HashMap<(u32, u64), Vec<NodeId>> = HashMap::new();
-        for member in self.subtree(id) {
-            let node = self.node(member);
-            if node.kind != NodeKind::File {
-                continue;
-            }
-            if node.link_count > 1 {
-                linked_entries
-                    .entry((node.real_dev, node.file_id))
-                    .or_default()
-                    .push(member);
-            } else {
-                total += reclaim(member, self.file_facts(member))?;
-            }
-        }
-        for entries in linked_entries.values() {
-            let node = self.node(entries[0]);
-            if (node.link_count as usize) > entries.len() {
-                total.held_by_hard_links += node.alloc_size;
-            } else {
-                total += reclaim(entries[0], self.file_facts(entries[0]))?;
-            }
-        }
-        Ok(total)
-    }
-
-    fn file_facts(&self, id: NodeId) -> FileFacts {
-        let node = self.node(id);
-        FileFacts {
-            compressed: node.flags & UF_COMPRESSED != 0,
-            shares_all_blocks: node.ext_flags & u64::from(EF_SHARES_ALL_BLOCKS) != 0,
-            clone_refcount: node.clone_refcount,
-            stream_inodes: node.shares_with + 1,
-            alloc_size: node.alloc_size,
-        }
+        let files = self
+            .subtree(id)
+            .into_iter()
+            .filter(|member| self.node(*member).kind == NodeKind::File)
+            .map(|member| (self.node(member), member));
+        sum_over_files(files, |file, member| {
+            reclaim(member, FileFacts::of(file, file.shares_with + 1))
+        })
     }
 }
 

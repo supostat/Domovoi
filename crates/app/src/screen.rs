@@ -1,5 +1,6 @@
 use crate::availability::Availability;
 use crate::model_variant::ModelVariant;
+use crate::tray_variant::TrayVariant;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Screen {
@@ -10,11 +11,11 @@ pub enum Screen {
     Assistant(Availability),
     Duplicates,
     Model(ModelVariant),
-    Tray,
+    Tray(TrayVariant),
 }
 
 impl Screen {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Access,
         Self::Scanning,
         Self::Main,
@@ -28,7 +29,8 @@ impl Screen {
         Self::Duplicates,
         Self::Model(ModelVariant::Catalog),
         Self::Model(ModelVariant::Off),
-        Self::Tray,
+        Self::Tray(TrayVariant::Measured),
+        Self::Tray(TrayVariant::Measuring),
     ];
 
     pub fn number(self) -> &'static str {
@@ -40,7 +42,7 @@ impl Screen {
             Self::Assistant(_) => "05",
             Self::Duplicates => "06",
             Self::Model(_) => "07",
-            Self::Tray => "08",
+            Self::Tray(_) => "08",
         }
     }
 
@@ -51,6 +53,7 @@ impl Screen {
             Self::Assistant(Availability::Unloaded) => Some("unloaded"),
             Self::Assistant(Availability::NoModel) => Some("no-model"),
             Self::Assistant(Availability::Off) | Self::Model(ModelVariant::Off) => Some("off"),
+            Self::Tray(TrayVariant::Measuring) => Some("measuring"),
             Self::Access
             | Self::Scanning
             | Self::Main
@@ -58,7 +61,7 @@ impl Screen {
             | Self::Assistant(Availability::Ready)
             | Self::Duplicates
             | Self::Model(ModelVariant::Catalog)
-            | Self::Tray => None,
+            | Self::Tray(TrayVariant::Measured) => None,
         }
     }
 

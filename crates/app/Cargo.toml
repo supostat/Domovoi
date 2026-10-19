@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 block2.workspace = true
 domovoi-agent.workspace = true
+domovoi-apfs-sys.workspace = true
 domovoi-downloader.workspace = true
 domovoi-dups.workspace = true
 domovoi-grammar.workspace = true

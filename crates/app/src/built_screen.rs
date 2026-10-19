@@ -57,7 +57,7 @@ impl BuiltScreen {
             Screen::Assistant(_) => Self::Assistant(AssistantScreen::build(marker, data, palette, actions)),
             Screen::Duplicates => Self::Duplicates(DuplicatesScreen::build(marker, data, palette, actions)),
             Screen::Model(_) => Self::Model(ModelScreen::build(marker, data, palette, actions)),
-            Screen::Tray => Self::Tray(TrayScreen::build(marker, &data.care.tray, palette, actions)),
+            Screen::Tray(_) => Self::Tray(TrayScreen::build(marker, &data.care.tray, palette, actions)),
         }
     }
 

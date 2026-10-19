@@ -5,6 +5,10 @@ use std::os::unix::ffi::OsStrExt;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct NameId(u32);
 
+impl NameId {
+    pub(crate) const NONE: Self = Self(u32::MAX);
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub(crate) struct NameTable {
     bytes: Vec<u8>,

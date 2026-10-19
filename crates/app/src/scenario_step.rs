@@ -16,6 +16,8 @@ pub enum ScenarioStep {
     AwaitChange {
         path: PathBuf,
         timeout_seconds: u64,
+        #[serde(default)]
+        heavy_nodes: Option<usize>,
     },
     Recommendations,
     TrashRecommendations {

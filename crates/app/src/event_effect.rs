@@ -2,5 +2,6 @@
 pub enum EventEffect {
     Applied,
     Ignored,
+    Heavy,
     RescanRequired,
 }

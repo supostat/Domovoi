@@ -1,7 +1,7 @@
 use std::io;
 use std::path::PathBuf;
 
-use domovoi_index::{Index, NodeId, Reclaimable};
+use domovoi_index::{Index, NodeId};
 use objc2_app_kit::NSWorkspace;
 
 use crate::denylist::Denylist;
@@ -51,14 +51,6 @@ impl Tray {
 
     pub fn items(&self) -> &[TrayItem] {
         &self.items
-    }
-
-    pub fn reclaimable(&self, index: &Index) -> io::Result<Reclaimable> {
-        let mut total = Reclaimable::default();
-        for item in &self.items {
-            total += index.reclaimable(item.node)?;
-        }
-        Ok(total)
     }
 
     pub fn move_to_trash(

@@ -11,3 +11,23 @@ pub struct DirectoryListing {
     pub entries: Vec<ListedEntry>,
     pub descended: u64,
 }
+
+impl DirectoryListing {
+    pub fn nodes(&self) -> usize {
+        self.entries
+            .iter()
+            .map(|entry| match entry {
+                ListedEntry::Kept(_) => 1,
+                ListedEntry::Read(node) => {
+                    let mut count = 0;
+                    let mut pending = vec![node];
+                    while let Some(current) = pending.pop() {
+                        count += 1;
+                        pending.extend(&current.children);
+                    }
+                    count
+                }
+            })
+            .sum()
+    }
+}

@@ -577,6 +577,10 @@
    ]
   }
  },
+  "tray_measuring": {
+    "files": 182340,
+    "bytes": 41800000000
+  },
   "ai": {
     "chat": {
       "entries": [

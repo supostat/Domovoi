@@ -23,6 +23,7 @@ const SPARSE_LENGTH: u64 = 64 * 1024 * 1024;
 const FRESH_FILE_BYTES: usize = 64 * 1024;
 const DEEP_FOLDER: &str = "Users/tester/Library/Developer/Xcode/DerivedData/App-abc/Build/Intermediates";
 const CHANGE_TIMEOUT_SECONDS: u64 = 10;
+const TRASH_HEAVY_NODES: usize = 2;
 const SNAPSHOTS: usize = 16;
 const PARTIAL_STATUS: u16 = 206;
 const REDIRECT_STATUS: u16 = 302;
@@ -126,6 +127,10 @@ fn seed_partial(models: &Path, entry: &CatalogEntry, content: &[u8]) {
     assert!(status.success(), "the partial file remembers its validator");
 }
 
+fn trash_of(mount_point: &Path) -> PathBuf {
+    mount_point.join(".Trashes").join(unsafe { libc::getuid() }.to_string())
+}
+
 fn steps<'a>(report: &'a Value, name: &str) -> Vec<&'a Value> {
     report["steps"]
         .as_array()
@@ -164,6 +169,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     let server = serve(&entry, content);
     let fresh_in_root = mount_point.join("fresh.txt");
     let fresh_in_depth = mount_point.join(DEEP_FOLDER).join("fresh.o");
+    let next_to_trashed = mount_point.join("Projects/engine/after-trash.txt");
     let scenario = json!({
         "root": mount_point,
         "state": state.path().join("session"),
@@ -176,6 +182,13 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
             {"step": "await_change", "path": fresh_in_depth, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
             {"step": "recommendations"},
             {"step": "trash_recommendations", "level": "safe"},
+            {"step": "create_file", "path": next_to_trashed, "bytes": FRESH_FILE_BYTES},
+            {
+                "step": "await_change",
+                "path": next_to_trashed,
+                "timeout_seconds": CHANGE_TIMEOUT_SECONDS,
+                "heavy_nodes": TRASH_HEAVY_NODES,
+            },
             {"step": "restore_last"},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
@@ -221,8 +234,8 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
     assert!(step(report, "scan")["files"].as_u64().is_some_and(|files| files > 0));
     assert!(step(report, "reopen_cache")["last_event_id"].as_u64().is_some());
     let changes = steps(report, "await_change");
-    assert_eq!(changes.len(), 2, "{report:#}");
-    for change in changes {
+    assert_eq!(changes.len(), 3, "{report:#}");
+    for change in &changes[..2] {
         assert!(change["allocated"].as_u64().is_some_and(|bytes| bytes > 0), "{change}");
         assert_eq!(
             change["descended"].as_u64(),
@@ -230,6 +243,13 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
             "only one level is read: {change}"
         );
     }
+    let moved_to_trash = changes[2];
+    assert!(
+        moved_to_trash["applied_in_background"]
+            .as_u64()
+            .is_some_and(|batches| batches > 0),
+        "the batch after the move to the Trash is applied with the session in a background job: {moved_to_trash}"
+    );
     let recommendations = step(report, "recommendations");
     let cards: Vec<&str> = recommendations["cards"]
         .as_array()
@@ -246,9 +266,14 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
         "the locked build folder is refused by the denylist: {recommendations:#}"
     );
     assert!(report["totals"]["safe"].as_u64().is_some_and(|safe| safe > 0));
-    let trash = mount_point.join(".Trashes").join(unsafe { libc::getuid() }.to_string());
+    let trash = trash_of(mount_point);
     let trashed = step(report, "trash_recommendations");
     assert!(trashed["moved"].as_u64().is_some_and(|moved| moved > 0), "{trashed:#}");
+    assert!(
+        trashed["measured_files"].as_u64().is_some_and(|files| files > 0),
+        "the tray is measured in the background before the move: {trashed:#}"
+    );
+    assert_eq!(trashed["estimated"].as_bool(), Some(false), "{trashed:#}");
     assert!(
         trashed["trashed"]
             .as_array()

@@ -1,11 +1,13 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 
 use domovoi_app::{
-    DuplicatesModel, Provenance, RecommendationsModel, SafetyBadge, Session, SessionPaths, TrayModel, strings,
+    DuplicatesModel, Provenance, RecommendationsModel, SafetyBadge, Session, SessionPaths, TrayMeasureJob, TrayModel,
+    strings,
 };
+use domovoi_index::Reclaimable;
 use domovoi_scanner::CancelToken;
 use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat};
 
@@ -36,6 +38,36 @@ fn populate(root: &Path) {
         .status()
         .expect("cp starts");
     assert!(cloned.success(), "the clone is made");
+}
+
+fn estimated_then_measured_tray(session: &Session, title: &str) -> (TrayModel, TrayModel) {
+    let index = session.index().expect("the index stays");
+    let estimated = TrayModel::estimated(index, session.tray(), session.trash_journal());
+    assert_eq!(estimated.rows.len(), 1);
+    assert_eq!(estimated.rows[0].title, title);
+    assert!(estimated.total() >= BUILD_OUTPUT as u64);
+    assert!(estimated.measuring.is_some(), "the sheet opens on the estimate");
+    let items: Vec<PathBuf> = session
+        .tray()
+        .items()
+        .iter()
+        .map(|item| item.physical.clone())
+        .collect();
+    let exact = TrayMeasureJob::start(items)
+        .finish()
+        .expect("the tray is measured")
+        .sizes;
+    let indexed: Vec<Reclaimable> = session
+        .tray()
+        .items()
+        .iter()
+        .map(|item| index.reclaimable(item.node).expect("the index measures the item"))
+        .collect();
+    assert_eq!(exact, indexed);
+    let measured = TrayModel::measured(index, session.tray(), session.trash_journal(), &exact);
+    assert!(measured.measuring.is_none());
+    assert_eq!(measured.rows[0].title, title);
+    (estimated, measured)
 }
 
 #[test]
@@ -99,17 +131,16 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
     for target in &targets {
         session.add_to_tray(target.node, target.rule_id.as_deref());
     }
-    let index = session.index().expect("the index stays");
-    let tray = TrayModel::build(index, session.tray(), session.trash_journal()).expect("the tray model builds");
-    assert_eq!(tray.rows.len(), 1);
-    assert_eq!(tray.rows[0].title, card.title);
-    assert!(tray.total() >= BUILD_OUTPUT as u64);
-    let moved = session.tray_reclaimable().expect("the tray is measured").bytes;
+    let (estimated, measured) = estimated_then_measured_tray(&session, &card.title);
+    let moved = measured.total();
     let outcomes = session.move_tray_to_trash().expect("the tray moves to the Trash");
     assert!(outcomes.iter().all(|outcome| outcome.result.is_ok()), "{outcomes:?}");
     assert!(!mount_point.join("Projects/demo/target").exists());
-    let after = TrayModel::default().with_outcome(&outcomes, moved, session.trash_journal());
+    let unmeasured = estimated.with_outcome(&outcomes, session.trash_journal());
+    assert_eq!(unmeasured.outcome.as_ref().map(|outcome| outcome.estimated), Some(true));
+    let after = measured.with_outcome(&outcomes, session.trash_journal());
     assert_eq!(after.outcome.as_ref().map(|outcome| outcome.moved), Some(moved));
+    assert_eq!(after.outcome.as_ref().map(|outcome| outcome.estimated), Some(false));
     assert_eq!(after.journal.len(), 1);
     assert_eq!(after.journal[0].title, card.title);
     session

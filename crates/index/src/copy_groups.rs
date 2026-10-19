@@ -8,7 +8,7 @@ use crate::index_node::IndexNode;
 use crate::node_id::NodeId;
 use crate::node_kind::NodeKind;
 
-type InodeKey = (u32, u64);
+pub(crate) type InodeKey = (u32, u64);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct CopyGroups {
@@ -39,22 +39,22 @@ impl CopyGroups {
     }
 }
 
-fn is_link_member(node: &IndexNode) -> bool {
+pub(crate) fn is_link_member(node: &IndexNode) -> bool {
     node.link_count > 1 && node.kind != NodeKind::Directory
 }
 
-fn link_key(node: &IndexNode) -> InodeKey {
+pub(crate) fn link_key(node: &IndexNode) -> InodeKey {
     (node.real_dev, node.file_id)
 }
 
-fn is_stream_candidate(node: &IndexNode) -> bool {
+pub(crate) fn is_stream_candidate(node: &IndexNode) -> bool {
     node.kind == NodeKind::File
         && (node.ext_flags & u64::from(EF_MAY_SHARE_BLOCKS | EF_SHARES_ALL_BLOCKS) != 0
             || node.clone_refcount > 1
             || node.flags & UF_COMPRESSED != 0)
 }
 
-fn stream_key(node: &IndexNode) -> InodeKey {
+pub(crate) fn stream_key(node: &IndexNode) -> InodeKey {
     (node.real_dev, node.clone_id)
 }
 

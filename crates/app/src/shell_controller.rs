@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr::NonNull;
 use std::rc::{Rc, Weak};
@@ -28,6 +28,7 @@ use objc2_foundation::{
 use crate::access_screen::AccessScreen;
 use crate::access_state::AccessState;
 use crate::action_handler::ActionHandler;
+use crate::apply_job::ApplyJob;
 use crate::assistant::Assistant;
 use crate::assistant_screen::AssistantScreen;
 use crate::assistant_settings::AssistantSettings;
@@ -44,7 +45,7 @@ use crate::duplicates_model::DuplicatesModel;
 use crate::duplicates_screen::DuplicatesScreen;
 use crate::duplicates_state::DuplicatesState;
 use crate::event_effect::EventEffect;
-use crate::event_queue::EventQueue;
+use crate::event_queue::{EventQueue, HEAVY_DELTA_NODES};
 use crate::event_watch::EventWatch;
 use crate::expansion::Expansion;
 use crate::hover_panel::HoverPanel;
@@ -69,9 +70,10 @@ use crate::shell_state::ShellState;
 use crate::stage::Stage;
 use crate::strings::{
     APP_NAME, CLONED, DIAGRAM, FAILURE_CLOSE, FAILURE_TITLE, FDA_SETTINGS_URL, NOT_CLONED, RESTORE_FAILED,
-    RESTORE_NOT_IN_TRASH, RESTORE_PARENT_MISSING, RESTORE_REPLACED,
+    RESTORE_NOT_IN_TRASH, RESTORE_PARENT_MISSING, RESTORE_REPLACED, UPDATING_INDEX,
 };
 use crate::tilde::tilde;
+use crate::tray_measurement::TrayMeasurement;
 use crate::tray_model::TrayModel;
 use crate::tray_screen::TrayScreen;
 use crate::tray_sheet::TraySheet;
@@ -79,6 +81,7 @@ use crate::tray_sheet::TraySheet;
 const SCAN_TICK: f64 = 1.0 / 30.0;
 const SEARCH_TICK: f64 = 1.0 / 10.0;
 const EVENTS_TICK: f64 = 0.5;
+const MEASURE_TICK: f64 = 0.25;
 const OPEN: &str = "/usr/bin/open";
 
 mod assistant_actions;
@@ -259,7 +262,7 @@ impl ShellController {
                     _stream: stream,
                     events,
                     timer: self.repeating(EVENTS_TICK, ShellController::events_tick),
-                    queue: EventQueue::default(),
+                    queue: EventQueue::new(HEAVY_DELTA_NODES),
                 }),
                 Err(error) => return self.fail(&error.to_string()),
             },
@@ -276,7 +279,9 @@ impl ShellController {
     }
 
     fn events_tick(&self) {
-        let effect = {
+        let effect = if let Some(settled) = self.finish_apply() {
+            settled
+        } else {
             let mut state = self.state.borrow_mut();
             let ShellState { watch, session, .. } = &mut *state;
             let (Some(watch), Some(session)) = (watch.as_mut(), session.as_mut()) else {
@@ -287,6 +292,7 @@ impl ShellController {
         match effect {
             Ok(EventEffect::Ignored) => {}
             Ok(EventEffect::Applied) => self.refresh(),
+            Ok(EventEffect::Heavy) => self.begin_apply(),
             Ok(EventEffect::RescanRequired) | Err(SessionError::Scan(_)) => {
                 let session = self.state.borrow_mut().session.take();
                 if let Some(session) = session {
@@ -295,6 +301,42 @@ impl ShellController {
             }
             Err(error) => self.fail(&error.to_string()),
         }
+    }
+
+    fn begin_apply(&self) {
+        {
+            let mut state = self.state.borrow_mut();
+            let ShellState {
+                watch,
+                session,
+                applying,
+                ..
+            } = &mut *state;
+            let batch = watch
+                .as_mut()
+                .and_then(|watch| watch.queue.take_heavy())
+                .expect("a heavy batch waits in the queue");
+            let session = session.take().expect("a heavy batch applies to an open session");
+            *applying = Some(ApplyJob::start(session, batch));
+        }
+        self.window.setSubtitle(&NSString::from_str(UPDATING_INDEX));
+    }
+
+    fn finish_apply(&self) -> Option<Result<EventEffect, SessionError>> {
+        let settled = {
+            let mut state = self.state.borrow_mut();
+            let job = state.applying.take_if(|job| job.is_finished())?;
+            let (session, applied) = job.finish();
+            state.session = Some(session);
+            state
+                .watch
+                .as_mut()
+                .expect("a heavy batch comes from the watched volume")
+                .queue
+                .settle(applied)
+        };
+        self.window.setSubtitle(&NSString::from_str(""));
+        Some(settled)
     }
 
     fn refresh(&self) {
@@ -684,15 +726,61 @@ impl ShellController {
     }
 
     fn open_tray(&self) {
-        let tray = {
+        let model = self.measured_tray();
+        self.show_tray(&model, false);
+    }
+
+    fn measured_tray(&self) -> TrayModel {
+        let (items, estimate) = {
             let state = self.state.borrow();
             let session = state.session.as_ref().expect("the tray belongs to an open session");
+            let items: Vec<PathBuf> = session
+                .tray()
+                .items()
+                .iter()
+                .map(|item| item.physical.clone())
+                .collect();
+            let fresh = state
+                .tray_measurement
+                .as_ref()
+                .is_some_and(|measurement| measurement.items == items);
             let index = session.index().expect("the tray belongs to a scanned volume");
-            TrayModel::build(index, session.tray(), session.trash_journal())
+            (
+                items,
+                (!fresh).then(|| TrayModel::estimated_sizes(index, session.tray())),
+            )
         };
-        match tray {
-            Ok(tray) => self.show_tray(&tray, false),
-            Err(error) => self.fail(&error.to_string()),
+        if let Some(estimate) = estimate {
+            let timer = self.repeating(MEASURE_TICK, ShellController::measure_tick);
+            self.state.borrow_mut().tray_measurement = Some(TrayMeasurement::start(items, estimate, timer));
+        }
+        let state = self.state.borrow();
+        let ShellState {
+            session,
+            tray_measurement,
+            ..
+        } = &*state;
+        let session = session.as_ref().expect("the tray belongs to an open session");
+        let index = session.index().expect("the tray belongs to a scanned volume");
+        let measurement = tray_measurement.as_ref().expect("the tray is being measured");
+        match measurement.exact() {
+            Some(exact) => TrayModel::measured(index, session.tray(), session.trash_journal(), exact),
+            None => TrayModel::measured(index, session.tray(), session.trash_journal(), measurement.estimate())
+                .with_progress(measurement.progress()),
+        }
+    }
+
+    fn measure_tick(&self) {
+        let advanced = self
+            .state
+            .borrow_mut()
+            .tray_measurement
+            .as_mut()
+            .map(TrayMeasurement::advance);
+        match advanced {
+            Some(Ok(())) => self.refresh_tray(),
+            Some(Err(error)) => self.fail(&error.to_string()),
+            None => {}
         }
     }
 
@@ -737,16 +825,18 @@ impl ShellController {
     }
 
     fn confirm_tray(&self) {
-        let outcome = {
+        let before = self.measured_tray();
+        let outcomes = {
             let mut state = self.state.borrow_mut();
-            let session = state.session.as_mut().expect("the tray belongs to an open session");
-            session
-                .tray_reclaimable()
-                .map_err(SessionError::Io)
-                .and_then(|reclaimable| Ok((reclaimable.bytes, session.move_tray_to_trash()?)))
+            state.tray_measurement = None;
+            state
+                .session
+                .as_mut()
+                .expect("the tray belongs to an open session")
+                .move_tray_to_trash()
         };
-        let (moved, outcomes) = match outcome {
-            Ok(outcome) => outcome,
+        let outcomes = match outcomes {
+            Ok(outcomes) => outcomes,
             Err(error) => return self.fail(&error.to_string()),
         };
         let rebuilt = self.state.borrow_mut().rebuild_data(SystemTime::now());
@@ -756,14 +846,18 @@ impl ShellController {
         let model = {
             let state = self.state.borrow();
             let session = state.session.as_ref().expect("the tray belongs to an open session");
-            TrayModel::default().with_outcome(&outcomes, moved, session.trash_journal())
+            before.with_outcome(&outcomes, session.trash_journal())
         };
         self.show_tray(&model, true);
         self.show_current();
     }
 
     fn close_tray(&self) {
-        let sheet = self.state.borrow_mut().tray.take();
+        let sheet = {
+            let mut state = self.state.borrow_mut();
+            state.tray_measurement = None;
+            state.tray.take()
+        };
         if let Some(sheet) = sheet {
             self.window.endSheet(&sheet.window);
             sheet.window.orderOut(None);
@@ -1008,7 +1102,11 @@ impl ActionHandler for ShellController {
             ShellAction::ShowClickedRowInFinder => self
                 .clicked_row()
                 .is_some_and(|node| self.state.borrow().node_path(node).is_some()),
-            _ => true,
+            ShellAction::ToggleDuplicateSearch => {
+                let state = self.state.borrow();
+                state.search.is_some() || state.session.is_some()
+            }
+            _ => !action.needs_session() || self.state.borrow().session.is_some(),
         }
     }
 }

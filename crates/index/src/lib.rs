@@ -61,7 +61,7 @@ pub use node_id::NodeId;
 pub use node_kind::NodeKind;
 pub use query::Query;
 pub use reach::Reach;
-pub use reclaimable::Reclaimable;
+pub use reclaimable::{Reclaimable, measure_reclaimable};
 pub use safety_level::{SafetyLevel, SafetyLevels};
 pub use spliced_directory::SplicedDirectory;
 pub use stale_delta::StaleDelta;

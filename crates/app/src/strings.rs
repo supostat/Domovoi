@@ -162,6 +162,14 @@ pub const TRAY_NOTE: &str =
 pub const CANCEL: &str = "Отмена";
 pub const MOVE_TO_TRASH: &str = "Переместить в Корзину";
 pub const MOVED_TO_TRASH: &str = "Перемещено в Корзину:";
+pub const ESTIMATE_MARK: &str = "≈";
+pub const REFINING_SIZE: &str = "Уточняю размер:";
+pub const UPDATING_INDEX: &str = "Обновляю индекс…";
+pub const FILES: PluralForms = PluralForms {
+    one: "файл",
+    few: "файла",
+    many: "файлов",
+};
 pub const FREED_AFTER_EMPTYING: &str = "Место освободится после очистки Корзины.";
 pub const OPEN_TRASH: &str = "Открыть Корзину";
 pub const CLOSE: &str = "Закрыть";

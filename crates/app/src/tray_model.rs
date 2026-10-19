@@ -1,16 +1,16 @@
-use std::io;
 use std::path::Path;
 
 use domovoi_index::{Index, Reclaimable};
 use domovoi_rules::{TrashFailure, TrashJournal, TrashOutcome, Tray};
-use domovoi_theme::format_size;
+use domovoi_theme::format_count;
 use serde::Deserialize;
 
 use crate::deny_reason_text::deny_reason_text;
 use crate::held_line::held_line;
 use crate::journal_row::JournalRow;
+use crate::measure_progress::MeasureProgress;
 use crate::strings::{
-    MOVED_TO_TRASH, TRASH_MISSING, TRASH_NO_PERMISSION, TRASH_NO_TRASH, TRASH_OTHER, TRASH_OUT_OF_SPACE,
+    FILES, REFINING_SIZE, TRASH_MISSING, TRASH_NO_PERMISSION, TRASH_NO_TRASH, TRASH_OTHER, TRASH_OUT_OF_SPACE,
     TRASH_READ_ONLY, rule_title,
 };
 use crate::tilde::tilde;
@@ -30,17 +30,30 @@ pub struct TrayModel {
     #[serde(default)]
     pub held_by_hard_links: u64,
     #[serde(default)]
+    pub measuring: Option<MeasureProgress>,
+    #[serde(default)]
     pub outcome: Option<TrayOutcome>,
     #[serde(default)]
     pub journal: Vec<JournalRow>,
 }
 
 impl TrayModel {
-    pub fn build(index: &Index, tray: &Tray, journal: &TrashJournal) -> io::Result<Self> {
+    pub fn estimated(index: &Index, tray: &Tray, journal: &TrashJournal) -> Self {
+        Self::measured(index, tray, journal, &Self::estimated_sizes(index, tray))
+            .with_progress(MeasureProgress::default())
+    }
+
+    pub fn estimated_sizes(index: &Index, tray: &Tray) -> Vec<Reclaimable> {
+        tray.items()
+            .iter()
+            .map(|item| index.reclaimable_estimate(item.node))
+            .collect()
+    }
+
+    pub fn measured(index: &Index, tray: &Tray, journal: &TrashJournal, sizes: &[Reclaimable]) -> Self {
         let mut rows: Vec<(Option<String>, TrayRow)> = Vec::new();
         let mut held = Reclaimable::default();
-        for item in tray.items() {
-            let reclaimable = index.reclaimable(item.node)?;
+        for (item, reclaimable) in tray.items().iter().zip(sizes.iter().copied()) {
             held += reclaimable;
             let size = reclaimable.bytes;
             let category = index.node(item.node).category;
@@ -63,14 +76,26 @@ impl TrayModel {
                 )),
             }
         }
-        Ok(Self {
+        Self {
             rows: rows.into_iter().map(|(_, row)| row).collect(),
             held_by_snapshots: held.held_by_snapshots,
             held_by_clones: held.held_by_clones,
             held_by_hard_links: held.held_by_hard_links,
+            measuring: None,
             outcome: None,
             journal: journal_rows(journal),
-        })
+        }
+    }
+
+    #[must_use]
+    pub fn with_progress(mut self, progress: MeasureProgress) -> Self {
+        self.measuring = Some(progress);
+        self
+    }
+
+    pub fn measuring_line(&self) -> Option<String> {
+        self.measuring
+            .map(|progress| format!("{REFINING_SIZE} {}", format_count(progress.files, &FILES)))
     }
 
     pub fn total(&self) -> u64 {
@@ -82,7 +107,7 @@ impl TrayModel {
     }
 
     #[must_use]
-    pub fn with_outcome(mut self, outcomes: &[TrashOutcome], moved: u64, journal: &TrashJournal) -> Self {
+    pub fn with_outcome(mut self, outcomes: &[TrashOutcome], journal: &TrashJournal) -> Self {
         let failures = outcomes
             .iter()
             .filter_map(|outcome| match &outcome.result {
@@ -90,13 +115,14 @@ impl TrayModel {
                 Err(failure) => Some(format!("{} — {}", tilde(&outcome.path), failure_text(failure))),
             })
             .collect();
-        self.outcome = Some(TrayOutcome { moved, failures });
+        self.outcome = Some(TrayOutcome {
+            moved: self.total(),
+            estimated: self.measuring.is_some(),
+            failures,
+        });
+        self.measuring = None;
         self.journal = journal_rows(journal);
         self
-    }
-
-    pub fn moved_line(moved: u64) -> String {
-        format!("{MOVED_TO_TRASH} {}", format_size(moved))
     }
 }
 

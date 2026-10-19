@@ -9,7 +9,7 @@ use serde_json::Value;
 const BINARY: &str = env!("CARGO_BIN_EXE_domovoi");
 const THEMES: [&str; 2] = ["dark", "light"];
 const SCALES: [u32; 2] = [1, 2];
-const SCREENS: [&str; 3] = ["04", "06", "08"];
+const SCREENS: [(&str, &[&str]); 3] = [("04", &[""]), ("06", &[""]), ("08", &["", "-measuring"])];
 const WIDE_WINDOW: [u32; 2] = [1100, 700];
 const SHEET_WIDTH: u32 = 560;
 const SHEET_MAX_HEIGHT: u32 = 700;
@@ -25,7 +25,7 @@ fn review_directory() -> PathBuf {
 fn render_set(directory: &Path) -> Vec<String> {
     fs::create_dir_all(directory).expect("the snapshot directory is created");
     let mut stems = Vec::new();
-    for screen in SCREENS {
+    for (screen, variants) in SCREENS {
         for theme in THEMES {
             for scale in SCALES {
                 let output = Command::new(BINARY)
@@ -47,7 +47,11 @@ fn render_set(directory: &Path) -> Vec<String> {
                     "domovoi --snapshot {screen} failed: {}",
                     String::from_utf8_lossy(&output.stderr)
                 );
-                stems.push(format!("{screen}-{theme}@{scale}x"));
+                stems.extend(
+                    variants
+                        .iter()
+                        .map(|variant| format!("{screen}{variant}-{theme}@{scale}x")),
+                );
             }
         }
     }

@@ -13,7 +13,7 @@ use domovoi_dups::{
 };
 use domovoi_index::{
     CacheError, CacheHeader, ChangedPath, DeltaApplied, DirectoryListing, Enrichment, Index, IndexRoot, ModelEvent,
-    NodeId, Reclaimable, open_cache, write_cache,
+    NodeId, open_cache, write_cache,
 };
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_rules::{
@@ -305,13 +305,6 @@ impl Session {
 
     pub fn remove_from_tray(&mut self, node: NodeId) {
         self.tray.remove(node);
-    }
-
-    pub fn tray_reclaimable(&self) -> io::Result<Reclaimable> {
-        match &self.index {
-            Some(index) => self.tray.reclaimable(index),
-            None => Ok(Reclaimable::default()),
-        }
     }
 
     pub fn move_tray_to_trash(&mut self) -> Result<Vec<TrashOutcome>, SessionError> {

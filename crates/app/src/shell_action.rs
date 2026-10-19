@@ -40,3 +40,19 @@ pub enum ShellAction {
     ChooseModelFile,
     TrashOrphan(usize),
 }
+
+impl ShellAction {
+    pub fn needs_session(self) -> bool {
+        matches!(
+            self,
+            Self::OpenTray
+                | Self::SendCardsToTray
+                | Self::ConfirmTray
+                | Self::AddAnswerToTray(_)
+                | Self::Restore(_)
+                | Self::ToggleDuplicateSearch
+                | Self::ApplyDuplicates
+                | Self::AskAssistant
+        )
+    }
+}

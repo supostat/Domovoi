@@ -312,6 +312,7 @@ version = "0.1.0"
 dependencies = [
  "block2",
  "domovoi-agent",
+ "domovoi-apfs-sys",
  "domovoi-downloader",
  "domovoi-dups",
  "domovoi-grammar",

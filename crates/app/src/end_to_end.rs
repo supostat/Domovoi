@@ -16,6 +16,7 @@ use objc2::MainThreadMarker;
 use serde_json::{Value, json};
 
 use crate::access_state::AccessState;
+use crate::apply_job::ApplyJob;
 use crate::assistant::Assistant;
 use crate::assistant_settings::AssistantSettings;
 use crate::cache_opening::CacheOpening;
@@ -25,7 +26,7 @@ use crate::disk_overview::DiskOverview;
 use crate::duplicate_summary::DuplicateSummary;
 use crate::duplicates_model::DuplicatesModel;
 use crate::event_effect::EventEffect;
-use crate::event_queue::EventQueue;
+use crate::event_queue::{EventQueue, HEAVY_DELTA_NODES};
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
 use crate::recommendations_model::RecommendationsModel;
@@ -41,10 +42,12 @@ use crate::session_paths::SessionPaths;
 use crate::shell_data::ShellData;
 use crate::shell_snapshot::write_snapshots;
 use crate::snapshot_options::SnapshotOptions;
+use crate::tray_measure_job::TrayMeasureJob;
 use crate::tray_model::TrayModel;
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const EVENT_POLL: Duration = Duration::from_millis(50);
+const SESSION_BETWEEN_STEPS: &str = "the session is home between steps";
 
 pub fn run_end_to_end(marker: MainThreadMarker, scenario: &Path, report: &Path) -> Result<(), String> {
     let scenario = Scenario::read(scenario)?;
@@ -61,7 +64,7 @@ pub fn run_end_to_end(marker: MainThreadMarker, scenario: &Path, report: &Path) 
             }
         }
     }
-    let totals = run.session.recommendations().map(|recommendations| {
+    let totals = run.session().recommendations().map(|recommendations| {
         json!({
             "safe": recommendations.totals.safe,
             "recoverable": recommendations.totals.recoverable,
@@ -80,7 +83,7 @@ pub fn run_end_to_end(marker: MainThreadMarker, scenario: &Path, report: &Path) 
 struct EndToEnd {
     root: PathBuf,
     paths: SessionPaths,
-    session: Session,
+    session: Option<Session>,
     duplicates: Option<DuplicateSummary>,
     model: Option<(CatalogEntry, PathBuf)>,
     snapshots: Vec<PathBuf>,
@@ -91,7 +94,7 @@ impl EndToEnd {
         let paths = SessionPaths::in_directory(&scenario.state);
         Ok(Self {
             root: scenario.root.clone(),
-            session: Session::open(&scenario.root, &paths, APP_VERSION).map_err(|error| error.to_string())?,
+            session: Some(Session::open(&scenario.root, &paths, APP_VERSION).map_err(|error| error.to_string())?),
             paths,
             duplicates: None,
             model: None,
@@ -102,10 +105,10 @@ impl EndToEnd {
     fn perform(&mut self, marker: MainThreadMarker, step: &ScenarioStep) -> Result<Value, String> {
         match step {
             ScenarioStep::Scan => {
-                self.session
+                self.session_mut()
                     .scan(None, CancelToken::default())
                     .map_err(|error| error.to_string())?;
-                let index = self.session.index().expect("a finished scan installs an index");
+                let index = self.session().index().expect("a finished scan installs an index");
                 let root = index.node(index.root());
                 Ok(json!({ "step": "scan", "files": root.files, "bytes": root.allocated, "nodes": index.len() }))
             }
@@ -116,16 +119,22 @@ impl EndToEnd {
                     CacheOpening::Opened => {}
                     opening => return Err(format!("the scan cache was not reused: {opening:?}")),
                 }
-                self.session = reopened;
-                Ok(json!({ "step": "reopen_cache", "last_event_id": self.session.last_event_id() }))
+                self.session = Some(reopened);
+                Ok(json!({ "step": "reopen_cache", "last_event_id": self.session().last_event_id() }))
             }
             ScenarioStep::CreateFile { path, bytes } => {
                 fs::write(path, vec![b'x'; *bytes]).map_err(|error| format!("{}: {error}", path.display()))?;
                 Ok(json!({ "step": "create_file", "path": path, "bytes": bytes }))
             }
-            ScenarioStep::AwaitChange { path, timeout_seconds } => {
-                self.await_change(path, Duration::from_secs(*timeout_seconds))
-            }
+            ScenarioStep::AwaitChange {
+                path,
+                timeout_seconds,
+                heavy_nodes,
+            } => self.await_change(
+                path,
+                Duration::from_secs(*timeout_seconds),
+                heavy_nodes.unwrap_or(HEAVY_DELTA_NODES),
+            ),
             ScenarioStep::Recommendations => {
                 let model = self.recommendations();
                 let rules: Vec<String> = model.cards.iter().map(|card| card.provenance.label()).collect();
@@ -135,18 +144,18 @@ impl EndToEnd {
             ScenarioStep::TrashRecommendations { level } => self.trash_recommendations(*level),
             ScenarioStep::RestoreLast => {
                 let last = self
-                    .session
+                    .session()
                     .trash_journal()
                     .entries()
                     .len()
                     .checked_sub(1)
                     .ok_or("the trash journal is empty")?;
-                let restored = self.session.restore(last).map_err(|error| format!("{error:?}"))?;
+                let restored = self.session_mut().restore(last).map_err(|error| format!("{error:?}"))?;
                 Ok(json!({ "step": "restore_last", "restored": restored }))
             }
             ScenarioStep::FindDuplicates => {
                 let started = Instant::now();
-                self.session
+                self.session_mut()
                     .find_duplicates(None, CancelToken::default())
                     .map_err(|error| error.to_string())?;
                 let model = self.duplicates_model(started.elapsed().as_secs())?;
@@ -176,19 +185,28 @@ impl EndToEnd {
         }
     }
 
+    fn session(&self) -> &Session {
+        self.session.as_ref().expect(SESSION_BETWEEN_STEPS)
+    }
+
+    fn session_mut(&mut self) -> &mut Session {
+        self.session.as_mut().expect(SESSION_BETWEEN_STEPS)
+    }
+
     fn recommendations(&self) -> RecommendationsModel {
-        let index = self.session.index().expect("recommendations follow a scan");
-        self.session
+        let index = self.session().index().expect("recommendations follow a scan");
+        self.session()
             .recommendations()
             .map(|recommendations| {
-                RecommendationsModel::build(index, self.session.rules(), recommendations, SystemTime::now())
+                RecommendationsModel::build(index, self.session().rules(), recommendations, SystemTime::now())
             })
             .unwrap_or_default()
     }
 
     fn duplicates_model(&mut self, seconds: u64) -> Result<DuplicatesModel, String> {
-        let index = self.session.index().expect("duplicates follow a scan");
-        let duplicates = self.session.duplicates().expect("a finished search stores duplicates");
+        let session = self.session.as_ref().expect(SESSION_BETWEEN_STEPS);
+        let index = session.index().expect("duplicates follow a scan");
+        let duplicates = session.duplicates().expect("a finished search stores duplicates");
         let candidates = duplicates
             .groups
             .iter()
@@ -198,7 +216,7 @@ impl EndToEnd {
         self.duplicates = Some(DuplicateSummary { candidates, seconds });
         let mut model =
             DuplicatesModel::found(index, duplicates, candidates, seconds).map_err(|error| error.to_string())?;
-        model.assess_clones(|keep, copy| self.session.clone_plan(keep, copy).map(drop));
+        model.assess_clones(|keep, copy| session.clone_plan(keep, copy).map(drop));
         Ok(model)
     }
 
@@ -211,17 +229,17 @@ impl EndToEnd {
             .flat_map(|card| card.targets)
             .collect();
         for target in &targets {
-            self.session.add_to_tray(target.node, target.rule_id.as_deref());
+            self.session_mut().add_to_tray(target.node, target.rule_id.as_deref());
         }
-        let moved = self
-            .session
-            .tray_reclaimable()
-            .map_err(|error| error.to_string())?
-            .bytes;
-        let outcomes = self.session.move_tray_to_trash().map_err(|error| error.to_string())?;
-        let model = TrayModel::default().with_outcome(&outcomes, moved, self.session.trash_journal());
+        let (measured, measured_files) = self.measured_tray()?;
+        let moved = measured.total();
+        let outcomes = self
+            .session_mut()
+            .move_tray_to_trash()
+            .map_err(|error| error.to_string())?;
+        let model = measured.with_outcome(&outcomes, self.session().trash_journal());
         let trashed: Vec<String> = self
-            .session
+            .session()
             .trash_journal()
             .entries()
             .iter()
@@ -230,9 +248,28 @@ impl EndToEnd {
         Ok(json!({
             "step": "trash_recommendations",
             "moved": moved,
+            "measured_files": measured_files,
+            "estimated": model.outcome.as_ref().is_some_and(|outcome| outcome.estimated),
             "failures": model.outcome.map(|outcome| outcome.failures).unwrap_or_default(),
             "trashed": trashed,
         }))
+    }
+
+    fn measured_tray(&self) -> Result<(TrayModel, u64), String> {
+        let items: Vec<PathBuf> = self
+            .session()
+            .tray()
+            .items()
+            .iter()
+            .map(|item| item.physical.clone())
+            .collect();
+        let measured = TrayMeasureJob::start(items)
+            .finish()
+            .map_err(|error| error.to_string())?;
+        let session = self.session();
+        let index = session.index().expect("the tray belongs to a scanned volume");
+        let model = TrayModel::measured(index, session.tray(), session.trash_journal(), &measured.sizes);
+        Ok((model, measured.walked.files))
     }
 
     fn replace_with_clone(&mut self) -> Result<Value, String> {
@@ -245,7 +282,7 @@ impl EndToEnd {
             .and_then(|(group, copy)| Some((group.keep.node?, copy.node?)))
             .ok_or("no copy can be replaced with a clone")?;
         let replaced = self
-            .session
+            .session_mut()
             .replace_with_clone(keep, copy)
             .map_err(|error| format!("{error:?}"))?;
         Ok(json!({ "step": "replace_with_clone", "trashed": replaced.trashed }))
@@ -263,7 +300,7 @@ impl EndToEnd {
             DownloadOutcome::Installed(event) => event,
             other => return Err(format!("the download ended as {other:?}")),
         };
-        self.session.apply_model_event(&event);
+        self.session_mut().apply_model_event(&event);
         let ModelEvent::Downloaded { path } = event else {
             return Err("an installed model reports its path".to_owned());
         };
@@ -296,7 +333,7 @@ impl EndToEnd {
         let mut chat = ChatModel::default();
         chat.ask(question);
         let answer = self
-            .session
+            .session()
             .ask(
                 &mut client,
                 &entry,
@@ -321,12 +358,13 @@ impl EndToEnd {
         }))
     }
 
-    fn await_change(&mut self, path: &Path, timeout: Duration) -> Result<Value, String> {
-        let (_stream, events) = self.session.watch().map_err(|error| error.to_string())?;
-        let mut queue = EventQueue::default();
+    fn await_change(&mut self, path: &Path, timeout: Duration, heavy_nodes: usize) -> Result<Value, String> {
+        let (_stream, events) = self.session().watch().map_err(|error| error.to_string())?;
+        let mut queue = EventQueue::new(heavy_nodes);
+        let mut applied_in_background = 0_u64;
         let deadline = Instant::now() + timeout;
         loop {
-            if let Some(index) = self.session.index()
+            if let Some(index) = self.session().index()
                 && let Some(node) = index.find(path)
             {
                 return Ok(json!({
@@ -334,6 +372,7 @@ impl EndToEnd {
                     "path": path,
                     "allocated": index.node(node).allocated,
                     "descended": queue.descended(),
+                    "applied_in_background": applied_in_background,
                 }));
             }
             let remaining = deadline.saturating_duration_since(Instant::now());
@@ -346,10 +385,18 @@ impl EndToEnd {
                 Err(RecvTimeoutError::Disconnected) => return Err("the volume event stream stopped".to_owned()),
             };
             match queue
-                .advance(arrived, &mut self.session)
+                .advance(arrived, self.session_mut())
                 .map_err(|error| error.to_string())?
             {
                 EventEffect::Applied | EventEffect::Ignored => {}
+                EventEffect::Heavy => {
+                    let batch = queue.take_heavy().expect("a heavy batch waits in the queue");
+                    let session = self.session.take().expect(SESSION_BETWEEN_STEPS);
+                    let (session, applied) = ApplyJob::start(session, batch).finish();
+                    self.session = Some(session);
+                    queue.settle(applied).map_err(|error| error.to_string())?;
+                    applied_in_background += 1;
+                }
                 EventEffect::RescanRequired => return Err("the volume asked for a full rescan".to_owned()),
             }
         }
@@ -362,16 +409,15 @@ impl EndToEnd {
             Some(summary) => self.duplicates_model(summary.seconds)?,
             None => DuplicatesModel::idle(),
         };
-        let index = self.session.index().expect("snapshots follow a scan");
-        let tray = TrayModel::build(index, self.session.tray(), self.session.trash_journal())
-            .map_err(|error| error.to_string())?;
+        let index = self.session().index().expect("snapshots follow a scan");
+        let (tray, _) = self.measured_tray()?;
         let expansion = Expansion::around(index, index.root(), NODE_BUDGET);
         let root = index.node(index.root());
         let scan = ScanStatus {
             bytes: root.allocated,
             files: u64::from(root.files),
             sweep: 1.0,
-            threads: self.session.workers(),
+            threads: self.session().workers(),
             current: self.root.display().to_string(),
             full_first_scan: false,
             stage: ScanStage::Walking,
