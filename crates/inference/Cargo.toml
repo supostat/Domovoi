@@ -17,6 +17,7 @@ dispatch2.workspace = true
 domovoi-apfs-sys.workspace = true
 domovoi-inference-proto.workspace = true
 domovoi-llama-sys.workspace = true
+domovoi-log-sys.workspace = true
 domovoi-xpc-sys.workspace = true
 libc.workspace = true
 objc2-foundation = { workspace = true, features = ["NSBundle", "NSString"] }

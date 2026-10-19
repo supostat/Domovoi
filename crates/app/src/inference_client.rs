@@ -1,3 +1,4 @@
+use std::ffi::CStr;
 use std::os::fd::OwnedFd;
 use std::process;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -6,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use domovoi_inference::{BackendError, CancelFlag, InferenceBackend};
 use domovoi_inference_proto::{ErrorCode, GenerateRequest, GenerationStats, Message, ModelClass, Timeouts};
+use domovoi_log_sys::SystemLog;
 
 use crate::loaded_weights::LoadedWeights;
 use crate::service_address::ServiceAddress;
@@ -14,6 +16,8 @@ use crate::service_link::ServiceLink;
 const POLL: Duration = Duration::from_millis(20);
 const TOKEN_SETTLE: Duration = Duration::from_millis(100);
 const STALLED: &str = "the inference service stopped answering and was stopped";
+const LOG_SUBSYSTEM: &CStr = c"com.domovoi.app";
+const LOG_CATEGORY: &CStr = c"inference";
 
 #[derive(Debug)]
 pub struct InferenceClient {
@@ -24,6 +28,7 @@ pub struct InferenceClient {
     timeouts: Timeouts,
     service_pid: i32,
     loaded: Option<LoadedWeights>,
+    log: SystemLog,
 }
 
 impl InferenceClient {
@@ -38,6 +43,7 @@ impl InferenceClient {
             timeouts,
             service_pid: 0,
             loaded: None,
+            log: SystemLog::new(LOG_SUBSYSTEM, LOG_CATEGORY),
         };
         client.service_pid = client.handshake()?;
         Ok(client)
@@ -51,14 +57,28 @@ impl InferenceClient {
         self.link.close();
         self.link = ServiceLink::open(&self.address, self.token_sender.clone()).map_err(unavailable)?;
         self.service_pid = self.handshake()?;
-        if let Some(loaded) = self.loaded.take() {
-            let weights = loaded
-                .weights
-                .try_clone()
-                .map_err(|error| internal(error.to_string()))?;
-            self.load_weights(weights, loaded.class, loaded.context_length, &CancelFlag::default())?;
-        }
-        Ok(())
+        self.reload(&CancelFlag::default())
+    }
+
+    fn reload(&mut self, cancel: &CancelFlag) -> Result<(), BackendError> {
+        let Some(loaded) = self.loaded.take() else {
+            return Ok(());
+        };
+        let weights = loaded
+            .weights
+            .try_clone()
+            .map_err(|error| internal(error.to_string()))?;
+        self.load_weights(weights, loaded.class, loaded.context_length, cancel)
+    }
+
+    fn unloaded_by_service(&self, error: &BackendError) -> bool {
+        error.code == ErrorCode::ModelNotLoaded && self.loaded.is_some()
+    }
+
+    fn restore_unloaded(&mut self, cancel: &CancelFlag) -> Result<(), BackendError> {
+        self.log
+            .notice("the inference service unloaded the model; the weights are loaded again");
+        self.reload(cancel)
     }
 
     fn handshake(&mut self) -> Result<i32, BackendError> {
@@ -96,8 +116,45 @@ impl InferenceClient {
                 });
                 Ok(())
             }
-            Message::Error { code, description } => Err(BackendError::new(code, description)),
+            Message::Error { code, description } => Err(self.service_error(code, description)),
             other => Err(unexpected(&other)),
+        }
+    }
+
+    fn generate_once(
+        &mut self,
+        request: &GenerateRequest,
+        cancel: &CancelFlag,
+        on_token: &mut dyn FnMut(&str),
+    ) -> Result<GenerationStats, BackendError> {
+        match self.exchange(
+            Message::Generate(request.clone()),
+            self.timeouts.stall,
+            Some(cancel),
+            on_token,
+        )? {
+            Message::Done(stats) => Ok(stats),
+            Message::Error { code, description } => Err(self.service_error(code, description)),
+            other => Err(unexpected(&other)),
+        }
+    }
+
+    fn count_tokens_once(&self, text: &str) -> Result<u32, BackendError> {
+        let (reply_sender, replies) = mpsc::channel();
+        let link = self.link.clone();
+        let message = Message::CountTokens { text: text.to_owned() };
+        thread::spawn(move || {
+            let _ = reply_sender.send(link.request(&message));
+        });
+        match replies.recv_timeout(self.timeouts.stall) {
+            Ok(Ok(Message::TokenCount { count })) => Ok(count),
+            Ok(Ok(Message::Error { code, description })) => Err(self.service_error(code, description)),
+            Ok(Ok(other)) => Err(unexpected(&other)),
+            Ok(Err(description)) => Err(self.link_failure(description)),
+            Err(_) => {
+                self.terminate();
+                Err(stalled())
+            }
         }
     }
 
@@ -127,8 +184,9 @@ impl InferenceClient {
                     return Ok(reply);
                 }
                 Ok(Err(description)) => {
+                    let failure = self.link_failure(description);
                     let recovered = self.reconnect();
-                    return Err(recovered.err().unwrap_or_else(|| internal(description)));
+                    return Err(recovered.err().unwrap_or(failure));
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => return Err(internal("the request thread stopped")),
@@ -161,9 +219,25 @@ impl InferenceClient {
     }
 
     fn terminate(&self) {
+        self.log.error(&format!(
+            "the inference service (pid {}) stopped answering and was stopped",
+            self.service_pid
+        ));
         if self.service_pid > 0 {
             unsafe { libc::kill(self.service_pid, libc::SIGKILL) };
         }
+    }
+
+    fn service_error(&self, code: ErrorCode, description: String) -> BackendError {
+        self.log
+            .error(&format!("the inference service answered {code:?}: {description}"));
+        BackendError::new(code, description)
+    }
+
+    fn link_failure(&self, description: String) -> BackendError {
+        self.log
+            .error(&format!("the link to the inference service failed: {description}"));
+        internal(description)
     }
 }
 
@@ -193,34 +267,22 @@ impl InferenceBackend for InferenceClient {
         cancel: &CancelFlag,
         on_token: &mut dyn FnMut(&str),
     ) -> Result<GenerationStats, BackendError> {
-        match self.exchange(
-            Message::Generate(request.clone()),
-            self.timeouts.stall,
-            Some(cancel),
-            on_token,
-        )? {
-            Message::Done(stats) => Ok(stats),
-            Message::Error { code, description } => Err(BackendError::new(code, description)),
-            other => Err(unexpected(&other)),
+        match self.generate_once(request, cancel, on_token) {
+            Err(error) if self.unloaded_by_service(&error) => {
+                self.restore_unloaded(cancel)?;
+                self.generate_once(request, cancel, on_token)
+            }
+            outcome => outcome,
         }
     }
 
-    fn count_tokens(&self, text: &str) -> Result<u32, BackendError> {
-        let (reply_sender, replies) = mpsc::channel();
-        let link = self.link.clone();
-        let message = Message::CountTokens { text: text.to_owned() };
-        thread::spawn(move || {
-            let _ = reply_sender.send(link.request(&message));
-        });
-        match replies.recv_timeout(self.timeouts.stall) {
-            Ok(Ok(Message::TokenCount { count })) => Ok(count),
-            Ok(Ok(Message::Error { code, description })) => Err(BackendError::new(code, description)),
-            Ok(Ok(other)) => Err(unexpected(&other)),
-            Ok(Err(description)) => Err(internal(description)),
-            Err(_) => {
-                self.terminate();
-                Err(stalled())
+    fn count_tokens(&mut self, text: &str) -> Result<u32, BackendError> {
+        match self.count_tokens_once(text) {
+            Err(error) if self.unloaded_by_service(&error) => {
+                self.restore_unloaded(&CancelFlag::default())?;
+                self.count_tokens_once(text)
             }
+            outcome => outcome,
         }
     }
 }

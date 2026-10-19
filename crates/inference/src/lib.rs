@@ -25,7 +25,7 @@ pub use device_profile::DeviceProfile;
 pub use fake_backend::FakeBackend;
 pub use fake_command::FakeCommand;
 pub use inference_backend::InferenceBackend;
-pub use inference_service::InferenceService;
+pub use inference_service::{InferenceService, PRESSURE_IDLE_GRACE};
 pub use llama_backend::LlamaBackend;
 pub use memory_pressure::MemoryPressureMonitor;
 pub use message_sink::MessageSink;

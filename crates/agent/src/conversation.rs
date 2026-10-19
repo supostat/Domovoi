@@ -26,7 +26,7 @@ impl Conversation {
         &mut self,
         template: ChatTemplate,
         system: &str,
-        backend: &dyn InferenceBackend,
+        backend: &mut dyn InferenceBackend,
         limits: &AgentLimits,
     ) -> Result<String, AgentError> {
         loop {

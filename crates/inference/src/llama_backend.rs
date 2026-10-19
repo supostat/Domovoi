@@ -152,7 +152,7 @@ impl InferenceBackend for LlamaBackend {
             .generate(request, cancel, on_token)
     }
 
-    fn count_tokens(&self, text: &str) -> Result<u32, BackendError> {
+    fn count_tokens(&mut self, text: &str) -> Result<u32, BackendError> {
         self.model
             .as_ref()
             .ok_or_else(|| BackendError::new(ErrorCode::ModelNotLoaded, "no model is loaded"))?

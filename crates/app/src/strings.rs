@@ -212,6 +212,8 @@ pub const NODES: PluralForms = PluralForms {
 pub const ANSWER_CANCELLED: &str = "Ответ остановлен.";
 pub const ANSWER_STALLED: &str = "Сервис модели перестал отвечать и был перезапущен. Спросите ещё раз.";
 pub const ANSWER_FAILED: &str = "Модель не смогла ответить.";
+pub const ANSWER_LOW_MEMORY: &str =
+    "Модели не хватает памяти. Закройте тяжёлые приложения или выберите модель поменьше и спросите ещё раз.";
 pub const ANSWER_OUTSIDE_SCHEMA: &str = "Модель ответила не по схеме. Попробуйте сформулировать вопрос иначе.";
 pub const ANSWER_TOO_LONG: &str = "Разговор не помещается в память модели. Начните новый вопрос короче.";
 pub const SERVICE_UNAVAILABLE: &str = "Сервис модели недоступен.";

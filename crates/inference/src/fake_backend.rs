@@ -121,7 +121,7 @@ impl InferenceBackend for FakeBackend {
         })
     }
 
-    fn count_tokens(&self, text: &str) -> Result<u32, BackendError> {
+    fn count_tokens(&mut self, text: &str) -> Result<u32, BackendError> {
         if self.weights_prefix.is_none() {
             return Err(BackendError::new(ErrorCode::ModelNotLoaded, "no model is loaded"));
         }

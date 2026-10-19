@@ -8,8 +8,8 @@ use crate::answer_target::AnswerTarget;
 use crate::availability::Availability;
 use crate::chat_entry::ChatEntry;
 use crate::strings::{
-    ANSWER_CANCELLED, ANSWER_FAILED, ANSWER_OUTSIDE_SCHEMA, ANSWER_STALLED, ANSWER_TOO_LONG, SERVICE_UNAVAILABLE,
-    rule_title,
+    ANSWER_CANCELLED, ANSWER_FAILED, ANSWER_LOW_MEMORY, ANSWER_OUTSIDE_SCHEMA, ANSWER_STALLED, ANSWER_TOO_LONG,
+    SERVICE_UNAVAILABLE, rule_title,
 };
 use crate::tilde::tilde;
 
@@ -82,6 +82,7 @@ impl ChatModel {
             AgentError::Backend(failure) if failure.code == ErrorCode::LoadCancelled => ANSWER_CANCELLED,
             AgentError::Backend(failure) if failure.code == ErrorCode::Stalled => ANSWER_STALLED,
             AgentError::Backend(failure) if failure.code == ErrorCode::Unavailable => SERVICE_UNAVAILABLE,
+            AgentError::Backend(failure) if failure.code == ErrorCode::OutOfMemory => ANSWER_LOW_MEMORY,
             AgentError::Backend(_) => ANSWER_FAILED,
             AgentError::InvalidResponse { .. } => ANSWER_OUTSIDE_SCHEMA,
             AgentError::ContextOverflow { .. } => ANSWER_TOO_LONG,

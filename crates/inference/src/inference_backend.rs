@@ -25,5 +25,5 @@ pub trait InferenceBackend: Send {
         on_token: &mut dyn FnMut(&str),
     ) -> Result<GenerationStats, BackendError>;
 
-    fn count_tokens(&self, text: &str) -> Result<u32, BackendError>;
+    fn count_tokens(&mut self, text: &str) -> Result<u32, BackendError>;
 }

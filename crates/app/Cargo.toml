@@ -22,6 +22,7 @@ domovoi-grammar.workspace = true
 domovoi-index.workspace = true
 domovoi-inference.workspace = true
 domovoi-inference-proto.workspace = true
+domovoi-log-sys.workspace = true
 domovoi-render.workspace = true
 domovoi-rules.workspace = true
 domovoi-scanner.workspace = true

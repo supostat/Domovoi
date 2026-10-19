@@ -287,9 +287,14 @@
   Qwen3.5. Шаблоны Qwen3.5 обрезают пробелы по краям содержимого, остальные — нет: Rust-шаблон обрезает всегда.
   GBNF грамматик ответа проверен `test-gbnf-validator` llama.cpp на пине.
 - [каталог] GPU-бюджет `recommendedMaxWorkingSetSize` ≈ 74 % памяти (8 ГБ → ≈ 5,9 ГБ) на веса + KV + compute рядом
-  с индексом скана 0,6–0,9 ГБ; `n_ctx` по классу 8k / 16k / 32k; выгрузка модели по
-  `DISPATCH_SOURCE_TYPE_MEMORYPRESSURE` WARN (следующий запрос перезагружает), CRITICAL — аварийная выгрузка и отказ
-  от новой загрузки до спада давления. Таблица `ClassFootprint` и `MemoryBudget` живут в inference-proto рядом с
+  с индексом скана 0,6–0,9 ГБ; `n_ctx` по классу 8k / 16k / 32k. Давление памяти
+  (`DISPATCH_SOURCE_TYPE_MEMORYPRESSURE`, `SPEC-MEMORY-PRESSURE`): WARN не прерывает загрузку и генерацию — модель
+  выгружается после `PRESSURE_IDLE_GRACE` = 8 с без команд (пауза из замера промежутков ответа агента, тест
+  `step_gap`); CRITICAL прерывает работу ответом `OutOfMemory`, выгружает модель и отказывает в загрузке до спада ниже
+  CRITICAL. `InferenceClient` сам перезагружает модель по `ModelNotLoaded` (следующий запрос перезагружает);
+  `OutOfMemory` в чате — «Модели не хватает памяти…», «Ответ остановлен.» — только после «Стоп». Сервис и клиент пишут
+  смену уровня, отказы и ошибки сервиса в `os_log` (`com.domovoi.inference`, `com.domovoi.app`, крейт
+  `domovoi-log-sys`). Таблица `ClassFootprint` и `MemoryBudget` живут в inference-proto рядом с
   `ModelClass`: их читают и сервис (отказ в загрузке), и downloader (модель по умолчанию — класс по `hw.memsize`,
   при нехватке бюджета ступенью ниже).
 - [загрузка] Проверено на HF (16.10.2026): resolve `huggingface.co/<repo>/resolve/<rev>/<file>` → 302 с

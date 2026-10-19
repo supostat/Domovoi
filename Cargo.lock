@@ -288,6 +288,7 @@ dependencies = [
 name = "domovoi-agent"
 version = "0.1.0"
 dependencies = [
+ "domovoi-apfs-sys",
  "domovoi-grammar",
  "domovoi-index",
  "domovoi-inference",
@@ -319,6 +320,7 @@ dependencies = [
  "domovoi-index",
  "domovoi-inference",
  "domovoi-inference-proto",
+ "domovoi-log-sys",
  "domovoi-render",
  "domovoi-rules",
  "domovoi-scanner",
@@ -426,6 +428,7 @@ dependencies = [
  "domovoi-index",
  "domovoi-inference-proto",
  "domovoi-llama-sys",
+ "domovoi-log-sys",
  "domovoi-scanner",
  "domovoi-testkit",
  "domovoi-xpc-sys",
@@ -451,6 +454,14 @@ dependencies = [
  "cmake",
  "domovoi-testkit",
  "libc",
+]
+
+[[package]]
+name = "domovoi-log-sys"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "domovoi-testkit",
 ]
 
 [[package]]

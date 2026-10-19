@@ -17,5 +17,6 @@ domovoi-rules.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+domovoi-apfs-sys.workspace = true
 domovoi-scanner.workspace = true
 domovoi-testkit.workspace = true

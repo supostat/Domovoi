@@ -253,8 +253,9 @@ fn old_tool_results_are_trimmed_when_the_context_runs_short() {
             &mut |_| {},
         )
         .expect("the agent answers");
+    let opening = measuring.requests()[0].prompt.clone();
     let opening_tokens = measuring
-        .count_tokens(&measuring.requests()[0].prompt)
+        .count_tokens(&opening)
         .expect("the fake backend counts tokens");
     let tight = AgentLimits {
         context_length: opening_tokens + 300 + limits().max_tokens_per_step,
@@ -272,8 +273,8 @@ fn old_tool_results_are_trimmed_when_the_context_runs_short() {
             &mut |_| {},
         )
         .expect("the agent answers within the trimmed context");
-    let second = &backend.requests()[1].prompt;
+    let second = backend.requests()[1].prompt.clone();
     assert!(second.contains(r#"{"trimmed":true}"#), "{second}");
-    let second_tokens = backend.count_tokens(second).expect("the fake backend counts tokens");
+    let second_tokens = backend.count_tokens(&second).expect("the fake backend counts tokens");
     assert!(second_tokens + tight.max_tokens_per_step <= tight.context_length);
 }

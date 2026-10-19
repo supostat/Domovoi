@@ -69,7 +69,7 @@ impl<'a> Agent<'a> {
         let mut steps = Vec::new();
         for step in 0..self.limits.max_steps {
             let schema = self.schema_for(step);
-            let prompt = conversation.render(self.template, &system, &*self.backend, &self.limits)?;
+            let prompt = conversation.render(self.template, &system, &mut *self.backend, &self.limits)?;
             let text = self.generate(prompt, &schema, cancel)?;
             match schema.parse(&text) {
                 Ok(ModelResponse::ToolCall(call)) => {

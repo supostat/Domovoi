@@ -10,7 +10,8 @@ use std::time::{Duration, Instant};
 
 use domovoi_app::{InferenceClient, ServiceAddress};
 use domovoi_inference::{
-    AnonymousService, BackendError, CancelFlag, FakeBackend, InferenceBackend, ServiceSettings, serve_bundled,
+    AnonymousService, BackendError, CancelFlag, FakeBackend, InferenceBackend, PRESSURE_IDLE_GRACE, PressureLevel,
+    ServiceSettings, serve_bundled,
 };
 use domovoi_inference_proto::{ErrorCode, GenerateRequest, ModelClass, Sampling, StopReason, Timeouts};
 use domovoi_testkit::{TempTree, test_timeout};
@@ -30,6 +31,9 @@ const CONTEXT_LENGTH: u32 = 512;
 const WAIT_STEP: Duration = Duration::from_millis(20);
 const RUN_ALLOWANCE: u32 = 6;
 const CANCEL_AFTER: Duration = Duration::from_millis(150);
+const GRACE_MARGIN: Duration = Duration::from_millis(500);
+const LOG_POLL: Duration = Duration::from_millis(250);
+const CLIENT_SUBSYSTEM: &str = "com.domovoi.app";
 
 fn main() -> ExitCode {
     if env::var_os(SERVICE_MODE).is_some() {
@@ -48,6 +52,8 @@ fn main() -> ExitCode {
     }
     protocol_over_an_anonymous_endpoint();
     println!("protocol over an anonymous endpoint passed");
+    memory_pressure_over_an_anonymous_endpoint();
+    println!("memory pressure over an anonymous endpoint passed");
     let host = TestHost::build();
     let output = host.run();
     assert!(output.contains("scenario watchdog passed"), "{output}");
@@ -124,6 +130,70 @@ fn protocol_over_an_anonymous_endpoint() {
         client.count_tokens("Привет"),
         Ok(u32::try_from("Привет".len()).expect("short"))
     );
+}
+
+fn client_log_shows(text: &str) -> bool {
+    let predicate = format!(
+        "processID == {} AND subsystem == \"{CLIENT_SUBSYSTEM}\" AND eventMessage CONTAINS \"{text}\"",
+        std::process::id()
+    );
+    let output = Command::new("/usr/bin/log")
+        .args(["show", "--last", "1m", "--style", "compact", "--predicate", &predicate])
+        .output()
+        .expect("log show runs");
+    assert!(output.status.success(), "log show failed");
+    String::from_utf8_lossy(&output.stdout).contains(text)
+}
+
+fn memory_pressure_over_an_anonymous_endpoint() {
+    let service = AnonymousService::start(Box::new(FakeBackend::default()), None);
+    let pressure = service.service();
+    let workspace = TempTree::new().expect("a temp tree is created");
+    let timeouts = Timeouts::from_environment().expect("the timeouts parse");
+    let mut client =
+        InferenceClient::connect(ServiceAddress::Endpoint(service.endpoint()), timeouts).expect("the client connects");
+    client
+        .load(
+            weights(&workspace),
+            ModelClass::Compact,
+            CONTEXT_LENGTH,
+            &CancelFlag::default(),
+        )
+        .expect("the weights load by descriptor");
+
+    pressure.report_pressure(PressureLevel::Warning);
+    thread::sleep(PRESSURE_IDLE_GRACE + GRACE_MARGIN);
+    let (tokens, stop) = generate(&mut client, &["token снова"], &CancelFlag::default());
+    assert_eq!(
+        tokens,
+        ["снова"],
+        "the client loads the weights again after the idle unload"
+    );
+    assert_eq!(stop, Ok(StopReason::EndOfGeneration));
+
+    pressure.report_pressure(PressureLevel::Critical);
+    pressure.report_pressure(PressureLevel::Warning);
+    assert_eq!(
+        client.count_tokens("Привет"),
+        Ok(u32::try_from("Привет".len()).expect("short")),
+        "counting tokens also restores the unloaded weights"
+    );
+
+    pressure.report_pressure(PressureLevel::Critical);
+    let (tokens, stop) = generate(&mut client, &["token поздно"], &CancelFlag::default());
+    assert!(tokens.is_empty());
+    assert_eq!(
+        stop.map_err(|error| error.code),
+        Err(ErrorCode::OutOfMemory),
+        "under critical pressure the reload is refused as out of memory"
+    );
+    assert!(!client.is_loaded(), "a refused reload leaves the client unloaded");
+
+    let deadline = Instant::now() + test_timeout();
+    while !client_log_shows("the inference service answered OutOfMemory: memory pressure is critical") {
+        assert!(Instant::now() < deadline, "the refusal never reached the unified log");
+        thread::sleep(LOG_POLL);
+    }
 }
 
 fn watchdog_scenario() {
