@@ -36,7 +36,7 @@ pub use bulk_listing::BulkListing;
 pub use container_capacity::{ContainerCapacity, container_capacity};
 pub use current_user::current_user_id;
 pub use descriptor_operations::{chflags, copy_metadata, ftruncate, get_xattr, pwrite_at, set_nocache, set_xattr};
-pub use directory_operations::{clone_at, mkdir_at, open_at, open_search, rename_swap, stat_at};
+pub use directory_operations::{clone_at, mkdir_at, open_at, open_search, rename_exclusive, rename_swap, stat_at};
 pub use firmlink::{Firmlink, firmlinks};
 pub use identity::{gen_count, link_id, private_size, real_dev, user_access};
 pub use io_policy::{raise_nofile_limit, set_thread_disk_policy_utility, set_vfs_policies, thread_disk_policy};

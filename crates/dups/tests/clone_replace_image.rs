@@ -217,6 +217,7 @@ fn a_replaced_copy_shares_blocks_and_its_old_body_comes_back(fixture: &mut Fixtu
         "{}",
         replaced.trashed.display()
     );
+    assert_named_like_copy(&replaced.trashed);
     assert_eq!(private_size(&copy).expect("private size"), 0);
     assert_eq!(
         stream_identity(&copy).expect("copy stream").clone_id,
@@ -242,9 +243,27 @@ fn a_replaced_copy_shares_blocks_and_its_old_body_comes_back(fixture: &mut Fixtu
         fixture.trash_journal.entries()[last].original,
         fixture.index.path(fixture.node("success/copy")).to_string_lossy()
     );
+    assert_eq!(
+        Path::new(&fixture.trash_journal.entries()[last].trashed),
+        replaced.trashed
+    );
     let restored = fixture.trash_journal.restore(last).expect("old body comes back");
     assert_eq!(restored, directory.join("copy 2"));
     assert_eq!(fs::read(&restored).expect("old body is read"), content(5));
+}
+
+fn assert_named_like_copy(trashed: &Path) {
+    let name = trashed
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("a trashed item has a UTF-8 name");
+    let numbered = name
+        .strip_prefix("copy ")
+        .is_some_and(|number| !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()));
+    assert!(
+        !name.starts_with(TEMPORARY_PREFIX) && (name == "copy" || numbered),
+        "the old body lies in the Trash as {name}"
+    );
 }
 
 fn pending(copy: &Path, temporary: &Path, link_id: u64) -> PendingReplacement {
@@ -293,6 +312,7 @@ fn stranded_temporaries_are_swept_into_the_trash(fixture: &mut Fixture) {
         PathBuf::from(&fixture.trash_journal.entries()[journaled_before].original_physical),
         copy
     );
+    assert_named_like_copy(Path::new(&fixture.trash_journal.entries()[journaled_before].trashed));
 }
 
 #[test]

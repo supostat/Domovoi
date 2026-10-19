@@ -4,7 +4,7 @@ use std::mem::MaybeUninit;
 use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 
 use crate::c_string::c_string;
-use crate::sys::{CLONE_NOFOLLOW, RENAME_SWAP, renameatx_np};
+use crate::sys::{CLONE_NOFOLLOW, RENAME_EXCL, RENAME_SWAP, renameatx_np};
 use crate::syscall::check;
 
 pub fn open_at(directory: BorrowedFd<'_>, name: &OsStr, flags: libc::c_int, mode: libc::mode_t) -> io::Result<OwnedFd> {
@@ -78,6 +78,26 @@ pub fn rename_swap(
             second_directory.as_raw_fd(),
             second_name.as_ptr(),
             RENAME_SWAP,
+        )
+    })
+    .map(drop)
+}
+
+pub fn rename_exclusive(
+    from_directory: BorrowedFd<'_>,
+    from_name: &OsStr,
+    to_directory: BorrowedFd<'_>,
+    to_name: &OsStr,
+) -> io::Result<()> {
+    let from_name = c_string(from_name)?;
+    let to_name = c_string(to_name)?;
+    check(unsafe {
+        renameatx_np(
+            from_directory.as_raw_fd(),
+            from_name.as_ptr(),
+            to_directory.as_raw_fd(),
+            to_name.as_ptr(),
+            RENAME_EXCL,
         )
     })
     .map(drop)

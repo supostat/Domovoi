@@ -1,11 +1,13 @@
 use std::env;
-use std::fs;
+use std::ffi::{OsStr, OsString};
+use std::fs::{self, File};
 use std::io;
+use std::os::fd::AsFd;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domovoi_apfs_sys::sys::UF_COMPRESSED;
-use domovoi_apfs_sys::{link_id, private_size, write_atomically};
+use domovoi_apfs_sys::{link_id, private_size, rename_exclusive, write_atomically};
 use domovoi_index::{Enrichment, Index, IndexRoot};
 use domovoi_scanner::{ScanOptions, scan};
 use objc2_foundation::{NSFileManager, NSString, NSURL};
@@ -74,7 +76,7 @@ impl TrashJournal {
 
     pub fn trash(&mut self, subject: &TrashSubject) -> io::Result<Result<PathBuf, TrashFailure>> {
         let trashed = match trash_item(&subject.location)? {
-            Ok(trashed) => trashed,
+            Ok(trashed) => named_like_original(&trashed, &subject.original),
             Err(failure) => return Ok(Err(failure)),
         };
         self.entries.push(JournalEntry {
@@ -159,29 +161,51 @@ pub(crate) fn file_url(path: &Path) -> Result<objc2::rc::Retained<NSURL>, Restor
 }
 
 fn free_name(original: &Path) -> PathBuf {
-    if original.symlink_metadata().is_err() {
-        return original.to_path_buf();
-    }
     let parent = original.parent().unwrap_or_else(|| Path::new("/"));
-    let stem = original
+    let Some(name) = original.file_name() else {
+        return original.to_path_buf();
+    };
+    finder_names(name)
+        .map(|candidate| parent.join(candidate))
+        .find(|candidate| candidate.symlink_metadata().is_err())
+        .expect("finder names never run out")
+}
+
+fn named_like_original(trashed: &Path, original: &Path) -> PathBuf {
+    let (Some(name), Some(wanted), Some(folder)) = (trashed.file_name(), original.file_name(), trashed.parent()) else {
+        return trashed.to_path_buf();
+    };
+    if name == wanted {
+        return trashed.to_path_buf();
+    }
+    let Ok(directory) = File::open(folder) else {
+        return trashed.to_path_buf();
+    };
+    for candidate in finder_names(wanted) {
+        match rename_exclusive(directory.as_fd(), name, directory.as_fd(), &candidate) {
+            Ok(()) => return folder.join(candidate),
+            Err(error) if error.raw_os_error() == Some(libc::EEXIST) => {}
+            Err(_) => return trashed.to_path_buf(),
+        }
+    }
+    unreachable!("finder names never run out")
+}
+
+fn finder_names(name: &OsStr) -> impl Iterator<Item = OsString> {
+    let path = Path::new(name);
+    let stem = path
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let extension = original
+    let extension = path
         .extension()
         .map(|extension| extension.to_string_lossy().into_owned());
-    let mut number = 2_u64;
-    loop {
-        let name = match &extension {
+    std::iter::once(name.to_os_string()).chain((2_u64..).map(move |number| {
+        OsString::from(match &extension {
             Some(extension) => format!("{stem} {number}.{extension}"),
             None => format!("{stem} {number}"),
-        };
-        let candidate = parent.join(name);
-        if candidate.symlink_metadata().is_err() {
-            return candidate;
-        }
-        number += 1;
-    }
+        })
+    }))
 }
 
 #[cfg(test)]

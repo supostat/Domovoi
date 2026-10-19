@@ -1,10 +1,11 @@
 use std::fs;
 use std::os::unix::fs::MetadataExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use domovoi_apfs_sys::{current_user_id, link_id};
 use domovoi_index::{Enrichment, Index, IndexRoot, NodeId};
-use domovoi_rules::{CaseRule, Denylist, TrashFailure, TrashJournal, Tray};
+use domovoi_rules::{CaseRule, Denylist, TrashFailure, TrashJournal, TrashSubject, Tray};
 use domovoi_scanner::{ScanOptions, scan};
 use domovoi_testkit::{Fill, ImageVolume, TempTree, Visibility, VolumeFormat};
 
@@ -134,4 +135,60 @@ fn a_read_only_volume_fails_per_item_without_stopping_the_batch() {
         );
     }
     assert_eq!(journal.entries().len(), 1);
+}
+
+fn temporary_subject(original: &Path, temporary: PathBuf, content: &[u8]) -> TrashSubject {
+    fs::write(&temporary, content).expect("the temporary file is written");
+    TrashSubject {
+        original: original.to_path_buf(),
+        original_physical: original.to_path_buf(),
+        link_id: link_id(&temporary).expect("the temporary file has a link id"),
+        location: temporary,
+        alloc_size: 0,
+        flags: 0,
+        clone_id: 0,
+        rule_id: None,
+    }
+}
+
+#[test]
+fn an_item_under_a_temporary_name_lands_in_the_trash_under_its_original_name() {
+    let volume = ImageVolume::create(VolumeFormat::Apfs, Visibility::Hidden).expect("image attaches");
+    let mount_point = fs::canonicalize(volume.mount_point()).expect("the mount point resolves");
+    let folder = mount_point.join("Media");
+    fs::create_dir(&folder).expect("the folder is created");
+    let original = folder.join("photo.jpg");
+    let workspace = TempTree::new().expect("journal workspace is created");
+    let mut journal = journal_in(&workspace);
+    let trash = mount_point.join(".Trashes").join(current_user_id().to_string());
+
+    let first = journal
+        .trash(&temporary_subject(
+            &original,
+            folder.join(".domovoi-tmp-first"),
+            b"first",
+        ))
+        .expect("the journal is written")
+        .expect("the first item goes to the Trash");
+    let second = journal
+        .trash(&temporary_subject(
+            &original,
+            folder.join(".domovoi-tmp-second"),
+            b"second",
+        ))
+        .expect("the journal is written")
+        .expect("the second item goes to the Trash");
+
+    assert_eq!(first, trash.join("photo.jpg"));
+    assert_eq!(second, trash.join("photo 2.jpg"));
+    assert_eq!(fs::read(&first).expect("the first item reads"), b"first");
+    assert_eq!(fs::read(&second).expect("the second item reads"), b"second");
+    let journaled: Vec<&str> = journal.entries().iter().map(|entry| entry.trashed.as_str()).collect();
+    assert_eq!(
+        journaled,
+        [first.to_str().expect("UTF-8"), second.to_str().expect("UTF-8")]
+    );
+    let restored = journal.restore(1).expect("the renamed item comes back");
+    assert_eq!(restored, original);
+    assert_eq!(fs::read(&original).expect("the restored item reads"), b"second");
 }

@@ -12,8 +12,8 @@ use domovoi_apfs_sys::sys::IOPOL_UTILITY;
 use domovoi_apfs_sys::{
     AccessError, AttributeSet, BulkListing, container_capacity, data_volume, firmlinks, gen_count, link_id, mkdir_at,
     mounted_volumes, open_at, open_search, os_build_version, pids_with_open, private_size, process_path,
-    raise_nofile_limit, real_dev, running_bundle_roots, set_thread_disk_policy_utility, set_vfs_policies, snapshots,
-    thread_disk_policy, user_access, volume_capabilities, volume_used, volume_uuid,
+    raise_nofile_limit, real_dev, rename_exclusive, running_bundle_roots, set_thread_disk_policy_utility,
+    set_vfs_policies, snapshots, thread_disk_policy, user_access, volume_capabilities, volume_used, volume_uuid,
 };
 use temp_dir::TempDir;
 
@@ -125,6 +125,41 @@ fn data_volume_supports_clones_and_rename_swap() {
     let capabilities = volume_capabilities(&data()).expect("capabilities are read");
     assert!(capabilities.clone);
     assert!(capabilities.rename_swap);
+}
+
+#[test]
+fn exclusive_rename_takes_a_free_name_and_never_replaces_a_taken_one() {
+    let temp = TempDir::new("rename-exclusive");
+    let directory = temp.open();
+    fs::write(temp.path().join("moving"), b"moving").expect("the moving file is written");
+    fs::write(temp.path().join("taken"), b"taken").expect("the taken file is written");
+
+    let refused = rename_exclusive(
+        directory.as_fd(),
+        OsStr::new("moving"),
+        directory.as_fd(),
+        OsStr::new("taken"),
+    )
+    .expect_err("a taken name is refused");
+    assert_eq!(refused.raw_os_error(), Some(libc::EEXIST));
+    assert_eq!(
+        fs::read(temp.path().join("moving")).expect("the moving file stays"),
+        b"moving"
+    );
+    assert_eq!(
+        fs::read(temp.path().join("taken")).expect("the taken file stays"),
+        b"taken"
+    );
+
+    rename_exclusive(
+        directory.as_fd(),
+        OsStr::new("moving"),
+        directory.as_fd(),
+        OsStr::new("free"),
+    )
+    .expect("a free name is taken");
+    assert!(!temp.path().join("moving").exists());
+    assert_eq!(fs::read(temp.path().join("free")).expect("the file moved"), b"moving");
 }
 
 #[test]
