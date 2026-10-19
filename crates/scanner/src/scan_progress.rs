@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ScanProgress {
-    pub files: u64,
-    pub bytes: u64,
-    pub current: PathBuf,
+pub enum ScanProgress {
+    Walking { files: u64, bytes: u64, current: PathBuf },
+    Walked { files: u64, bytes: u64 },
 }

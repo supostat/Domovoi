@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use domovoi_apfs_sys::ObjectKind;
 use domovoi_apfs_sys::sys::{EF_SHARES_ALL_BLOCKS, UF_COMPRESSED};
-use domovoi_scanner::{Node, NodeState, Onboarding, ProtectedFolders, ScanError, ScanOptions, scan};
+use domovoi_scanner::{Node, NodeState, Onboarding, ProtectedFolders, ScanError, ScanOptions, ScanProgress, scan};
 use domovoi_testkit::{Fill, TempTree};
 
 const SIGNAL_DELAY: Duration = Duration::from_millis(200);
@@ -197,7 +197,7 @@ fn unique_inode_allocation_matches_du() {
 }
 
 #[test]
-fn progress_reports_files_bytes_and_firmlink_paths() {
+fn progress_reports_firmlink_paths_and_ends_with_the_walked_totals() {
     let tree = TempTree::new().expect("temp tree is created");
     let root = tree.root().expect("root opens");
     root.file("one", 8_192, Fill::Byte(1)).expect("file is written");
@@ -213,14 +213,22 @@ fn progress_reports_files_bytes_and_firmlink_paths() {
     let report = scan(tree.path(), &options).expect("temp tree scans");
     drop(options);
     let events: Vec<_> = receiver.iter().collect();
-    let last = events
-        .iter()
-        .max_by_key(|event| event.files)
-        .expect("progress was reported");
-    assert_eq!((last.files, last.bytes), (report.files, report.bytes));
+    assert_eq!(
+        events.last(),
+        Some(&ScanProgress::Walked {
+            files: report.files,
+            bytes: report.bytes
+        })
+    );
     assert_eq!(report.files, 2);
     let root_path = canonical(tree.path());
-    assert!(events.iter().all(|event| event.current.starts_with(&root_path)));
+    let walking = &events[..events.len() - 1];
+    assert!(!walking.is_empty(), "the walk reports progress before it ends");
+    assert!(
+        walking
+            .iter()
+            .all(|event| matches!(event, ScanProgress::Walking { current, .. } if current.starts_with(&root_path)))
+    );
 }
 
 #[test]
@@ -278,7 +286,13 @@ fn protected_folders_are_scanned_last_even_after_onboarding() {
     };
     let scanned = scan(tree.path(), &options).expect("temp tree scans").root;
     drop(options);
-    let visited: Vec<_> = receiver.iter().map(|event| event.current).collect();
+    let visited: Vec<_> = receiver
+        .iter()
+        .filter_map(|event| match event {
+            ScanProgress::Walking { current, .. } => Some(current),
+            ScanProgress::Walked { .. } => None,
+        })
+        .collect();
     assert_eq!(visited.last(), Some(&canonical(tree.path()).join("Downloads")));
     assert_eq!(child(&scanned, "Downloads").state, NodeState::Listed);
 }

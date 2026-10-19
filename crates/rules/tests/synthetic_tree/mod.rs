@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::ffi::OsString;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, UNIX_EPOCH};
@@ -5,6 +7,8 @@ use std::time::{Duration, UNIX_EPOCH};
 use domovoi_apfs_sys::{EntryAttributes, ObjectKind};
 use domovoi_index::{Enrichment, FirmlinkPair, Index, IndexRoot};
 use domovoi_scanner::{Node, NodeState, ScanReport};
+
+pub(crate) const FILE_ALLOCATION: u64 = 4096;
 
 static NEXT_FILE_ID: AtomicU64 = AtomicU64::new(1_000);
 
@@ -23,9 +27,9 @@ fn node(name: &str, kind: ObjectKind, children: Vec<Node>) -> Node {
             added: Some(time),
             mount_status: (!file).then_some(0),
             link_count: file.then_some(1),
-            total_size: file.then_some(4096),
-            alloc_size: file.then_some(4096),
-            data_alloc_size: file.then_some(4096),
+            total_size: file.then_some(FILE_ALLOCATION),
+            alloc_size: file.then_some(FILE_ALLOCATION),
+            data_alloc_size: file.then_some(FILE_ALLOCATION),
             private_size: None,
             link_id: Some(file_id),
             real_dev: Some(1),
@@ -56,7 +60,7 @@ pub(crate) fn path_tree(path: &str, leaf: Node) -> Node {
     current
 }
 
-pub(crate) fn data_volume_index(children: Vec<Node>) -> Index {
+pub(crate) fn data_volume(children: Vec<Node>) -> (ScanReport, IndexRoot) {
     let pair = |path: &str, data_relative: &str| FirmlinkPair {
         path: path.to_owned(),
         data_relative: data_relative.to_owned(),
@@ -79,6 +83,11 @@ pub(crate) fn data_volume_index(children: Vec<Node>) -> Index {
             pair("/Applications", "Applications"),
         ],
     };
+    (report, root)
+}
+
+pub(crate) fn data_volume_index(children: Vec<Node>) -> Index {
+    let (report, root) = data_volume(children);
     Index::build(&report, root, &Enrichment::default())
 }
 

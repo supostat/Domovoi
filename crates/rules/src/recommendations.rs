@@ -1,5 +1,4 @@
 use std::collections::BTreeSet;
-use std::io;
 use std::path::PathBuf;
 
 use domovoi_index::{Index, NodeId, Reclaimable, SafetyLevel};
@@ -72,7 +71,7 @@ impl Recommendations {
         denylist: &Denylist,
         running_bundle_ids: &BTreeSet<String>,
         hypotheses: Vec<Hypothesis>,
-    ) -> io::Result<Self> {
+    ) -> Self {
         let mut cards: Vec<RuleCard> = Vec::new();
         for claim in rules.claims(index) {
             let position = if let Some(position) = cards.iter().position(|card| card.rule == claim.rule) {
@@ -95,7 +94,7 @@ impl Recommendations {
             if let Some(reason) = denylist.verdict(index, claim.node) {
                 card.blocked.push((claim.node, reason));
             } else {
-                card.reclaimable += index.reclaimable(claim.node)?;
+                card.reclaimable += index.reclaimable_estimate(claim.node);
                 card.items.push(claim.node);
             }
         }
@@ -115,18 +114,16 @@ impl Recommendations {
                 Some((hypothesis, node))
             })
             .filter(|(_, node)| denylist.verdict(index, *node).is_none())
-            .map(|(hypothesis, node)| {
-                Ok(HypothesisCard {
-                    reclaimable: index.reclaimable(node)?,
-                    hypothesis,
-                    node,
-                })
+            .map(|(hypothesis, node)| HypothesisCard {
+                reclaimable: index.reclaimable_estimate(node),
+                hypothesis,
+                node,
             })
-            .collect::<io::Result<Vec<_>>>()?;
-        Ok(Self {
+            .collect();
+        Self {
             cards,
             totals,
             hypotheses,
-        })
+        }
     }
 }

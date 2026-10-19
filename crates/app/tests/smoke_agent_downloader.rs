@@ -123,7 +123,7 @@ fn a_session_runs_the_real_agent_over_a_model_installed_from_the_real_catalog() 
         }]
     );
     for event in &installed {
-        session.apply_model_event(event).expect("the event reaches the index");
+        session.apply_model_event(event);
     }
     let category_of_model = |session: &Session| {
         let index = session.index().expect("the volume is scanned");
@@ -159,9 +159,7 @@ fn a_session_runs_the_real_agent_over_a_model_installed_from_the_real_catalog() 
             path: model_path.clone()
         }
     );
-    session
-        .apply_model_event(&removed)
-        .expect("the removal reaches the index");
+    session.apply_model_event(&removed);
     assert_eq!(
         library.screen_model(&settings).cards[0].state,
         ModelCardState::Available

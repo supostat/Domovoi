@@ -5,6 +5,7 @@ use domovoi_scanner::{CancelToken, ScanProgress};
 use objc2::rc::Retained;
 use objc2_foundation::NSTimer;
 
+use crate::scan_stage::ScanStage;
 use crate::scan_status::ScanStatus;
 use crate::session::Session;
 use crate::session_error::SessionError;
@@ -37,6 +38,7 @@ impl ScanJob {
             threads: session.workers(),
             current: session.root().display().to_string(),
             full_first_scan,
+            stage: ScanStage::Walking,
         };
         let thread = {
             let cancel = cancel.clone();
@@ -58,13 +60,25 @@ impl ScanJob {
     pub(crate) fn absorb_progress(&mut self) -> bool {
         let mut changed = false;
         while let Ok(progress) = self.progress.try_recv() {
-            self.status.bytes = progress.bytes;
-            self.status.files = progress.files;
-            self.status.current = progress.current.display().to_string();
+            match progress {
+                ScanProgress::Walking { files, bytes, current } => {
+                    self.status.files = files;
+                    self.status.bytes = bytes;
+                    self.status.current = current.display().to_string();
+                }
+                ScanProgress::Walked { files, bytes } => {
+                    self.status.files = files;
+                    self.status.bytes = bytes;
+                    self.status.stage = ScanStage::Indexing;
+                }
+            }
             changed = true;
         }
         if changed {
-            self.status.sweep = (self.status.bytes as f64 / self.expected_bytes.max(1) as f64).min(1.0) as f32;
+            self.status.sweep = match self.status.stage {
+                ScanStage::Walking => (self.status.bytes as f64 / self.expected_bytes.max(1) as f64).min(1.0) as f32,
+                ScanStage::Indexing => 1.0,
+            };
         }
         changed
     }

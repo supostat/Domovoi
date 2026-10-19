@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::io;
 use std::ops::AddAssign;
 
@@ -35,22 +36,27 @@ pub(crate) struct FileFacts {
     pub(crate) alloc_size: u64,
 }
 
+pub(crate) fn estimate_file(facts: FileFacts) -> Reclaimable {
+    let regular_clone = !facts.compressed && facts.clone_refcount > 1;
+    if facts.shares_all_blocks || facts.stream_inodes > 1 || regular_clone {
+        Reclaimable {
+            held_by_clones: facts.alloc_size,
+            ..Reclaimable::default()
+        }
+    } else {
+        Reclaimable {
+            bytes: facts.alloc_size,
+            ..Reclaimable::default()
+        }
+    }
+}
+
 pub(crate) fn reclaimable_file(
     facts: FileFacts,
     private_size: impl FnOnce() -> io::Result<u64>,
 ) -> io::Result<Reclaimable> {
     if facts.compressed {
-        return Ok(if facts.shares_all_blocks || facts.stream_inodes > 1 {
-            Reclaimable {
-                held_by_clones: facts.alloc_size,
-                ..Reclaimable::default()
-            }
-        } else {
-            Reclaimable {
-                bytes: facts.alloc_size,
-                ..Reclaimable::default()
-            }
-        });
+        return Ok(estimate_file(facts));
     }
     let private = private_size()?.min(facts.alloc_size);
     let held = facts.alloc_size - private;
@@ -65,38 +71,61 @@ pub(crate) fn reclaimable_file(
 
 impl Index {
     pub fn reclaimable(&self, id: NodeId) -> io::Result<Reclaimable> {
-        let mut entries_by_inode: HashMap<(u32, u64), Vec<NodeId>> = HashMap::new();
+        self.sum_over_inodes(id, |entry, facts| {
+            let path = self.physical_path(entry);
+            match reclaimable_file(facts, || private_size(&path)) {
+                Err(error) if error.raw_os_error() == Some(libc::ENOENT) => Ok(Reclaimable::default()),
+                outcome => outcome,
+            }
+        })
+    }
+
+    pub fn reclaimable_estimate(&self, id: NodeId) -> Reclaimable {
+        let Ok(total) = self.sum_over_inodes(id, |_, facts| Ok::<_, Infallible>(estimate_file(facts)));
+        total
+    }
+
+    fn sum_over_inodes<E>(
+        &self,
+        id: NodeId,
+        mut reclaim: impl FnMut(NodeId, FileFacts) -> Result<Reclaimable, E>,
+    ) -> Result<Reclaimable, E> {
+        let mut total = Reclaimable::default();
+        let mut linked_entries: HashMap<(u32, u64), Vec<NodeId>> = HashMap::new();
         for member in self.subtree(id) {
-            if self.node(member).kind == NodeKind::File {
-                let node = self.node(member);
-                entries_by_inode
+            let node = self.node(member);
+            if node.kind != NodeKind::File {
+                continue;
+            }
+            if node.link_count > 1 {
+                linked_entries
                     .entry((node.real_dev, node.file_id))
                     .or_default()
                     .push(member);
+            } else {
+                total += reclaim(member, self.file_facts(member))?;
             }
         }
-        let mut total = Reclaimable::default();
-        for entries in entries_by_inode.values() {
+        for entries in linked_entries.values() {
             let node = self.node(entries[0]);
             if (node.link_count as usize) > entries.len() {
                 total.held_by_hard_links += node.alloc_size;
-                continue;
-            }
-            let facts = FileFacts {
-                compressed: node.flags & UF_COMPRESSED != 0,
-                shares_all_blocks: node.ext_flags & u64::from(EF_SHARES_ALL_BLOCKS) != 0,
-                clone_refcount: node.clone_refcount,
-                stream_inodes: node.shares_with + 1,
-                alloc_size: node.alloc_size,
-            };
-            let path = self.physical_path(entries[0]);
-            match reclaimable_file(facts, || private_size(&path)) {
-                Ok(reclaimable) => total += reclaimable,
-                Err(error) if error.raw_os_error() == Some(libc::ENOENT) => {}
-                Err(error) => return Err(error),
+            } else {
+                total += reclaim(entries[0], self.file_facts(entries[0]))?;
             }
         }
         Ok(total)
+    }
+
+    fn file_facts(&self, id: NodeId) -> FileFacts {
+        let node = self.node(id);
+        FileFacts {
+            compressed: node.flags & UF_COMPRESSED != 0,
+            shares_all_blocks: node.ext_flags & u64::from(EF_SHARES_ALL_BLOCKS) != 0,
+            clone_refcount: node.clone_refcount,
+            stream_inodes: node.shares_with + 1,
+            alloc_size: node.alloc_size,
+        }
     }
 }
 

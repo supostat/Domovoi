@@ -36,6 +36,7 @@ pub const THREADS: PluralForms = PluralForms {
     many: "потоков",
 };
 pub const WALKED: &str = "обойдено";
+pub const INDEXING: &str = "Собираю индекс…";
 pub const FULL_FIRST_SCAN: &str = "После обновления macOS первый скан полный.";
 pub const FILES_MILLIONS: &str = "млн файлов";
 pub const TRAY: &str = "Корзина Домового";

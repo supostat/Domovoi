@@ -1,19 +1,22 @@
 use std::fs;
 use std::path::Path;
+use std::sync::mpsc;
+use std::thread;
 use std::time::Instant;
 
 use domovoi_app::{
-    AccessState, AiModels, CacheOpening, CareModels, DiskOverview, Expansion, NODE_BUDGET, ScanStatus, Session,
-    SessionPaths, ShellData, strings,
+    AccessState, AiModels, CacheOpening, CareModels, DiskOverview, Expansion, NODE_BUDGET, ScanStage, ScanStatus,
+    Session, SessionPaths, ShellData, strings,
 };
 use domovoi_index::{Category, Source};
 use domovoi_render::{DiagramMode, DiagramRenderer, DiagramState, GlyphAtlas, NodeOrigin, ROOT};
-use domovoi_scanner::CancelToken;
+use domovoi_scanner::{CancelToken, ScanProgress};
 use domovoi_testkit::{Fill, ImageVolume, TempTree, Visibility, VolumeFormat};
 use domovoi_theme::Palette;
 
 const MEGABYTE: u64 = 1024 * 1024;
 const SIDE: f32 = 440.0;
+const PROGRESS_BACKLOG: usize = 64;
 
 fn populate(root: &Path) {
     for (folder, file, size) in [
@@ -45,6 +48,7 @@ fn scan_status(session: &Session) -> ScanStatus {
         threads: session.workers(),
         current: String::new(),
         full_first_scan: false,
+        stage: ScanStage::Walking,
     }
 }
 
@@ -60,9 +64,18 @@ fn session_feeds_the_real_scanner_index_and_renderer_on_a_volume() {
         session.open_cached().expect("the cache probe runs"),
         CacheOpening::Absent
     );
-    session.scan(None, CancelToken::default()).expect("the volume scans");
+    let (sender, progress) = mpsc::sync_channel(PROGRESS_BACKLOG);
+    let listener = thread::spawn(move || progress.iter().collect::<Vec<ScanProgress>>());
+    session
+        .scan(Some(sender), CancelToken::default())
+        .expect("the volume scans");
+    let reported = listener.join().expect("the progress listener ends with the scan");
 
     let index = session.index().expect("the scan installs an index");
+    assert!(
+        matches!(reported.last(), Some(ScanProgress::Walked { files, .. }) if *files >= 3),
+        "the walk ends with the indexing stage: {reported:?}"
+    );
     let overview = DiskOverview::measure(&mount_point).expect("the volume is measured");
     let expansion = Expansion::around(index, index.root(), NODE_BUDGET);
     let data = ShellData::measured(

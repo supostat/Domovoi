@@ -392,8 +392,7 @@
       "rule": "ios.backups"
      },
      "amount": 31500000000,
-     "selected": false,
-     "held_by_snapshots": 2400000000
+     "selected": false
     },
     {
      "title": "Симуляторы Xcode",
@@ -562,6 +561,8 @@
      "size": 7200000000
     }
    ],
+   "held_by_snapshots": 2400000000,
+   "held_by_clones": 1200000000,
    "journal": [
     {
      "title": "Установщики в Загрузках",

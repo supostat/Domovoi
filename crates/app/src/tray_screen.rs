@@ -21,6 +21,7 @@ use crate::strings::{
 };
 use crate::tray_column::{MARGIN, TrayColumn};
 use crate::tray_model::TrayModel;
+use crate::tray_row::TrayRow;
 use crate::ui_font::{interface_font, mono_font};
 
 const ROW_HEIGHT: f64 = 40.0;
@@ -142,70 +143,7 @@ impl TrayScreen {
 fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) {
     let tokens = column.palette.tokens;
     for row in &model.rows {
-        let band = FillView::new(
-            column.marker,
-            NSRect::new(NSPoint::ZERO, NSSize::new(column.width, ROW_HEIGHT)),
-            FillStyle {
-                fill: None,
-                border: None,
-                radius: 0.0,
-                dashed: false,
-            },
-        );
-        let rule = FillView::new(
-            column.marker,
-            NSRect::new(NSPoint::ZERO, NSSize::new(column.width, 1.0)),
-            FillStyle {
-                fill: Some(column.palette.line_soft()),
-                border: None,
-                radius: 0.0,
-                dashed: false,
-            },
-        );
-        let dot = FillView::new(
-            column.marker,
-            NSRect::new(NSPoint::new(0.0, (ROW_HEIGHT - DOT) / 2.0), NSSize::new(DOT, DOT)),
-            FillStyle {
-                fill: Some(category_color(tokens, row.category).ns_color()),
-                border: None,
-                radius: DOT_RADIUS,
-                dashed: false,
-            },
-        );
-        let size = measure_label(
-            column.marker,
-            &format_size(row.size),
-            &mono_font(12.5, 500.0),
-            &tokens.mute.ns_color(),
-        );
-        let size_size = size.fittingSize();
-        size.setFrameOrigin(NSPoint::new(
-            column.width - size_size.width,
-            (ROW_HEIGHT - size_size.height) / 2.0,
-        ));
-        let title = label(
-            column.marker,
-            &row.title,
-            &interface_font(13.5, 400.0),
-            &tokens.text.ns_color(),
-            NSLineBreakMode::ByTruncatingTail,
-        );
-        let full = NSString::from_str(&row.title);
-        title.setToolTip(Some(&full));
-        title.setAccessibilityLabel(Some(&full));
-        let title_height = title.fittingSize().height;
-        title.setFrame(NSRect::new(
-            NSPoint::new(DOT + GAP, (ROW_HEIGHT - title_height) / 2.0),
-            NSSize::new(
-                (column.width - DOT - 3.0 * GAP - size_size.width).max(0.0),
-                title_height,
-            ),
-        ));
-        for child in [&*rule as &NSView, &dot, &title, &size] {
-            band.addSubview(child);
-        }
-        column.add(band.into_super(), MARGIN, NSSize::new(column.width, ROW_HEIGHT));
-        column.top += ROW_HEIGHT;
+        tray_row(column, row);
     }
     column.top += GAP;
     let caption = measure_label(
@@ -235,8 +173,80 @@ fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) {
         total_size,
     );
     column.top += line + GAP;
+    if let Some(held) = model.held_line() {
+        column.paragraph(&held, &interface_font(12.5, 400.0), &tokens.dim.ns_color());
+        column.top += GAP / 2.0;
+    }
     column.paragraph(TRAY_NOTE, &interface_font(13.0, 400.0), &tokens.dim.ns_color());
     column.top += SECTION_GAP;
+}
+
+fn tray_row(column: &mut TrayColumn<'_>, row: &TrayRow) {
+    let tokens = column.palette.tokens;
+    let band = FillView::new(
+        column.marker,
+        NSRect::new(NSPoint::ZERO, NSSize::new(column.width, ROW_HEIGHT)),
+        FillStyle {
+            fill: None,
+            border: None,
+            radius: 0.0,
+            dashed: false,
+        },
+    );
+    let rule = FillView::new(
+        column.marker,
+        NSRect::new(NSPoint::ZERO, NSSize::new(column.width, 1.0)),
+        FillStyle {
+            fill: Some(column.palette.line_soft()),
+            border: None,
+            radius: 0.0,
+            dashed: false,
+        },
+    );
+    let dot = FillView::new(
+        column.marker,
+        NSRect::new(NSPoint::new(0.0, (ROW_HEIGHT - DOT) / 2.0), NSSize::new(DOT, DOT)),
+        FillStyle {
+            fill: Some(category_color(tokens, row.category).ns_color()),
+            border: None,
+            radius: DOT_RADIUS,
+            dashed: false,
+        },
+    );
+    let size = measure_label(
+        column.marker,
+        &format_size(row.size),
+        &mono_font(12.5, 500.0),
+        &tokens.mute.ns_color(),
+    );
+    let size_size = size.fittingSize();
+    size.setFrameOrigin(NSPoint::new(
+        column.width - size_size.width,
+        (ROW_HEIGHT - size_size.height) / 2.0,
+    ));
+    let title = label(
+        column.marker,
+        &row.title,
+        &interface_font(13.5, 400.0),
+        &tokens.text.ns_color(),
+        NSLineBreakMode::ByTruncatingTail,
+    );
+    let full = NSString::from_str(&row.title);
+    title.setToolTip(Some(&full));
+    title.setAccessibilityLabel(Some(&full));
+    let title_height = title.fittingSize().height;
+    title.setFrame(NSRect::new(
+        NSPoint::new(DOT + GAP, (ROW_HEIGHT - title_height) / 2.0),
+        NSSize::new(
+            (column.width - DOT - 3.0 * GAP - size_size.width).max(0.0),
+            title_height,
+        ),
+    ));
+    for child in [&*rule as &NSView, &dot, &title, &size] {
+        band.addSubview(child);
+    }
+    column.add(band.into_super(), MARGIN, NSSize::new(column.width, ROW_HEIGHT));
+    column.top += ROW_HEIGHT;
 }
 
 fn journal_row(

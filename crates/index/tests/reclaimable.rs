@@ -1,8 +1,9 @@
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 use domovoi_apfs_sys::private_size;
-use domovoi_index::{Enrichment, Index, IndexRoot, NodeId};
+use domovoi_index::{Enrichment, Index, IndexRoot, NodeId, Reclaimable};
 use domovoi_scanner::{ScanOptions, scan};
 use domovoi_testkit::{Fill, TempTree};
 
@@ -31,6 +32,20 @@ fn clone_with_cp(directory: &Path, source: &str, target: &str) {
     assert!(status.success(), "cp -c failed");
 }
 
+fn freed(bytes: u64) -> Reclaimable {
+    Reclaimable {
+        bytes,
+        ..Reclaimable::default()
+    }
+}
+
+fn held_by_clones(bytes: u64) -> Reclaimable {
+    Reclaimable {
+        held_by_clones: bytes,
+        ..Reclaimable::default()
+    }
+}
+
 #[test]
 fn a_lone_decmpfs_file_frees_its_allocation() {
     let tree = TempTree::new().expect("temp tree is created");
@@ -43,6 +58,7 @@ fn a_lone_decmpfs_file_frees_its_allocation() {
     let reclaimable = index.reclaimable(packed).expect("reclaimable is computed");
     assert_eq!(reclaimable.bytes, index.node(packed).alloc_size);
     assert_eq!(reclaimable.held_by_clones, 0);
+    assert_eq!(index.reclaimable_estimate(packed), freed(index.node(packed).alloc_size));
 }
 
 #[test]
@@ -55,9 +71,15 @@ fn a_decmpfs_file_with_a_clone_frees_nothing() {
     clone_with_cp(tree.path(), "packed", "packed-copy");
     let index = index_of(&tree);
     for name in ["packed", "packed-copy"] {
-        let reclaimable = index.reclaimable(node(&index, name)).expect("reclaimable is computed");
+        let packed = node(&index, name);
+        let reclaimable = index.reclaimable(packed).expect("reclaimable is computed");
         assert_eq!(reclaimable.bytes, 0, "{name}");
         assert!(reclaimable.held_by_clones > 0, "{name}");
+        assert_eq!(
+            index.reclaimable_estimate(packed),
+            held_by_clones(index.node(packed).alloc_size),
+            "{name}"
+        );
     }
 }
 
@@ -76,6 +98,42 @@ fn a_cloned_regular_file_frees_its_private_size() {
 }
 
 #[test]
+fn the_estimate_of_a_cloned_regular_file_is_held_by_clones_whole() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.root().expect("root opens");
+    root.file("original", 200_000, Fill::Noise(3)).expect("file is written");
+    root.clone_of("original", "copy").expect("clone is created");
+    let index = index_of(&tree);
+    for name in ["original", "copy"] {
+        let member = node(&index, name);
+        assert_eq!(
+            index.reclaimable_estimate(member),
+            held_by_clones(index.node(member).alloc_size),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn the_estimate_of_a_regular_file_frees_its_allocation_without_reading_the_disk() {
+    let tree = TempTree::new().expect("temp tree is created");
+    tree.root()
+        .expect("root opens")
+        .file("plain", 120_000, Fill::Noise(5))
+        .expect("file is written");
+    let index = index_of(&tree);
+    let plain = node(&index, "plain");
+    fs::remove_file(tree.path().join("plain")).expect("the file leaves the disk after indexing");
+    assert_eq!(
+        index.reclaimable(plain).expect("reclaimable is computed"),
+        Reclaimable::default()
+    );
+    let estimate = index.reclaimable_estimate(plain);
+    assert_eq!(estimate, freed(index.node(plain).alloc_size));
+    assert_eq!(estimate.held_by_snapshots, 0);
+}
+
+#[test]
 fn one_of_several_hard_links_frees_nothing_but_all_of_them_do() {
     let tree = TempTree::new().expect("temp tree is created");
     let root = tree.root().expect("root opens");
@@ -85,12 +143,18 @@ fn one_of_several_hard_links_frees_nothing_but_all_of_them_do() {
     let index = index_of(&tree);
     let directory = node(&index, "shared");
     let link = index.child_named(directory, "a".as_ref()).expect("link is indexed");
+    let allocated = index.node(link).alloc_size;
     let alone = index.reclaimable(link).expect("reclaimable is computed");
+    assert_eq!((alone.bytes, alone.held_by_hard_links), (0, allocated));
     assert_eq!(
-        (alone.bytes, alone.held_by_hard_links),
-        (0, index.node(link).alloc_size)
+        index.reclaimable_estimate(link),
+        Reclaimable {
+            held_by_hard_links: allocated,
+            ..Reclaimable::default()
+        }
     );
     let together = index.reclaimable(directory).expect("reclaimable is computed");
     assert_eq!(together.held_by_hard_links, 0);
-    assert_eq!(together.bytes, index.node(link).alloc_size);
+    assert_eq!(together.bytes, allocated);
+    assert_eq!(index.reclaimable_estimate(directory), freed(allocated));
 }

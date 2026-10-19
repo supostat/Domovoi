@@ -8,6 +8,7 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use crate::button_style::ButtonStyle;
 use crate::label::{label, measure_label};
 use crate::probes::Probes;
+use crate::scan_stage::ScanStage;
 use crate::scan_status::ScanStatus;
 use crate::section::Section;
 use crate::shell_actions::ShellActions;
@@ -15,7 +16,9 @@ use crate::shell_button::ShellButton;
 use crate::shell_data::ShellData;
 use crate::shell_layout::{PANE_PADDING, WINDOW, from_top};
 use crate::shell_palette::ShellPalette;
-use crate::strings::{DIAGRAM, FILES_MILLIONS, FULL_FIRST_SCAN, SCAN_ENGINE, SCANNING, STOP, THREADS, WALKED};
+use crate::strings::{
+    DIAGRAM, FILES_MILLIONS, FULL_FIRST_SCAN, INDEXING, SCAN_ENGINE, SCANNING, STOP, THREADS, WALKED,
+};
 use crate::ui_font::{interface_font, mono_font};
 use crate::window_frame::WindowFrame;
 
@@ -136,7 +139,10 @@ impl ScanningScreen {
     }
 
     pub fn show_progress(&self, scan: &ScanStatus) {
-        let full = NSString::from_str(&scan.current);
+        let full = NSString::from_str(match scan.stage {
+            ScanStage::Walking => &scan.current,
+            ScanStage::Indexing => INDEXING,
+        });
         self.path.setStringValue(&full);
         self.path.setToolTip(Some(&full));
         self.path.setAccessibilityLabel(Some(&full));

@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::scan_stage::ScanStage;
+
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ScanStatus {
@@ -10,4 +12,6 @@ pub struct ScanStatus {
     pub current: String,
     #[serde(default)]
     pub full_first_scan: bool,
+    #[serde(default)]
+    pub stage: ScanStage,
 }

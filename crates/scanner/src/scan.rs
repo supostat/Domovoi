@@ -7,7 +7,7 @@ use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::TrySendError;
+use std::sync::mpsc::{SendError, TrySendError};
 use std::time::SystemTime;
 
 use domovoi_apfs_sys::sys::EF_NO_XATTRS;
@@ -62,10 +62,17 @@ pub fn scan(root: &Path, options: &ScanOptions) -> Result<ScanReport, ScanError>
         pool.install(|| walk.scan_deferred(directory.as_fd(), &mut root_node, &deferred));
         walk.stop_if_cancelled()?;
     }
+    let files = walk.files.into_inner();
+    let bytes = walk.bytes.into_inner();
+    if let Some(progress) = &options.progress {
+        match progress.send(ScanProgress::Walked { files, bytes }) {
+            Ok(()) | Err(SendError(_)) => {}
+        }
+    }
     Ok(ScanReport {
         root: root_node,
-        files: walk.files.into_inner(),
-        bytes: walk.bytes.into_inner(),
+        files,
+        bytes,
     })
 }
 
@@ -169,7 +176,7 @@ impl Walk<'_> {
         let files = self.files.fetch_add(files, Ordering::Relaxed) + files;
         let bytes = self.bytes.fetch_add(bytes, Ordering::Relaxed) + bytes;
         if let Some(progress) = &self.options.progress {
-            let event = ScanProgress {
+            let event = ScanProgress::Walking {
                 files,
                 bytes,
                 current: self.paths.canonical(relative),

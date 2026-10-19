@@ -21,6 +21,7 @@ use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::hover_tip::HoverTip;
 use crate::recommendations_model::RecommendationsModel;
 use crate::scan_job::ScanJob;
+use crate::scan_stage::ScanStage;
 use crate::scan_status::ScanStatus;
 use crate::screen_views::ScreenViews;
 use crate::section::Section;
@@ -104,13 +105,14 @@ impl ShellState {
             threads: self.session.as_ref().map_or(0, Session::workers),
             current: String::new(),
             full_first_scan: false,
+            stage: ScanStage::Walking,
         })
     }
 
     pub(crate) fn rebuild_data(&mut self, now: SystemTime) -> io::Result<()> {
         if let Some(session) = self.session.as_mut() {
             for event in self.pending_model_events.drain(..) {
-                session.apply_model_event(&event)?;
+                session.apply_model_event(&event);
             }
         }
         let previous = self.data.take().map(|data| data.care);

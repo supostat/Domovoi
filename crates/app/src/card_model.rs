@@ -1,11 +1,9 @@
-use domovoi_theme::format_size;
 use serde::Deserialize;
 
+use crate::held_line::held_line;
 use crate::provenance::Provenance;
 use crate::safety_badge::SafetyBadge;
-use crate::strings::{
-    CLOSE_OWNER, CLOSE_OWNER_SUFFIX, HELD_BY_CLONES, HELD_BY_HARD_LINKS, HELD_BY_SNAPSHOTS, HELD_PREFIX,
-};
+use crate::strings::{CLOSE_OWNER, CLOSE_OWNER_SUFFIX};
 use crate::tray_target::TrayTarget;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -43,16 +41,7 @@ impl CardModel {
     }
 
     pub fn held_line(&self) -> Option<String> {
-        let parts: Vec<String> = [
-            (self.held_by_snapshots, HELD_BY_SNAPSHOTS),
-            (self.held_by_clones, HELD_BY_CLONES),
-            (self.held_by_hard_links, HELD_BY_HARD_LINKS),
-        ]
-        .into_iter()
-        .filter(|(bytes, _)| *bytes > 0)
-        .map(|(bytes, holder)| format!("{} {holder}", format_size(bytes)))
-        .collect();
-        (!parts.is_empty()).then(|| format!("{HELD_PREFIX} {}", parts.join(" · ")))
+        held_line(self.held_by_snapshots, self.held_by_clones, self.held_by_hard_links)
     }
 
     pub fn owner_line(&self) -> Option<String> {

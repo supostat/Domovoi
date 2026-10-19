@@ -1,12 +1,13 @@
 use std::io;
 use std::path::Path;
 
-use domovoi_index::Index;
+use domovoi_index::{Index, Reclaimable};
 use domovoi_rules::{TrashFailure, TrashJournal, TrashOutcome, Tray};
 use domovoi_theme::format_size;
 use serde::Deserialize;
 
 use crate::deny_reason_text::deny_reason_text;
+use crate::held_line::held_line;
 use crate::journal_row::JournalRow;
 use crate::strings::{
     MOVED_TO_TRASH, TRASH_MISSING, TRASH_NO_PERMISSION, TRASH_NO_TRASH, TRASH_OTHER, TRASH_OUT_OF_SPACE,
@@ -23,6 +24,12 @@ pub(crate) const RECENT_LIMIT: usize = 5;
 pub struct TrayModel {
     pub rows: Vec<TrayRow>,
     #[serde(default)]
+    pub held_by_snapshots: u64,
+    #[serde(default)]
+    pub held_by_clones: u64,
+    #[serde(default)]
+    pub held_by_hard_links: u64,
+    #[serde(default)]
     pub outcome: Option<TrayOutcome>,
     #[serde(default)]
     pub journal: Vec<JournalRow>,
@@ -31,8 +38,11 @@ pub struct TrayModel {
 impl TrayModel {
     pub fn build(index: &Index, tray: &Tray, journal: &TrashJournal) -> io::Result<Self> {
         let mut rows: Vec<(Option<String>, TrayRow)> = Vec::new();
+        let mut held = Reclaimable::default();
         for item in tray.items() {
-            let size = index.reclaimable(item.node)?.bytes;
+            let reclaimable = index.reclaimable(item.node)?;
+            held += reclaimable;
+            let size = reclaimable.bytes;
             let category = index.node(item.node).category;
             match rows
                 .iter_mut()
@@ -55,6 +65,9 @@ impl TrayModel {
         }
         Ok(Self {
             rows: rows.into_iter().map(|(_, row)| row).collect(),
+            held_by_snapshots: held.held_by_snapshots,
+            held_by_clones: held.held_by_clones,
+            held_by_hard_links: held.held_by_hard_links,
             outcome: None,
             journal: journal_rows(journal),
         })
@@ -62,6 +75,10 @@ impl TrayModel {
 
     pub fn total(&self) -> u64 {
         self.rows.iter().map(|row| row.size).sum()
+    }
+
+    pub fn held_line(&self) -> Option<String> {
+        held_line(self.held_by_snapshots, self.held_by_clones, self.held_by_hard_links)
     }
 
     #[must_use]

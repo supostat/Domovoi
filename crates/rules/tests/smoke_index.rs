@@ -35,8 +35,7 @@ fn a_real_index_yields_rule_cards_with_level_totals() {
     );
     let rules = RuleSet::for_volume(tree.path(), &ConfigOverrides::default()).expect("rules are prepared");
     let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
-    let recommendations =
-        Recommendations::build(&index, &rules, &denylist, &BTreeSet::new(), Vec::new()).expect("recommendations build");
+    let recommendations = Recommendations::build(&index, &rules, &denylist, &BTreeSet::new(), Vec::new());
 
     let ids: BTreeSet<&str> = recommendations
         .cards

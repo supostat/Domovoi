@@ -181,18 +181,11 @@ impl Session {
         }
     }
 
-    pub fn refresh_recommendations(&mut self) -> io::Result<()> {
-        self.recommendations = match &self.index {
-            Some(index) => Some(Recommendations::build(
-                index,
-                &self.rules,
-                &self.denylist,
-                &running_bundle_ids(),
-                Vec::new(),
-            )?),
-            None => None,
-        };
-        Ok(())
+    pub fn refresh_recommendations(&mut self) {
+        self.recommendations = self
+            .index
+            .as_ref()
+            .map(|index| Recommendations::build(index, &self.rules, &self.denylist, &running_bundle_ids(), Vec::new()));
     }
 
     pub fn find_duplicates(
@@ -239,13 +232,12 @@ impl Session {
             .ask(&context, question, cancel, observer)
     }
 
-    pub fn apply_model_event(&mut self, event: &ModelEvent) -> io::Result<()> {
+    pub fn apply_model_event(&mut self, event: &ModelEvent) {
         if let Some(index) = self.index.as_mut() {
             index.apply_model_event(event, &mut self.enrichment);
-            self.refresh_recommendations()
+            self.refresh_recommendations();
         } else {
             self.enrichment.record_model_event(event);
-            Ok(())
         }
     }
 
@@ -314,7 +306,8 @@ impl Session {
         let duplicate_paths = self.duplicate_paths();
         self.index = Some(index);
         self.remap(&tray_paths, duplicate_paths)?;
-        self.refresh_recommendations()
+        self.refresh_recommendations();
+        Ok(())
     }
 
     fn rescan_paths(&mut self, paths: &[PathBuf]) -> Result<(), SessionError> {
@@ -331,7 +324,8 @@ impl Session {
             index.rescan(path, &ScanOptions::default(), &self.enrichment)?;
         }
         self.remap(&tray_paths, duplicate_paths).map_err(SessionError::Io)?;
-        self.refresh_recommendations().map_err(SessionError::Io)
+        self.refresh_recommendations();
+        Ok(())
     }
 
     fn tray_paths(&self) -> Vec<(PathBuf, Option<String>)> {

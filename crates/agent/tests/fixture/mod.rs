@@ -67,9 +67,7 @@ impl Fixture {
         );
         let rules = RuleSet::for_volume(tree.path(), &ConfigOverrides::default()).expect("the rules are prepared");
         let denylist = Denylist::new(CaseRule::Insensitive).expect("the denylist is prepared");
-        let totals = Recommendations::build(&index, &rules, &denylist, &BTreeSet::new(), Vec::new())
-            .expect("the recommendations build")
-            .totals;
+        let totals = Recommendations::build(&index, &rules, &denylist, &BTreeSet::new(), Vec::new()).totals;
         Self {
             tree,
             index,

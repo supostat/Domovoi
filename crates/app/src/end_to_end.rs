@@ -28,6 +28,7 @@ use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
 use crate::recommendations_model::RecommendationsModel;
 use crate::safety_badge::SafetyBadge;
+use crate::scan_stage::ScanStage;
 use crate::scan_status::ScanStatus;
 use crate::scenario::Scenario;
 use crate::scenario_step::ScenarioStep;
@@ -260,9 +261,7 @@ impl EndToEnd {
             DownloadOutcome::Installed(event) => event,
             other => return Err(format!("the download ended as {other:?}")),
         };
-        self.session
-            .apply_model_event(&event)
-            .map_err(|error| error.to_string())?;
+        self.session.apply_model_event(&event);
         let ModelEvent::Downloaded { path } = event else {
             return Err("an installed model reports its path".to_owned());
         };
@@ -365,6 +364,7 @@ impl EndToEnd {
             threads: self.session.workers(),
             current: self.root.display().to_string(),
             full_first_scan: false,
+            stage: ScanStage::Walking,
         };
         let care = CareModels {
             recommendations,
