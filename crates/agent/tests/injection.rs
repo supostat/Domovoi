@@ -41,6 +41,16 @@ fn tools(answer: &AgentAnswer) -> Vec<Tool> {
     answer.steps.iter().map(|step| step.tool).collect()
 }
 
+fn rule_explanation(answer: &AgentAnswer, fixture: &Fixture) -> Value {
+    let mut result = answer.steps[1].result.clone();
+    let root = fixture.root_path();
+    for found in result["found"].as_array_mut().expect("the rule lists its findings") {
+        let path = found["path"].as_str().expect("a finding has a path");
+        found["path"] = path.strip_prefix(&root).expect("a finding lies in the volume").into();
+    }
+    result
+}
+
 #[test]
 fn hostile_folder_names_change_neither_the_tool_sequence_nor_the_rule_explanation() {
     let clean = Fixture::with_folders(&[]);
@@ -49,7 +59,10 @@ fn hostile_folder_names_change_neither_the_tool_sequence_nor_the_rule_explanatio
     let (hostile_answer, _) = run(&hostile);
     assert_eq!(tools(&hostile_answer), tools(&clean_answer));
     assert_eq!(tools(&hostile_answer), [Tool::QueryIndex, Tool::RuleExplain]);
-    assert_eq!(hostile_answer.steps[1].result, clean_answer.steps[1].result);
+    assert_eq!(
+        rule_explanation(&hostile_answer, &hostile),
+        rule_explanation(&clean_answer, &clean)
+    );
     assert_eq!(hostile_answer.steps[1].result["id"], "cargo.target");
     let actions = |answer: &AgentAnswer| answer.actions.iter().map(|action| action.rule_id).collect::<Vec<_>>();
     assert_eq!(actions(&hostile_answer), actions(&clean_answer));

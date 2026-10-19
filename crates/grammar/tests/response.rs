@@ -130,3 +130,11 @@ fn the_last_step_grammar_admits_only_a_final_answer() {
     ));
     assert!(!schema.grammar().as_str().contains("tool_call"));
 }
+
+#[test]
+fn the_system_prompt_names_no_user_and_writes_paths_from_home() {
+    let prompt = system_prompt("Ты — Домовой.", &ResponseSchema::answers_and_tool_calls());
+    assert!(prompt.contains("Пример ответа"));
+    assert!(!prompt.contains("/Users/"), "{prompt}");
+    assert!(prompt.contains("~/Library/"), "{prompt}");
+}

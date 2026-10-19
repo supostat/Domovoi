@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use domovoi_agent::AgentContext;
 use domovoi_index::{Enrichment, Index, IndexRoot, NodeId};
@@ -22,6 +22,7 @@ pub(crate) struct Fixture {
     pub(crate) rules: RuleSet,
     pub(crate) denylist: Denylist,
     pub(crate) totals: LevelTotals,
+    pub(crate) home: PathBuf,
 }
 
 impl Fixture {
@@ -68,12 +69,14 @@ impl Fixture {
         let rules = RuleSet::for_volume(tree.path(), &ConfigOverrides::default()).expect("the rules are prepared");
         let denylist = Denylist::new(CaseRule::Insensitive).expect("the denylist is prepared");
         let totals = Recommendations::build(&index, &rules, &denylist, &BTreeSet::new(), Vec::new()).totals;
+        let home = index.path(index.root());
         Self {
             tree,
             index,
             rules,
             denylist,
             totals,
+            home,
         }
     }
 
@@ -83,6 +86,7 @@ impl Fixture {
             rules: &self.rules,
             denylist: &self.denylist,
             totals: self.totals,
+            home: &self.home,
         }
     }
 

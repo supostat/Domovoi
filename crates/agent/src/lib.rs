@@ -6,6 +6,7 @@ mod agent_context;
 mod agent_error;
 mod agent_limits;
 mod conversation;
+mod home_path;
 mod instructions;
 mod level_name;
 mod suggested_action;

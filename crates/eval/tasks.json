@@ -8,6 +8,13 @@
       "reference": "Называет DerivedData Xcode (около 18,5 ГБ), папку сборки target проекта engine (7,5 ГБ), node_modules проектов, кэши Homebrew, npm, Xcode и Chrome; говорит, что всё это пересоздаётся."
     },
     {
+      "id": "query-pnpm-store",
+      "question": "Что насчёт хранилища pnpm?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Называет ~/Library/pnpm/store (300 МБ), уровень «восстанавливаемое»: проекты сохранят свои копии, но следующая установка скачает пакеты заново."
+    },
+    {
       "id": "query-caches-over-gigabyte",
       "question": "Какие кэши занимают больше 1 ГБ?",
       "expected_tool": "query_index",

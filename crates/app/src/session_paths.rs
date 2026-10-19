@@ -17,6 +17,7 @@ pub struct SessionPaths {
     pub trash_journal: PathBuf,
     pub clone_journal: PathBuf,
     pub models: PathBuf,
+    pub home: PathBuf,
 }
 
 impl SessionPaths {
@@ -26,6 +27,8 @@ impl SessionPaths {
             trash_journal: TrashJournal::default_path()?,
             clone_journal: CloneJournal::default_path()?,
             models: ModelStore::default_directory()?,
+            home: std::env::home_dir()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "home directory is unknown"))?,
         })
     }
 
@@ -35,6 +38,15 @@ impl SessionPaths {
             trash_journal: directory.join(TRASH_JOURNAL_FILE),
             clone_journal: directory.join(CLONE_JOURNAL_FILE),
             models: directory.join(MODELS_DIRECTORY),
+            home: directory.to_path_buf(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_home(self, home: &Path) -> Self {
+        Self {
+            home: home.to_path_buf(),
+            ..self
         }
     }
 

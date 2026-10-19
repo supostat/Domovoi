@@ -227,6 +227,7 @@ impl Volume {
             rules: &self.rules,
             denylist: &self.denylist,
             totals: self.totals,
+            home: self.tree.path(),
         }
     }
 

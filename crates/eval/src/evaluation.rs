@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::time::Duration;
 
 use domovoi_agent::{Agent, AgentContext, AgentError, AgentLimits};
@@ -5,7 +6,7 @@ use domovoi_grammar::{ChatMessage, ChatTemplate, ResponseSchema, system_prompt};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::GenerateRequest;
 
-use crate::fixture_index::FixtureIndex;
+use crate::fixture_index::{FIXTURE_HOME, FixtureIndex};
 use crate::judge::Judge;
 use crate::task_outcome::TaskOutcome;
 use crate::task_set::TaskSet;
@@ -31,6 +32,7 @@ impl Evaluation<'_> {
             rules: &self.fixture.rules,
             denylist: &self.fixture.denylist,
             totals: self.fixture.totals,
+            home: Path::new(FIXTURE_HOME),
         };
         self.tasks
             .tasks

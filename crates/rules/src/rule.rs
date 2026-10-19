@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use domovoi_index::SafetyLevel;
 
 use crate::path_pattern::PathPattern;
@@ -16,6 +18,7 @@ pub struct Rule {
     pub vendor_command: Option<&'static str>,
     pub condition: Option<Condition>,
     pub(crate) patterns: Vec<PathPattern>,
+    paths: Vec<String>,
 }
 
 impl Rule {
@@ -28,6 +31,7 @@ impl Rule {
             vendor_command: None,
             condition: None,
             patterns: patterns.iter().map(|pattern| PathPattern::parse(pattern)).collect(),
+            paths: patterns.iter().map(|pattern| (*pattern).to_owned()).collect(),
         }
     }
 
@@ -46,12 +50,17 @@ impl Rule {
         self
     }
 
-    pub(crate) fn also_at(mut self, pattern: PathPattern) -> Self {
-        self.patterns.push(pattern);
+    pub(crate) fn also_at(mut self, path: &Path) -> Self {
+        self.patterns.push(PathPattern::absolute(path));
+        self.paths.push(path.to_string_lossy().into_owned());
         self
     }
 
     pub fn is_info_only(&self) -> bool {
         self.vendor_command.is_some()
+    }
+
+    pub fn paths(&self) -> &[String] {
+        &self.paths
     }
 }

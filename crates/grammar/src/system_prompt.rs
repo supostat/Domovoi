@@ -30,7 +30,7 @@ pub fn system_prompt(instructions: &str, schema: &ResponseSchema) -> String {
                 "kind": "final",
                 "answer": "Больше всего места занимают сборки Xcode: 38,2 ГБ в DerivedData.",
                 "hypotheses": [{
-                    "path": "/Users/igor/Library/Application Support/com.tinyapp.helper",
+                    "path": "~/Library/Application Support/com.tinyapp.helper",
                     "guess": "Похоже на данные удалённого приложения TinyApp",
                     "confidence": 0.6
                 }]

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use domovoi_grammar::{Tool, ToolCall};
@@ -7,12 +6,14 @@ use domovoi_index::{Category, NodeId, NodeKind, Query};
 use serde_json::{Map, Value, json};
 
 use crate::agent_context::AgentContext;
+use crate::home_path::expanded;
 use crate::level_name::{level_name, level_named};
 use crate::tool_outcome::ToolOutcome;
 
 const DEFAULT_LIMIT: usize = 10;
 const LARGEST_CHILDREN: usize = 5;
 const LARGEST_RULES: usize = 10;
+const FOUND_BY_RULE: usize = 5;
 const SECONDS_PER_DAY: u64 = 86_400;
 
 pub(crate) struct ToolRunner<'a> {
@@ -44,6 +45,7 @@ impl<'a> ToolRunner<'a> {
         let index = self.context.index;
         let totals = self.context.totals;
         json!({
+            "home": self.context.home.to_string_lossy(),
             "used_bytes": index.node(index.root()).allocated,
             "reclaimable": {
                 "safe": totals.safe,
@@ -74,21 +76,24 @@ impl<'a> ToolRunner<'a> {
                     .checked_sub(Duration::from_secs(days * SECONDS_PER_DAY))
                     .unwrap_or(UNIX_EPOCH)
             }),
-            path_prefix: text("path_prefix").map(PathBuf::from),
+            path_prefix: text("path_prefix").map(|prefix| expanded(prefix, self.context.home)),
         };
         let limit = number("limit").map_or(DEFAULT_LIMIT, |limit| limit as usize);
         let matches = self.context.index.query(&query, self.context.rules);
         let nodes: Vec<NodeId> = matches.iter().copied().take(limit).collect();
         let items: Vec<Value> = nodes.iter().map(|node| self.describe(*node)).collect();
-        ToolOutcome {
-            result: json!({"total": matches.len(), "items": items}),
-            nodes,
+        let mut result = json!({"total": matches.len(), "items": items});
+        if let Some(prefix) = query.path_prefix.as_deref()
+            && matches.is_empty()
+        {
+            result["prefix_found"] = self.context.index.find(prefix).is_some().into();
         }
+        ToolOutcome { result, nodes }
     }
 
     fn inspect_node(&self, path: &str) -> ToolOutcome {
         let index = self.context.index;
-        let Some(node) = index.find(Path::new(path)) else {
+        let Some(node) = index.find(&expanded(path, self.context.home)) else {
             return ToolOutcome {
                 result: json!({"error": "узел не найден", "path": path}),
                 nodes: Vec::new(),
@@ -105,27 +110,37 @@ impl<'a> ToolRunner<'a> {
     }
 
     fn rule_explain(&self, id: &str) -> ToolOutcome {
-        let result = self
-            .context
-            .rules
-            .rules()
-            .iter()
-            .find(|rule| rule.id == id)
-            .map_or_else(
-                || json!({"error": "правило не найдено", "id": id}),
-                |rule| {
-                    json!({
-                        "id": rule.id,
-                        "level": level_name(rule.level),
-                        "explanation": rule.explanation,
-                        "owner_bundle": rule.owner_bundle,
-                        "vendor_command": rule.vendor_command
-                    })
-                },
-            );
+        let rules = self.context.rules;
+        let Some(position) = rules.rules().iter().position(|rule| rule.id == id) else {
+            return ToolOutcome {
+                result: json!({"error": "правило не найдено", "id": id}),
+                nodes: Vec::new(),
+            };
+        };
+        let rule = rules.rule(position);
+        let index = self.context.index;
+        let mut claimed: Vec<NodeId> = rules
+            .claims(index)
+            .into_iter()
+            .filter(|claim| claim.rule == position)
+            .map(|claim| claim.node)
+            .collect();
+        let found_total = claimed.len();
+        claimed.sort_by_key(|node| std::cmp::Reverse(index.node(*node).allocated));
+        claimed.truncate(FOUND_BY_RULE);
+        let found: Vec<Value> = claimed.iter().map(|node| self.describe(*node)).collect();
         ToolOutcome {
-            result,
-            nodes: Vec::new(),
+            result: json!({
+                "id": rule.id,
+                "level": level_name(rule.level),
+                "explanation": rule.explanation,
+                "owner_bundle": rule.owner_bundle,
+                "vendor_command": rule.vendor_command,
+                "paths": rule.paths(),
+                "found": found,
+                "found_total": found_total
+            }),
+            nodes: claimed,
         }
     }
 

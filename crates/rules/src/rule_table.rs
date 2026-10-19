@@ -1,7 +1,6 @@
 use domovoi_index::SafetyLevel::{CheckYourself, Recoverable, Safe};
 
 use crate::config_overrides::ConfigOverrides;
-use crate::path_pattern::PathPattern;
 use crate::rule::{Condition, Rule};
 
 const XCODE: &str = "com.apple.dt.Xcode";
@@ -16,7 +15,7 @@ pub fn rule_table(overrides: &ConfigOverrides) -> Vec<Rule> {
          Учтены стандартный путь и target-dir из ~/.cargo/config.toml; путь из переменных окружения shell программа не видит.",
     );
     if let Some(target) = &overrides.cargo_target {
-        cargo_target = cargo_target.also_at(PathPattern::absolute(target));
+        cargo_target = cargo_target.also_at(target);
     }
     let mut pnpm_store = Rule::new(
         "cache.pnpm-store",
@@ -26,7 +25,7 @@ pub fn rule_table(overrides: &ConfigOverrides) -> Vec<Rule> {
          Учтены стандартный путь и store-dir из ~/.config/pnpm/rc; путь из переменных окружения shell программа не видит.",
     );
     if let Some(store) = &overrides.pnpm_store {
-        pnpm_store = pnpm_store.also_at(PathPattern::absolute(store));
+        pnpm_store = pnpm_store.also_at(store);
     }
     vec![
         Rule::new(

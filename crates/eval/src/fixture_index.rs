@@ -14,7 +14,7 @@ use domovoi_scanner::{Node, NodeState, ScanReport};
 pub const FIXTURE_HOME: &str = "/Users/fixture";
 const MODEL_FILE: &str = "Library/Application Support/Domovoi/models/Qwen3.5-4B-Q4_K_M.gguf";
 const SECONDS_PER_DAY: u64 = 86_400;
-const FILES: [(&str, u64, u64); 30] = [
+const FILES: [(&str, u64, u64); 31] = [
     (
         "Library/Developer/Xcode/DerivedData/Domovoi-abcdef/Build/Intermediates.noindex/data.bin",
         12_400_000_000,
@@ -43,6 +43,7 @@ const FILES: [(&str, u64, u64); 30] = [
     ("Library/Caches/Homebrew/downloads/node.tar.gz", 2_400_000_000, 15),
     ("Library/Caches/com.apple.dt.Xcode/cache.db", 1_100_000_000, 1),
     ("Library/Caches/Google/Chrome/Default/Cache/data.bin", 900_000_000, 0),
+    ("Library/pnpm/store/v10/files/00/data.bin", 300_000_000, 7),
     (
         "Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw",
         40_000_000_000,

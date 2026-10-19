@@ -1,5 +1,3 @@
-use std::path::{Path, PathBuf};
-
 use domovoi_grammar::{ChatTemplate, FinalAnswer, ModelResponse, ResponseSchema, system_prompt};
 use domovoi_index::{Index, NodeId, SafetyLevel};
 use domovoi_inference::{CancelFlag, InferenceBackend};
@@ -11,6 +9,7 @@ use crate::agent_context::AgentContext;
 use crate::agent_error::AgentError;
 use crate::agent_limits::AgentLimits;
 use crate::conversation::Conversation;
+use crate::home_path::expanded;
 use crate::instructions::INSTRUCTIONS;
 use crate::suggested_action::SuggestedAction;
 use crate::tool_runner::ToolRunner;
@@ -124,11 +123,9 @@ fn finish(context: &AgentContext<'_>, answer: FinalAnswer, steps: Vec<ToolStep>)
     let hypotheses = answer
         .hypotheses
         .into_iter()
-        .filter(|hypothesis| context.index.find(Path::new(&hypothesis.path)).is_some())
-        .map(|hypothesis| Hypothesis {
-            path: PathBuf::from(hypothesis.path),
-            explanation: hypothesis.guess,
-        })
+        .map(|hypothesis| (expanded(&hypothesis.path, context.home), hypothesis.guess))
+        .filter(|(path, _)| context.index.find(path).is_some())
+        .map(|(path, explanation)| Hypothesis { path, explanation })
         .collect();
     AgentAnswer {
         text: answer.answer,

@@ -58,8 +58,6 @@ impl Session {
         let mut trash_journal = TrashJournal::open(&paths.trash_journal)?;
         let mut clone_journal = CloneJournal::open(&paths.clone_journal)?;
         clone_journal.sweep(&mut trash_journal)?;
-        let home =
-            std::env::home_dir().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "home directory is unknown"))?;
         Ok(Self {
             root: root.to_path_buf(),
             paths: paths.clone(),
@@ -67,7 +65,7 @@ impl Session {
             rules: RuleSet::for_volume(root, &ConfigOverrides::default())?,
             denylist: Denylist::new(CaseRule::Insensitive)?,
             enrichment: Enrichment::default(),
-            cloud_folders: CloudFolders::of_home(&home),
+            cloud_folders: CloudFolders::of_home(&paths.home),
             index: None,
             recommendations: None,
             duplicates: None,
@@ -280,6 +278,7 @@ impl Session {
                 .as_ref()
                 .map(|recommendations| recommendations.totals)
                 .unwrap_or_default(),
+            home: &self.paths.home,
         };
         Agent::new(backend, model.template, limits)
             .calling_a_tool_first()
