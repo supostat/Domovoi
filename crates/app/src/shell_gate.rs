@@ -11,8 +11,12 @@ impl ShellGate {
     pub fn allows(self, action: ShellAction) -> bool {
         match action {
             ShellAction::ToggleDuplicateSearch => self.searching || self.session_open,
-            ShellAction::Rescan => self.session_open && !self.tray_open,
+            ShellAction::Rescan => self.lends_session(),
             _ => !action.needs_session() || self.session_open,
         }
+    }
+
+    pub fn lends_session(self) -> bool {
+        self.session_open && !self.tray_open
     }
 }

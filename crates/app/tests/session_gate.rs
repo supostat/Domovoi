@@ -70,6 +70,34 @@ fn a_rescan_waits_for_the_session_and_a_closed_tray() {
 }
 
 #[test]
+fn the_session_is_lent_only_while_the_tray_is_closed() {
+    assert!(IDLE.lends_session());
+    assert!(!BUSY.lends_session(), "a busy session is not home to lend");
+    assert!(
+        !ShellGate {
+            tray_open: true,
+            ..IDLE
+        }
+        .lends_session(),
+        "the open tray keeps measuring through the session"
+    );
+}
+
+#[test]
+fn a_rescan_is_allowed_exactly_when_the_session_can_be_lent() {
+    for session_open in [true, false] {
+        for tray_open in [true, false] {
+            let gate = ShellGate {
+                session_open,
+                tray_open,
+                searching: false,
+            };
+            assert_eq!(gate.allows(ShellAction::Rescan), gate.lends_session(), "{gate:?}");
+        }
+    }
+}
+
+#[test]
 fn a_running_search_is_stopped_without_the_session() {
     let searching = ShellGate {
         searching: true,

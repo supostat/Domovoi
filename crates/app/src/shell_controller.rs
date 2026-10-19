@@ -306,16 +306,21 @@ impl ShellController {
             };
             watch.queue.advance(watch.events.try_iter(), session)
         };
+        let lends_session = self.state.borrow().gate().lends_session();
         match effect {
-            Ok(EventEffect::Ignored) => {}
             Ok(EventEffect::Applied) => self.refresh(),
-            Ok(EventEffect::Heavy) => self.begin_apply(),
-            Ok(EventEffect::RescanRequired) | Err(SessionError::Scan(_)) => {
-                let session = self.state.borrow_mut().session.take();
-                if let Some(session) = session {
-                    self.begin_scan(session, false);
-                }
+            Ok(EventEffect::Heavy) if lends_session => self.begin_apply(),
+            Ok(EventEffect::RescanRequired) | Err(SessionError::Scan(_)) if lends_session => {
+                let session = self
+                    .state
+                    .borrow_mut()
+                    .session
+                    .take()
+                    .expect("the gate lends an open session");
+                self.begin_scan(session, false);
             }
+            Ok(EventEffect::Ignored | EventEffect::Heavy | EventEffect::RescanRequired)
+            | Err(SessionError::Scan(_)) => {}
             Err(error) => self.fail(&error.to_string()),
         }
     }
