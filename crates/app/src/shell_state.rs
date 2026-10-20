@@ -20,6 +20,7 @@ use crate::duplicates_state::DuplicatesState;
 use crate::event_watch::EventWatch;
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::hover_tip::HoverTip;
+use crate::purge_run::PurgeRun;
 use crate::recommendations_model::RecommendationsModel;
 use crate::scan_job::ScanJob;
 use crate::scan_stage::ScanStage;
@@ -57,6 +58,7 @@ pub(crate) struct ShellState {
     pub watch: Option<EventWatch>,
     pub tray: Option<TraySheet>,
     pub tray_measurement: Option<TrayMeasurement>,
+    pub purge: Option<PurgeRun>,
     pub applying: Option<ApplyJob>,
     pub settings_opened: bool,
     pub scan_without_access: bool,
@@ -91,6 +93,7 @@ impl ShellState {
             watch: None,
             tray: None,
             tray_measurement: None,
+            purge: None,
             applying: None,
             settings_opened: false,
             scan_without_access: false,

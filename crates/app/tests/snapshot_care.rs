@@ -9,7 +9,7 @@ use serde_json::Value;
 const BINARY: &str = env!("CARGO_BIN_EXE_domovoi");
 const THEMES: [&str; 2] = ["dark", "light"];
 const SCALES: [u32; 2] = [1, 2];
-const SCREENS: [(&str, &[&str]); 3] = [("04", &[""]), ("06", &[""]), ("08", &["", "-measuring"])];
+const SCREENS: [(&str, &[&str]); 3] = [("04", &[""]), ("06", &[""]), ("08", &["", "-measuring", "-purging"])];
 const WIDE_WINDOW: [u32; 2] = [1100, 700];
 const SHEET_WIDTH: u32 = 560;
 const SHEET_MAX_HEIGHT: u32 = 700;

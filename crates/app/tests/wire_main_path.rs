@@ -195,6 +195,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
             {"step": "restore_last"},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
+            {"step": "purge_trash"},
             {
                 "step": "download_model",
                 "catalog": manifest_path(TEST_CATALOG),
@@ -310,6 +311,17 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
             .is_some_and(|groups| !groups.is_empty())
     );
     assert!(step(report, "replace_with_clone")["trashed"].as_str().is_some());
+    let purge = step(report, "purge_trash");
+    assert!(
+        purge["purged"].as_u64().is_some_and(|purged| purged > 0),
+        "what Domovoi moved to the Trash is removed for good: {purge}"
+    );
+    assert_eq!(purge["failed"], json!([]), "{purge}");
+    assert_eq!(purge["journal_left"], 0, "the journal forgets the removed set: {purge}");
+    assert_eq!(
+        purge["paths_left"], 0,
+        "the Trash no longer holds the removed set: {purge}"
+    );
 }
 
 fn assert_model_and_answer(report: &Value, server: &HfServer) {

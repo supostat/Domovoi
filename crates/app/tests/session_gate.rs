@@ -1,19 +1,20 @@
 use domovoi_app::{Section, ShellAction, ShellGate};
 use domovoi_render::DiagramMode;
 
-const SESSION_ACTIONS: [ShellAction; 9] = [
+const SESSION_ACTIONS: [ShellAction; 10] = [
     ShellAction::Rescan,
     ShellAction::SendCardsToTray,
     ShellAction::OpenTray,
     ShellAction::ConfirmTray,
     ShellAction::AddAnswerToTray(0),
     ShellAction::Restore(0),
+    ShellAction::PurgeTrash,
     ShellAction::ToggleDuplicateSearch,
     ShellAction::ApplyDuplicates,
     ShellAction::AskAssistant,
 ];
 
-const FREE_ACTIONS: [ShellAction; 13] = [
+const FREE_ACTIONS: [ShellAction; 14] = [
     ShellAction::Navigate(Section::Disk),
     ShellAction::Navigate(Section::Recommendations),
     ShellAction::Navigate(Section::Duplicates),
@@ -27,6 +28,7 @@ const FREE_ACTIONS: [ShellAction; 13] = [
     ShellAction::OpenTrash,
     ShellAction::StopAnswer,
     ShellAction::StopScan,
+    ShellAction::StopPurge,
 ];
 
 const IDLE: ShellGate = ShellGate {

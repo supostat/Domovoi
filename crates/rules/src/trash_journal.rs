@@ -2,6 +2,7 @@ use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::io;
+use std::mem;
 use std::os::fd::AsFd;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -94,6 +95,20 @@ impl TrashJournal {
         });
         self.save()?;
         Ok(Ok(trashed))
+    }
+
+    pub fn take_for_purge(&mut self) -> io::Result<Vec<JournalEntry>> {
+        let taken = mem::take(&mut self.entries);
+        if let Err(error) = self.save() {
+            self.entries = taken;
+            return Err(error);
+        }
+        Ok(taken)
+    }
+
+    pub fn return_untouched(&mut self, untouched: Vec<JournalEntry>) -> io::Result<()> {
+        self.entries.splice(0..0, untouched);
+        self.save()
     }
 
     pub fn forget_emptied(&mut self) -> io::Result<()> {

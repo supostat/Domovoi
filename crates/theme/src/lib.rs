@@ -19,6 +19,7 @@ mod size;
 pub use age::{DateSource, format_age};
 pub use appearance::palette_for;
 pub use count::format_count;
+pub use digits::group_thousands;
 pub use generated::{FONT_STACKS, FontStacks, Palette, RADII, Radii};
 pub use memory::format_memory;
 pub use motion::Motion;

@@ -34,6 +34,7 @@ use crate::event_effect::EventEffect;
 use crate::event_queue::{EventQueue, HEAVY_DELTA_NODES};
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
+use crate::purge_job::PurgeJob;
 use crate::recommendations_model::RecommendationsModel;
 use crate::safety_badge::SafetyBadge;
 use crate::scan_job::ScanJob;
@@ -175,6 +176,7 @@ impl EndToEnd {
                 Ok(json!({ "step": "find_duplicates", "groups": groups }))
             }
             ScenarioStep::ReplaceWithClone => self.replace_with_clone(),
+            ScenarioStep::PurgeTrash => self.purge_trash(),
             ScenarioStep::DownloadModel {
                 catalog,
                 entry,
@@ -195,6 +197,33 @@ impl EndToEnd {
 
     fn session(&self) -> &Session {
         self.session.as_ref().expect(SESSION_BETWEEN_STEPS)
+    }
+
+    fn purge_trash(&mut self) -> Result<Value, String> {
+        let entries = self.session_mut().take_for_purge().map_err(|error| error.to_string())?;
+        let trashed: Vec<PathBuf> = entries.iter().map(|entry| PathBuf::from(&entry.trashed)).collect();
+        let job = PurgeJob::start(entries);
+        while !job.is_finished() {
+            thread::sleep(SCAN_POLL);
+        }
+        let report = job.finish();
+        let failed: Vec<String> = report
+            .failed
+            .iter()
+            .map(|(entry, error)| format!("{}: {error}", entry.trashed))
+            .collect();
+        let (purged, skipped) = (report.purged.len(), report.skipped.len());
+        self.session_mut()
+            .return_untouched(report.untouched)
+            .map_err(|error| error.to_string())?;
+        Ok(json!({
+            "step": "purge_trash",
+            "purged": purged,
+            "skipped": skipped,
+            "failed": failed,
+            "journal_left": self.session().trash_journal().entries().len(),
+            "paths_left": trashed.iter().filter(|path| path.symlink_metadata().is_ok()).count(),
+        }))
     }
 
     fn rescan(&mut self, path: &Path) -> Result<Value, String> {
@@ -510,6 +539,7 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::RestoreLast => "restore_last",
         ScenarioStep::FindDuplicates => "find_duplicates",
         ScenarioStep::ReplaceWithClone => "replace_with_clone",
+        ScenarioStep::PurgeTrash => "purge_trash",
         ScenarioStep::DownloadModel { .. } => "download_model",
         ScenarioStep::AskAssistant { .. } => "ask_assistant",
         ScenarioStep::Snapshots { .. } => "snapshots",

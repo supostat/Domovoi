@@ -119,6 +119,16 @@ define_class!(
             self.dispatch(ShellAction::OpenTrash);
         }
 
+        #[unsafe(method(purgeTrash:))]
+        fn purge_trash(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::PurgeTrash);
+        }
+
+        #[unsafe(method(stopPurge:))]
+        fn stop_purge(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::StopPurge);
+        }
+
         #[unsafe(method(restore:))]
         fn restore(&self, sender: &AnyObject) {
             self.dispatch(ShellAction::Restore(tag_of(sender)));

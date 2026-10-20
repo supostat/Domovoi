@@ -17,8 +17,8 @@ use domovoi_index::{
 };
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_rules::{
-    CaseRule, ConfigOverrides, Denylist, Recommendations, RestoreError, RuleSet, TrashJournal, TrashOutcome, Tray,
-    running_bundle_ids,
+    CaseRule, ConfigOverrides, Denylist, JournalEntry, Recommendations, RestoreError, RuleSet, TrashJournal,
+    TrashOutcome, Tray, running_bundle_ids,
 };
 use domovoi_scanner::{
     CancelToken, ScanError, ScanOptions, ScanProgress, Since, VolumeEvent, VolumeEventStream, current_event_id, scan,
@@ -322,6 +322,14 @@ impl Session {
             .collect();
         self.rescan_paths(&moved)?;
         Ok(outcomes)
+    }
+
+    pub fn take_for_purge(&mut self) -> io::Result<Vec<JournalEntry>> {
+        self.trash_journal.take_for_purge()
+    }
+
+    pub fn return_untouched(&mut self, untouched: Vec<JournalEntry>) -> io::Result<()> {
+        self.trash_journal.return_untouched(untouched)
     }
 
     pub fn restore(&mut self, position: usize) -> Result<PathBuf, RestoreError> {

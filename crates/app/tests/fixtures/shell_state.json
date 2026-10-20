@@ -581,6 +581,10 @@
     "files": 182340,
     "bytes": 41800000000
   },
+  "tray_purging": {
+    "done": 1200,
+    "total": 3400
+  },
   "ai": {
     "chat": {
       "entries": [

@@ -178,6 +178,23 @@ pub const CLOSE: &str = "Закрыть";
 pub const RECENTLY_MOVED: &str = "Недавно перемещённые";
 pub const RESTORE: &str = "Вернуть";
 pub const NOT_MOVED: &str = "Не перемещено:";
+pub const PURGE: &str = "Удалить окончательно";
+pub const PURGE_CONFIRM: &str = "Удалить окончательно перенесённое Домовым?";
+pub const PURGE_CONFIRM_HINT: &str = "Вернуть его будет нельзя.";
+pub const PURGE_ACCEPT: &str = "Удалить";
+pub const PURGING: &str = "Удаляю:";
+pub const PURGED: &str = "Удалено окончательно:";
+pub const NOT_PURGED: &str = "Не удалено:";
+pub const PURGE_ITEMS: PluralForms = PluralForms {
+    one: "элемента",
+    few: "элементов",
+    many: "элементов",
+};
+pub const PURGED_OBJECTS: PluralForms = PluralForms {
+    one: "объект",
+    few: "объекта",
+    many: "объектов",
+};
 pub const TRAY_EMPTY: &str =
     "Корзина Домового пуста. Отметьте рекомендации или копии дубликатов, и они соберутся здесь.";
 pub const TRASH_NO_PERMISSION: &str = "нет прав";

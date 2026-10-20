@@ -26,6 +26,8 @@ pub enum ShellAction {
     CloseTray,
     OpenTrash,
     Restore(usize),
+    PurgeTrash,
+    StopPurge,
     AskAssistant,
     StopAnswer,
     AddAnswerToTray(usize),
@@ -52,6 +54,7 @@ impl ShellAction {
                 | Self::ConfirmTray
                 | Self::AddAnswerToTray(_)
                 | Self::Restore(_)
+                | Self::PurgeTrash
                 | Self::ToggleDuplicateSearch
                 | Self::ApplyDuplicates
                 | Self::AskAssistant

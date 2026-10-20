@@ -29,6 +29,7 @@ pub enum ScenarioStep {
     RestoreLast,
     FindDuplicates,
     ReplaceWithClone,
+    PurgeTrash,
     DownloadModel {
         catalog: PathBuf,
         entry: String,

@@ -9,6 +9,7 @@ use objc2_foundation::{NSInteger, NSPoint, NSRect, NSSize, NSString};
 use crate::button_style::ButtonStyle;
 use crate::field_ornament::{FieldOrnament, OrnamentInk};
 use crate::fill_view::{FillStyle, FillView};
+use crate::journal_row::JournalRow;
 use crate::label::{label, measure_label};
 use crate::probes::Probes;
 use crate::shell_actions::ShellActions;
@@ -16,11 +17,12 @@ use crate::shell_button::ShellButton;
 use crate::shell_layout::NARROW_WINDOW;
 use crate::shell_palette::ShellPalette;
 use crate::strings::{
-    CANCEL, CLOSE, ESTIMATE_MARK, FREED_AFTER_EMPTYING, MOVE_TO_TRASH, NOT_MOVED, OPEN_TRASH, RECENTLY_MOVED, RESTORE,
-    TRAY, TRAY_EMPTY, TRAY_NOTE, WILL_MOVE,
+    CANCEL, CLOSE, ESTIMATE_MARK, FREED_AFTER_EMPTYING, MOVE_TO_TRASH, NOT_MOVED, NOT_PURGED, OPEN_TRASH, PURGE,
+    RECENTLY_MOVED, RESTORE, STOP, TRAY, TRAY_EMPTY, TRAY_NOTE, WILL_MOVE,
 };
 use crate::tray_column::{MARGIN, TrayColumn};
 use crate::tray_model::TrayModel;
+use crate::tray_outcome::TrayOutcome;
 use crate::tray_row::TrayRow;
 use crate::ui_font::{interface_font, mono_font};
 
@@ -66,61 +68,33 @@ impl TrayScreen {
         column.top += GAP;
         let mut ornament = None;
         let primary = if let Some(outcome) = &model.outcome {
-            let stitched = FieldOrnament::new(
-                marker,
-                NSRect::new(NSPoint::ZERO, NSSize::new(column.width, FieldOrnament::height())),
-                OrnamentInk {
-                    outline: tokens.wax,
-                    fill: tokens.berry,
-                    center: tokens.text,
-                },
-            );
-            column.add(
-                stitched.clone().into_super(),
-                MARGIN,
-                NSSize::new(column.width, FieldOrnament::height()),
-            );
-            column.top += FieldOrnament::height() + SECTION_GAP;
+            let (primary, stitched) = moved(&mut column, model, outcome);
             ornament = Some(stitched);
-            column.paragraph(
-                &outcome.moved_line(),
-                &interface_font(22.0, 600.0),
-                &tokens.text.ns_color(),
-            );
-            column.top += GAP / 2.0;
-            column.paragraph(
-                FREED_AFTER_EMPTYING,
-                &interface_font(13.0, 400.0),
-                &tokens.dim.ns_color(),
-            );
-            if !outcome.failures.is_empty() {
-                column.top += GAP;
-                column.paragraph(NOT_MOVED, &interface_font(13.0, 600.0), &tokens.text.ns_color());
-                for failure in &outcome.failures {
-                    column.paragraph(failure, &interface_font(12.5, 400.0), &tokens.mute.ns_color());
-                }
-            }
-            column.top += SECTION_GAP;
-            column.buttons(&[(OPEN_TRASH, sel!(openTrash:), false), (CLOSE, sel!(closeTray:), true)])
+            primary
         } else if model.rows.is_empty() {
             column.paragraph(TRAY_EMPTY, &interface_font(14.0, 400.0), &tokens.mute.ns_color());
+            purge_status(&mut column, model);
             column.top += SECTION_GAP;
-            column.buttons(&[(CLOSE, sel!(closeTray:), true)])
+            if model.purging.is_some() {
+                column.buttons(&[(STOP, sel!(stopPurge:), true)])
+            } else {
+                column.buttons(&[(CLOSE, sel!(closeTray:), true)])
+            }
         } else {
             confirmation(&mut column, model);
-            column.buttons(&[
-                (CANCEL, sel!(closeTray:), false),
-                (MOVE_TO_TRASH, sel!(confirmTray:), true),
-            ])
-        };
-        if !model.journal.is_empty() {
-            column.top += SECTION_GAP;
-            column.caps(RECENTLY_MOVED);
-            column.top += GAP / 2.0;
-            for row in &model.journal {
-                journal_row(&mut column, row, palette, actions);
+            if purge_status(&mut column, model) {
+                column.top += SECTION_GAP;
             }
-        }
+            if model.purging.is_some() {
+                column.buttons(&[(STOP, sel!(stopPurge:), true)])
+            } else {
+                column.buttons(&[
+                    (CANCEL, sel!(closeTray:), false),
+                    (MOVE_TO_TRASH, sel!(confirmTray:), true),
+                ])
+            }
+        };
+        recently_moved(&mut column, model);
         let primary_frame = column.primary.expect("the primary button is placed");
         let height = column.finish();
         Self {
@@ -138,6 +112,101 @@ impl TrayScreen {
     pub fn size(&self) -> NSSize {
         self.root.frame().size
     }
+}
+
+fn moved(
+    column: &mut TrayColumn<'_>,
+    model: &TrayModel,
+    outcome: &TrayOutcome,
+) -> (Retained<ShellButton>, Retained<FieldOrnament>) {
+    let tokens = column.palette.tokens;
+    let stitched = FieldOrnament::new(
+        column.marker,
+        NSRect::new(NSPoint::ZERO, NSSize::new(column.width, FieldOrnament::height())),
+        OrnamentInk {
+            outline: tokens.wax,
+            fill: tokens.berry,
+            center: tokens.text,
+        },
+    );
+    column.add(
+        stitched.clone().into_super(),
+        MARGIN,
+        NSSize::new(column.width, FieldOrnament::height()),
+    );
+    column.top += FieldOrnament::height() + SECTION_GAP;
+    column.paragraph(
+        &outcome.moved_line(),
+        &interface_font(22.0, 600.0),
+        &tokens.text.ns_color(),
+    );
+    if model.purged.is_none() {
+        column.top += GAP / 2.0;
+        column.paragraph(
+            FREED_AFTER_EMPTYING,
+            &interface_font(13.0, 400.0),
+            &tokens.dim.ns_color(),
+        );
+    }
+    if !outcome.failures.is_empty() {
+        column.top += GAP;
+        column.paragraph(NOT_MOVED, &interface_font(13.0, 600.0), &tokens.text.ns_color());
+        for failure in &outcome.failures {
+            column.paragraph(failure, &interface_font(12.5, 400.0), &tokens.mute.ns_color());
+        }
+    }
+    purge_status(column, model);
+    column.top += SECTION_GAP;
+    let primary = if model.purging.is_some() {
+        column.buttons(&[(STOP, sel!(stopPurge:), true)])
+    } else if model.purged.is_none() && !model.journal.is_empty() {
+        column.buttons(&[
+            (PURGE, sel!(purgeTrash:), false),
+            (OPEN_TRASH, sel!(openTrash:), false),
+            (CLOSE, sel!(closeTray:), true),
+        ])
+    } else {
+        column.buttons(&[(OPEN_TRASH, sel!(openTrash:), false), (CLOSE, sel!(closeTray:), true)])
+    };
+    (primary, stitched)
+}
+
+fn recently_moved(column: &mut TrayColumn<'_>, model: &TrayModel) {
+    if model.journal.is_empty() || model.purging.is_some() {
+        return;
+    }
+    column.top += SECTION_GAP;
+    if model.outcome.is_some() {
+        column.caps(RECENTLY_MOVED);
+    } else {
+        column.caps_with_button(RECENTLY_MOVED, PURGE, sel!(purgeTrash:));
+    }
+    column.top += GAP / 2.0;
+    for row in &model.journal {
+        journal_row(column, row);
+    }
+}
+
+fn purge_status(column: &mut TrayColumn<'_>, model: &TrayModel) -> bool {
+    let tokens = column.palette.tokens;
+    if let Some(purging) = model.purging_line() {
+        column.top += GAP;
+        column.paragraph(&purging, &interface_font(13.5, 600.0), &tokens.text.ns_color());
+        return true;
+    }
+    let (Some(purged), Some(outcome)) = (model.purged_line(), model.purged.as_ref()) else {
+        return false;
+    };
+    column.top += GAP;
+    column.paragraph(&purged, &interface_font(13.5, 600.0), &tokens.text.ns_color());
+    if !outcome.failures.is_empty() {
+        column.top += GAP / 2.0;
+        column.paragraph(NOT_PURGED, &interface_font(13.0, 600.0), &tokens.text.ns_color());
+        for failure in &outcome.failures {
+            column.paragraph(failure, &interface_font(12.5, 400.0), &tokens.mute.ns_color());
+        }
+    }
+    true
 }
 
 fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) {
@@ -258,12 +327,9 @@ fn tray_row(column: &mut TrayColumn<'_>, row: &TrayRow) {
     column.top += ROW_HEIGHT;
 }
 
-fn journal_row(
-    column: &mut TrayColumn<'_>,
-    row: &crate::journal_row::JournalRow,
-    palette: &ShellPalette,
-    actions: &ShellActions,
-) {
+fn journal_row(column: &mut TrayColumn<'_>, row: &JournalRow) {
+    let palette = column.palette;
+    let actions = column.actions;
     let tokens = palette.tokens;
     let restore = ShellButton::new(
         column.marker,

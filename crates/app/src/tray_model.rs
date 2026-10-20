@@ -2,16 +2,18 @@ use std::path::Path;
 
 use domovoi_index::{Index, Reclaimable};
 use domovoi_rules::{TrashFailure, TrashJournal, TrashOutcome, Tray};
-use domovoi_theme::format_count;
+use domovoi_theme::{format_count, group_thousands};
 use serde::Deserialize;
 
 use crate::deny_reason_text::deny_reason_text;
 use crate::held_line::held_line;
 use crate::journal_row::JournalRow;
 use crate::measure_progress::MeasureProgress;
+use crate::purge_outcome::PurgeOutcome;
+use crate::purge_status::PurgeStatus;
 use crate::strings::{
-    FILES, REFINING_SIZE, TRASH_MISSING, TRASH_NO_PERMISSION, TRASH_NO_TRASH, TRASH_OTHER, TRASH_OUT_OF_SPACE,
-    TRASH_READ_ONLY, rule_title,
+    FILES, OF, PURGE_ITEMS, PURGED, PURGED_OBJECTS, PURGING, REFINING_SIZE, TRASH_MISSING, TRASH_NO_PERMISSION,
+    TRASH_NO_TRASH, TRASH_OTHER, TRASH_OUT_OF_SPACE, TRASH_READ_ONLY, rule_title,
 };
 use crate::tilde::tilde;
 use crate::tray_outcome::TrayOutcome;
@@ -35,6 +37,10 @@ pub struct TrayModel {
     pub outcome: Option<TrayOutcome>,
     #[serde(default)]
     pub journal: Vec<JournalRow>,
+    #[serde(default)]
+    pub purging: Option<PurgeStatus>,
+    #[serde(default)]
+    pub purged: Option<PurgeOutcome>,
 }
 
 impl TrayModel {
@@ -84,6 +90,8 @@ impl TrayModel {
             measuring: None,
             outcome: None,
             journal: journal_rows(journal),
+            purging: None,
+            purged: None,
         }
     }
 
@@ -96,6 +104,36 @@ impl TrayModel {
     pub fn measuring_line(&self) -> Option<String> {
         self.measuring
             .map(|progress| format!("{REFINING_SIZE} {}", format_count(progress.files, &FILES)))
+    }
+
+    #[must_use]
+    pub fn with_purge(mut self, status: PurgeStatus) -> Self {
+        self.purging = Some(status);
+        self
+    }
+
+    #[must_use]
+    pub fn with_purged(mut self, outcome: PurgeOutcome, journal: &TrashJournal) -> Self {
+        self.purging = None;
+        self.purged = Some(outcome);
+        self.journal = journal_rows(journal);
+        self
+    }
+
+    pub fn purging_line(&self) -> Option<String> {
+        self.purging.map(|status| {
+            format!(
+                "{PURGING} {} {OF} {}",
+                group_thousands(status.done as u64),
+                format_count(status.total as u64, &PURGE_ITEMS)
+            )
+        })
+    }
+
+    pub fn purged_line(&self) -> Option<String> {
+        self.purged
+            .as_ref()
+            .map(|outcome| format!("{PURGED} {}", format_count(outcome.removed as u64, &PURGED_OBJECTS)))
     }
 
     pub fn total(&self) -> u64 {

@@ -10,6 +10,7 @@ use crate::availability::Availability;
 use crate::care_models::CareModels;
 use crate::measure_progress::MeasureProgress;
 use crate::outline_fixture::OutlineFixture;
+use crate::purge_status::PurgeStatus;
 use crate::scan_status::ScanStatus;
 use crate::screen::Screen;
 use crate::shell_data::ShellData;
@@ -31,6 +32,7 @@ pub struct ShellFixture {
     pub tree: OutlineFixture,
     pub care: CareModels,
     pub tray_measuring: MeasureProgress,
+    pub tray_purging: PurgeStatus,
     pub ai: AiFixture,
 }
 
@@ -46,6 +48,9 @@ impl ShellFixture {
         let mut care = self.care.clone();
         if screen == Screen::Tray(TrayVariant::Measuring) {
             care.tray = care.tray.with_progress(self.tray_measuring);
+        }
+        if screen == Screen::Tray(TrayVariant::Purging) {
+            care.tray = care.tray.with_purge(self.tray_purging);
         }
         Ok(ShellData {
             disk_name: self.disk_name.clone(),
