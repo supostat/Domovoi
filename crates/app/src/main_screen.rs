@@ -35,7 +35,7 @@ const NOTICE_GAP: f64 = 12.0;
 #[derive(Debug)]
 pub struct MainScreen {
     pub frame: WindowFrame,
-    pub crumbs: Breadcrumbs,
+    pub crumbs: Retained<Breadcrumbs>,
     pub list: LevelList,
     pub free: Retained<NSTextField>,
     pub in_cloud: Option<Retained<NSTextField>>,
@@ -61,16 +61,6 @@ impl MainScreen {
         let right = pane.width - PANE_PADDING;
         let pinned_top = NSAutoresizingMaskOptions::ViewMinYMargin;
         let pinned_top_right = NSAutoresizingMaskOptions::ViewMinXMargin | NSAutoresizingMaskOptions::ViewMinYMargin;
-        let crumbs = Breadcrumbs::build(marker, &data.crumbs(focus), palette, actions);
-        let crumbs_size = crumbs.stack.fittingSize();
-        crumbs.stack.setFrame(from_top(
-            pane,
-            left,
-            HEAD_TOP + (HEAD_HEIGHT - crumbs_size.height) / 2.0,
-            crumbs_size,
-        ));
-        crumbs.stack.setAutoresizingMask(pinned_top);
-        frame.pane.addSubview(&crumbs.stack);
         let tray = ShellButton::new(
             marker,
             TRAY,
@@ -118,7 +108,16 @@ impl MainScreen {
             palette,
             (actions, sel!(selectMode:)),
         );
-        place_head(&modes.view, pane, head_right, pinned_top_right, &frame.pane);
+        let crumbs_right = place_head(&modes.view, pane, head_right, pinned_top_right, &frame.pane);
+        let crumbs = Breadcrumbs::new(
+            marker,
+            from_top(pane, left, HEAD_TOP, NSSize::new(crumbs_right - left, HEAD_HEIGHT)),
+            &data.crumbs(focus),
+            palette,
+            actions,
+        );
+        crumbs.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | pinned_top);
+        frame.pane.addSubview(&crumbs);
         let diagram_frame = from_top(pane, left, BODY_TOP, NSSize::new(DIAGRAM_SIDE, DIAGRAM_SIDE));
         legend_block(marker, &frame.pane, data, palette);
         let list_left = left + DIAGRAM_SIDE + LIST_GAP;

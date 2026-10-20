@@ -2,12 +2,12 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use domovoi_app::{
-    Breadcrumbs, CardModel, Crumb, HoverPanel, HoverTip, LevelRow, LevelRowView, MemberModel, Provenance,
+    Breadcrumbs, CardModel, Crumb, HoverPanel, HoverTip, LevelRow, LevelRowView, MainScreen, MemberModel, Provenance,
     RecommendationCard, SafetyBadge, ScanningScreen, Screen, Section, ShellActions, ShellFixture, ShellPalette,
     SidebarEntry, SidebarItemView, development_fonts, member_row, strings,
 };
 use domovoi_index::Category;
-use domovoi_render::register_fonts;
+use domovoi_render::{DiagramMode, register_fonts};
 use domovoi_theme::Palette;
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly};
@@ -24,6 +24,12 @@ const SIZE_TEXT: &str = "393,2 ГБ";
 const CARD_WIDTH: f64 = 520.0;
 const DUPLICATE_ROW: f64 = 480.0;
 const TITLE_LINES: isize = 2;
+const WIDE_CRUMBS: f64 = 2_000.0;
+const NARROWEST_CRUMBS: f64 = 40.0;
+const CRUMB_STEP: f64 = 10.0;
+const CRUMB_HEIGHT: f64 = 30.0;
+const ELLIPSIS: &str = "…";
+const IN_CLOUD_BYTES: u64 = 12_000_000_000;
 const CRUMBS: [&str; 7] = [
     "Macintosh HD",
     "Пользователи · igor",
@@ -139,33 +145,45 @@ fn sidebar(checks: &mut Checks, marker: MainThreadMarker) {
     );
 }
 
-fn crumbs(checks: &mut Checks, marker: MainThreadMarker) {
-    let path: Vec<Crumb> = CRUMBS
+fn titles(crumbs: &Breadcrumbs) -> Vec<String> {
+    crumbs
+        .buttons()
+        .iter()
+        .map(|button| button.title().to_string())
+        .collect()
+}
+
+fn right_edge(view: &NSView) -> f64 {
+    view.subviews()
+        .iter()
+        .map(|child| child.frame().origin.x + child.frame().size.width)
+        .fold(0.0, f64::max)
+}
+
+fn crumb_path() -> Vec<Crumb> {
+    CRUMBS
         .iter()
         .enumerate()
         .map(|(node, title)| Crumb {
             node,
             title: (*title).to_owned(),
         })
-        .collect();
+        .collect()
+}
+
+fn crumbs(checks: &mut Checks, marker: MainThreadMarker) {
     let actions = ShellActions::new(marker);
-    let crumbs = Breadcrumbs::build(marker, &path, &palette(), &actions);
-    let titles: Vec<String> = crumbs.buttons.iter().map(|button| button.title().to_string()).collect();
-    checks.expect(
-        titles == ["Macintosh HD", "…", "Data", "vms"],
-        format!("crumbs collapse the middle levels: {titles:?}"),
+    let crumbs = Breadcrumbs::new(
+        marker,
+        NSRect::new(NSPoint::ZERO, NSSize::new(WIDE_CRUMBS, CRUMB_HEIGHT)),
+        &crumb_path(),
+        &palette(),
+        &actions,
     );
-    let collapsed: Vec<&str> = crumbs.collapsed.iter().map(|crumb| crumb.title.as_str()).collect();
-    checks.expect(collapsed == CRUMBS[1..5], format!("collapsed levels {collapsed:?}"));
-    let menu = crumbs.buttons[1].menu().expect("the ellipsis carries a menu");
-    let entries: Vec<String> = menu.itemArray().iter().map(|item| item.title().to_string()).collect();
-    checks.expect(entries == CRUMBS[1..5], format!("the ellipsis menu lists {entries:?}"));
-    for (button, title) in crumbs
-        .buttons
-        .iter()
-        .zip(titles.iter())
-        .filter(|(_, title)| *title != "…")
-    {
+    let all = titles(&crumbs);
+    checks.expect(all == CRUMBS, format!("a wide frame shows every level: {all:?}"));
+    checks.expect(crumbs.collapsed().is_empty(), "nothing is collapsed on a wide frame");
+    for (button, title) in crumbs.buttons().iter().zip(CRUMBS) {
         checks.mode(button, NSLineBreakMode::ByTruncatingTail, &format!("crumb {title}"));
         checks.truncated_with_full_text(button, title, &format!("crumb {title}"));
         let show = button.menu().expect("a crumb carries a menu");
@@ -180,6 +198,113 @@ fn crumbs(checks: &mut Checks, marker: MainThreadMarker) {
             format!("crumb {title} menu offers {first}"),
         );
     }
+    let full = right_edge(&crumbs);
+    let mut shown_levels = CRUMBS.len();
+    let mut width = full;
+    while width >= NARROWEST_CRUMBS {
+        crumbs.setFrameSize(NSSize::new(width, CRUMB_HEIGHT));
+        shown_levels = crumbs_step(checks, &crumbs, width, shown_levels);
+        width -= CRUMB_STEP;
+    }
+    crumbs.setFrameSize(NSSize::new(NARROWEST_CRUMBS, CRUMB_HEIGHT));
+    let narrowest = titles(&crumbs);
+    let current = CRUMBS[CRUMBS.len() - 1];
+    checks.expect(
+        narrowest == [ELLIPSIS, current],
+        format!("the narrowest frame keeps the ellipsis and the current level: {narrowest:?}"),
+    );
+    let buttons = crumbs.buttons();
+    let last = buttons.last().expect("the current level stays");
+    checks.expect(
+        last.frame().size.width < last.fittingSize().width,
+        "the current level is cut on the narrowest frame",
+    );
+    checks.truncated_with_full_text(last, current, "cut current crumb");
+    crumbs.setFrame(NSRect::new(NSPoint::ZERO, NSSize::new(full - 1.0, CRUMB_HEIGHT)));
+    checks.expect(
+        titles(&crumbs) != CRUMBS,
+        "a frame change through setFrame: collapses the crumbs too",
+    );
+    crumbs.setFrameSize(NSSize::new(WIDE_CRUMBS, CRUMB_HEIGHT));
+    let regrown = titles(&crumbs);
+    checks.expect(
+        regrown == CRUMBS,
+        format!("widening brings every level back: {regrown:?}"),
+    );
+}
+
+fn crumbs_step(checks: &mut Checks, crumbs: &Breadcrumbs, width: f64, shown_before: usize) -> usize {
+    let shown = titles(crumbs);
+    let element = format!("crumbs at {width} pt {shown:?}");
+    checks.expect(right_edge(crumbs) <= width + 0.5, format!("{element}: overflow"));
+    let all = shown == CRUMBS;
+    let first = !all && shown.first().is_some_and(|title| title == CRUMBS[0]);
+    let mut rest: &[String] = &shown;
+    if first {
+        rest = &rest[1..];
+    }
+    let ellipsis = rest.first().is_some_and(|title| title == ELLIPSIS);
+    if ellipsis {
+        rest = &rest[1..];
+    }
+    let tail = &CRUMBS[CRUMBS.len() - rest.len()..];
+    checks.expect(rest == tail, format!("{element}: the tail runs to the current level"));
+    let expected: Vec<&str> = if all {
+        Vec::new()
+    } else {
+        CRUMBS[usize::from(first)..CRUMBS.len() - rest.len()].to_vec()
+    };
+    let collapsed: Vec<String> = crumbs.collapsed().into_iter().map(|crumb| crumb.title).collect();
+    checks.expect(collapsed == expected, format!("{element}: collapsed {collapsed:?}"));
+    checks.expect(
+        ellipsis != expected.is_empty(),
+        format!("{element}: ellipsis only for collapsed levels"),
+    );
+    let buttons = crumbs.buttons();
+    if ellipsis {
+        let menu = buttons[usize::from(first)].menu().expect("the ellipsis carries a menu");
+        let entries: Vec<String> = menu.itemArray().iter().map(|item| item.title().to_string()).collect();
+        checks.expect(
+            entries == expected,
+            format!("{element}: the ellipsis menu lists {entries:?}"),
+        );
+    }
+    for button in &buttons[..buttons.len() - 1] {
+        checks.expect(
+            button.frame().size.width + 0.5 >= button.fittingSize().width,
+            format!("{element}: {} is cut", button.title()),
+        );
+    }
+    let levels = shown.len() - usize::from(ellipsis);
+    checks.expect(
+        levels <= shown_before,
+        format!("{element}: a narrower frame shows more levels"),
+    );
+    levels
+}
+
+fn head(checks: &mut Checks, marker: MainThreadMarker) {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shell_state.json");
+    let mut data = ShellFixture::read(&fixture)
+        .and_then(|fixture| fixture.shell_data(Screen::Main))
+        .expect("the fixture reads");
+    data.in_cloud_bytes = IN_CLOUD_BYTES;
+    let deepest = (0..data.tree.len())
+        .max_by_key(|node| data.crumbs(*node).len())
+        .expect("the fixture tree has nodes");
+    let actions = ShellActions::new(marker);
+    let screen = MainScreen::build(marker, &data, deepest, DiagramMode::Sunburst, &palette(), &actions);
+    checks.expect(screen.in_cloud.is_some(), "the head shows the cloud figure");
+    let crumbs = screen.crumbs.frame();
+    let switch = screen.modes.view.frame();
+    checks.expect(
+        crumbs.origin.x + crumbs.size.width <= switch.origin.x,
+        format!("the crumbs {crumbs:?} end before the switch {switch:?}"),
+    );
+    checks.expect(
+        right_edge(&screen.crumbs) <= crumbs.size.width + 0.5,
+        format!("the crumbs fit their frame: {:?}", titles(&screen.crumbs)),
+    );
 }
 
 fn scanning(checks: &mut Checks, marker: MainThreadMarker) {
@@ -277,6 +402,7 @@ fn main() -> ExitCode {
     level_rows(&mut checks, marker);
     sidebar(&mut checks, marker);
     crumbs(&mut checks, marker);
+    head(&mut checks, marker);
     scanning(&mut checks, marker);
     hover(&mut checks, marker);
     recommendation_card(&mut checks, marker);
