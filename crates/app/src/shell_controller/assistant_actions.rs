@@ -10,6 +10,8 @@ use objc2_app_kit::{
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use super::ShellController;
+#[cfg(feature = "claude-code")]
+use crate::assistant_provider::AssistantProvider;
 use crate::assistant_settings::AssistantSettings;
 use crate::chat_entry::ChatEntry;
 use crate::install_error_text::install_error_text;
@@ -200,6 +202,20 @@ impl ShellController {
                 }
                 assistant.unload();
             }
+        }
+        self.show_assistant_change(false);
+    }
+
+    #[cfg(feature = "claude-code")]
+    pub(super) fn toggle_claude_code(&self) {
+        {
+            let mut state = self.state.borrow_mut();
+            let settings = &mut state.assistant.settings;
+            settings.provider = match settings.provider {
+                AssistantProvider::LocalModel => AssistantProvider::ClaudeCode,
+                AssistantProvider::ClaudeCode => AssistantProvider::LocalModel,
+            };
+            settings.save();
         }
         self.show_assistant_change(false);
     }

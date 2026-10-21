@@ -112,6 +112,8 @@ impl ModelLibrary {
             unload: settings.unload,
             source: settings.source_host(),
             orphans,
+            #[cfg(feature = "claude-code")]
+            claude_code: None,
         }
     }
 

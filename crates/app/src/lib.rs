@@ -12,8 +12,11 @@ mod apply_job;
 mod ask_event;
 mod ask_job;
 mod ask_outcome;
+mod ask_reply;
 mod assembled_view;
 mod assistant;
+#[cfg(feature = "claude-code")]
+mod assistant_provider;
 mod assistant_screen;
 mod assistant_settings;
 mod availability;
@@ -36,6 +39,10 @@ mod chat_input;
 mod chat_input_delegate;
 mod chat_model;
 mod check_box;
+#[cfg(feature = "claude-code")]
+mod claude_code_choice;
+#[cfg(feature = "claude-code")]
+mod claude_search;
 mod clone_refusal_text;
 mod command_line;
 mod crumb;
@@ -184,6 +191,12 @@ pub use answer_item::AnswerItem;
 pub use answer_target::AnswerTarget;
 pub use applied_batch::AppliedBatch;
 pub use apply_job::ApplyJob;
+pub use ask_job::AskJob;
+pub use ask_outcome::AskOutcome;
+pub use ask_reply::AskReply;
+pub use assistant::Assistant;
+#[cfg(feature = "claude-code")]
+pub use assistant_provider::AssistantProvider;
 pub use assistant_screen::AssistantScreen;
 pub use assistant_settings::AssistantSettings;
 pub use availability::Availability;
@@ -197,6 +210,10 @@ pub use chat_entry::ChatEntry;
 pub use chat_input::ChatInput;
 pub use chat_model::ChatModel;
 pub use check_box::CheckBox;
+#[cfg(feature = "claude-code")]
+pub use claude_code_choice::ClaudeCodeChoice;
+#[cfg(feature = "claude-code")]
+pub use claude_search::{claude_directories, find_claude};
 pub use command_line::CommandLine;
 pub use crumb::Crumb;
 pub use disk_overview::{DiskOverview, in_cloud_bytes};

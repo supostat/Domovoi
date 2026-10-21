@@ -6,6 +6,8 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread;
 
 use domovoi_agent::{Agent, AgentAnswer, AgentContext, AgentError, AgentLimits, ToolStep};
+#[cfg(feature = "claude-code")]
+use domovoi_agent::{ClaudeAnswer, ClaudeCode, ClaudeCodeError};
 use domovoi_downloader::CatalogEntry;
 use domovoi_dups::{
     CloneJournal, ClonePlan, CloneReplaceError, CloneReplaced, CloudFolders, DuplicateGroup, DuplicateOptions,
@@ -269,9 +271,35 @@ impl Session {
         cancel: &CancelFlag,
         observer: &mut dyn FnMut(&ToolStep),
     ) -> Result<AgentAnswer, AgentError> {
-        let index = self.index.as_ref().expect("questions are asked about a scanned volume");
-        let context = AgentContext {
-            index,
+        Agent::new(backend, model.template, limits).calling_a_tool_first().ask(
+            &self.agent_context(question),
+            &question.text,
+            cancel,
+            observer,
+        )
+    }
+
+    #[cfg(feature = "claude-code")]
+    pub fn ask_claude(
+        &self,
+        claude: &ClaudeCode,
+        question: &Question,
+        claude_session: Option<&str>,
+        cancel: &CancelFlag,
+        observer: &mut dyn FnMut(&ToolStep),
+    ) -> Result<ClaudeAnswer, ClaudeCodeError> {
+        claude.ask(
+            &self.agent_context(question),
+            &question.text,
+            claude_session,
+            cancel,
+            observer,
+        )
+    }
+
+    fn agent_context<'a>(&'a self, question: &'a Question) -> AgentContext<'a> {
+        AgentContext {
+            index: self.index.as_ref().expect("questions are asked about a scanned volume"),
             rules: &self.rules,
             denylist: &self.denylist,
             totals: self
@@ -282,13 +310,7 @@ impl Session {
             home: &self.paths.home,
             history: &question.history,
             focus: &question.focus,
-        };
-        Agent::new(backend, model.template, limits).calling_a_tool_first().ask(
-            &context,
-            &question.text,
-            cancel,
-            observer,
-        )
+        }
     }
 
     pub fn apply_model_event(&mut self, event: &ModelEvent) {

@@ -1,10 +1,14 @@
 use domovoi_downloader::ModelSource;
 use objc2_foundation::{NSString, NSUserDefaults};
 
+#[cfg(feature = "claude-code")]
+use crate::assistant_provider::AssistantProvider;
 use crate::strings::SOURCE_NOT_HTTPS;
 use crate::unload_delay::UnloadDelay;
 
 const ENABLED: &str = "AssistantEnabled";
+#[cfg(feature = "claude-code")]
+const PROVIDER: &str = "AssistantProvider";
 const UNLOAD: &str = "ModelUnloadDelay";
 const MIRROR: &str = "ModelMirror";
 const ACTIVE: &str = "ActiveModel";
@@ -17,11 +21,20 @@ pub struct AssistantSettings {
     pub unload: UnloadDelay,
     pub mirror: Option<String>,
     pub active_entry: Option<String>,
+    #[cfg(feature = "claude-code")]
+    pub provider: AssistantProvider,
 }
 
 impl AssistantSettings {
     pub fn load() -> Self {
-        let defaults = NSUserDefaults::standardUserDefaults();
+        Self::load_from(&NSUserDefaults::standardUserDefaults())
+    }
+
+    pub fn save(&self) {
+        self.save_to(&NSUserDefaults::standardUserDefaults());
+    }
+
+    pub fn load_from(defaults: &NSUserDefaults) -> Self {
         let text = |key: &str| {
             defaults
                 .stringForKey(&NSString::from_str(key))
@@ -35,15 +48,21 @@ impl AssistantSettings {
                 .unwrap_or_default(),
             mirror: text(MIRROR),
             active_entry: text(ACTIVE),
+            #[cfg(feature = "claude-code")]
+            provider: text(PROVIDER)
+                .as_deref()
+                .and_then(AssistantProvider::from_key)
+                .unwrap_or_default(),
         }
     }
 
-    pub fn save(&self) {
-        let defaults = NSUserDefaults::standardUserDefaults();
+    pub fn save_to(&self, defaults: &NSUserDefaults) {
         defaults.setBool_forKey(self.enabled, &NSString::from_str(ENABLED));
-        store(&defaults, UNLOAD, Some(self.unload.key()));
-        store(&defaults, MIRROR, self.mirror.as_deref());
-        store(&defaults, ACTIVE, self.active_entry.as_deref());
+        store(defaults, UNLOAD, Some(self.unload.key()));
+        store(defaults, MIRROR, self.mirror.as_deref());
+        store(defaults, ACTIVE, self.active_entry.as_deref());
+        #[cfg(feature = "claude-code")]
+        store(defaults, PROVIDER, Some(self.provider.key()));
     }
 
     pub fn source(&self) -> ModelSource {

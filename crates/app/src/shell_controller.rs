@@ -35,6 +35,8 @@ use crate::assistant_settings::AssistantSettings;
 use crate::bundle_resources::diagram_metallib;
 use crate::cache_opening::CacheOpening;
 use crate::care_models::CareModels;
+#[cfg(feature = "claude-code")]
+use crate::claude_search::installed_claude_code;
 use crate::clone_refusal_text::clone_refusal_text;
 use crate::diagram_preference::{remember_mode, remembered_mode};
 use crate::disk_overview::{DiskOverview, SYSTEM_DATA_ROOT};
@@ -108,6 +110,9 @@ pub(crate) struct ShellController {
 
 impl ShellController {
     pub(crate) fn launch(marker: MainThreadMarker, paths: SessionPaths, models: ModelStore) -> Rc<Self> {
+        let assistant = Assistant::new(models, Catalog::bundled(), AssistantSettings::load());
+        #[cfg(feature = "claude-code")]
+        let assistant = assistant.with_claude_code(installed_claude_code(&paths));
         let window = unsafe {
             NSWindow::initWithContentRect_styleMask_backing_defer(
                 NSWindow::alloc(marker),
@@ -132,10 +137,7 @@ impl ShellController {
             actions: ShellActions::new(marker),
             hover: HoverPanel::new(marker),
             paths,
-            state: RefCell::new(ShellState::new(
-                remembered_mode(),
-                Assistant::new(models, Catalog::bundled(), AssistantSettings::load()),
-            )),
+            state: RefCell::new(ShellState::new(remembered_mode(), assistant)),
         });
         let handler: Weak<dyn ActionHandler> = controller.this.clone();
         controller.actions.connect(handler);
@@ -1266,6 +1268,8 @@ impl ActionHandler for ShellController {
             ShellAction::StopAnswer => self.stop_answer(),
             ShellAction::AddAnswerToTray(position) => self.add_answer_to_tray(position),
             ShellAction::ToggleAssistant => self.toggle_assistant(),
+            #[cfg(feature = "claude-code")]
+            ShellAction::ToggleClaudeCode => self.toggle_claude_code(),
             ShellAction::DownloadModel(position) => self.download_model(position),
             ShellAction::PauseDownload(position) => self.pause_download(position),
             ShellAction::CancelDownload(position) => self.cancel_download(position),

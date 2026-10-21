@@ -239,6 +239,23 @@ pub const SERVICE_UNAVAILABLE: &str = "Сервис модели недосту�
 pub const MODEL_FILE_UNREADABLE: &str = "Файл модели не открывается.";
 
 pub const LOCAL_MODEL: &str = "Локальная модель";
+#[cfg(feature = "claude-code")]
+pub const CLAUDE_CODE_SWITCH: &str = "Claude через Claude Code";
+#[cfg(feature = "claude-code")]
+pub const CLAUDE_CODE_OFFER: &str =
+    "Вместо локальной модели вопросы может разбирать Claude на вашей подписке. Инструменты и сводка те же.";
+#[cfg(feature = "claude-code")]
+pub const CLAUDE_CODE_CHOSEN: &str =
+    "Вопросы разбирает Claude на вашей подписке. Он видит те же пути, размеры и даты и не трогает файлы.";
+#[cfg(feature = "claude-code")]
+pub const CLAUDE_CODE_MISSING: &str =
+    "Claude Code не найден в ~/.local/bin, /opt/homebrew/bin и /usr/local/bin. Установите его и войдите в аккаунт.";
+#[cfg(feature = "claude-code")]
+pub const CLAUDE_NOT_STARTED: &str = "Claude Code не запустился. Проверьте, что он установлен и вход выполнен.";
+#[cfg(feature = "claude-code")]
+pub const CLAUDE_FAILED: &str = "Claude Code не смог ответить:";
+#[cfg(feature = "claude-code")]
+pub const CLAUDE_UNREADABLE: &str = "Claude Code ответил в незнакомом виде. Спросите ещё раз.";
 pub const ASSISTANT_SWITCH: &str = "Домовой (AI)";
 pub const THIS_MAC: &str = "Этот Mac:";
 pub const SHARED_MEMORY: &str = "общей памяти";

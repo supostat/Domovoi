@@ -1,6 +1,8 @@
 use domovoi_theme::format_memory;
 use serde::Deserialize;
 
+#[cfg(feature = "claude-code")]
+use crate::claude_code_choice::ClaudeCodeChoice;
 use crate::model_card_model::ModelCardModel;
 use crate::model_card_state::ModelCardState;
 use crate::orphan_row::OrphanRow;
@@ -17,6 +19,9 @@ pub struct ModelScreenModel {
     pub source: String,
     #[serde(default)]
     pub orphans: Vec<OrphanRow>,
+    #[cfg(feature = "claude-code")]
+    #[serde(default)]
+    pub claude_code: Option<ClaudeCodeChoice>,
 }
 
 impl ModelScreenModel {

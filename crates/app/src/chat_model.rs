@@ -1,3 +1,5 @@
+#[cfg(feature = "claude-code")]
+use domovoi_agent::ClaudeCodeError;
 use domovoi_agent::{AgentAnswer, AgentError, PastTurn, ToolStep};
 use domovoi_grammar::Tool;
 use domovoi_inference_proto::ErrorCode;
@@ -12,6 +14,8 @@ use crate::strings::{
     ANSWER_CANCELLED, ANSWER_FAILED, ANSWER_LOW_MEMORY, ANSWER_OUTSIDE_SCHEMA, ANSWER_STALLED, ANSWER_TOO_LONG,
     SERVICE_UNAVAILABLE, rule_title,
 };
+#[cfg(feature = "claude-code")]
+use crate::strings::{CLAUDE_FAILED, CLAUDE_NOT_STARTED, CLAUDE_UNREADABLE};
 use crate::tilde::tilde;
 
 const PAST_TURNS: usize = 6;
@@ -25,6 +29,9 @@ pub struct ChatModel {
     pub entries: Vec<ChatEntry>,
     #[serde(default)]
     pub draft: String,
+    #[cfg(feature = "claude-code")]
+    #[serde(skip)]
+    pub claude_session: Option<String>,
 }
 
 impl ChatModel {
@@ -132,6 +139,21 @@ impl ChatModel {
             AgentError::ContextOverflow { .. } => ANSWER_TOO_LONG,
         };
         self.entries.push(ChatEntry::Failure { text: text.to_owned() });
+    }
+
+    #[cfg(feature = "claude-code")]
+    pub fn record_claude_failure(&mut self, error: &ClaudeCodeError) {
+        let text = match error {
+            ClaudeCodeError::Cancelled => ANSWER_CANCELLED.to_owned(),
+            ClaudeCodeError::Process(_) => CLAUDE_NOT_STARTED.to_owned(),
+            ClaudeCodeError::Failed(reason) => format!("{CLAUDE_FAILED} {reason}"),
+            ClaudeCodeError::Output(_) | ClaudeCodeError::Mcp(_) => CLAUDE_UNREADABLE.to_owned(),
+        };
+        let session_may_be_broken = !matches!(error, ClaudeCodeError::Cancelled);
+        if session_may_be_broken {
+            self.claude_session = None;
+        }
+        self.entries.push(ChatEntry::Failure { text });
     }
 
     pub fn record_problem(&mut self, text: &str) {

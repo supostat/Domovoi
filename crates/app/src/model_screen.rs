@@ -6,6 +6,8 @@ use objc2_app_kit::{NSAutoresizingMaskOptions, NSLineBreakMode, NSScrollView, NS
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 use crate::chat_entry_view::text_block;
+#[cfg(feature = "claude-code")]
+use crate::claude_code_choice::ClaudeCodeChoice;
 use crate::document_swap::swap_document_keeping_offset;
 use crate::fill_view::{FillStyle, FillView};
 use crate::flipped_view::FlippedView;
@@ -21,6 +23,8 @@ use crate::shell_data::ShellData;
 use crate::shell_layout::WINDOW;
 use crate::shell_palette::ShellPalette;
 use crate::strings::{ASSISTANT_SWITCH, LOCAL_MODEL};
+#[cfg(feature = "claude-code")]
+use crate::strings::{CLAUDE_CODE_CHOSEN, CLAUDE_CODE_MISSING, CLAUDE_CODE_OFFER, CLAUDE_CODE_SWITCH};
 use crate::toggle_switch::{SIZE as TOGGLE_SIZE, ToggleSwitch};
 use crate::ui_font::interface_font;
 use crate::window_frame::WindowFrame;
@@ -96,6 +100,11 @@ fn show(
     let mut top = PANE_TOP;
     let (head_height, toggle) = head(marker, &document, model, width, palette, actions);
     top += head_height + BLOCK_GAP;
+    #[cfg(feature = "claude-code")]
+    if let Some(choice) = model.claude_code {
+        let row = claude_code_row(marker, choice, width, palette, actions);
+        top = stack(&document, &row, top);
+    }
     for (position, card) in model.cards.iter().enumerate() {
         let view = model_card_view(marker, card, position, model.fits(card), width, palette, actions);
         top = stack(&document, &view, top);
@@ -184,6 +193,63 @@ fn head(
     }
     document.addSubview(&toggle);
     (height, toggle)
+}
+
+#[cfg(feature = "claude-code")]
+fn claude_code_row(
+    marker: MainThreadMarker,
+    choice: ClaudeCodeChoice,
+    width: f64,
+    palette: &ShellPalette,
+    actions: &ShellActions,
+) -> Retained<NSView> {
+    let tokens = palette.tokens;
+    let text_width = width - TOGGLE_SIZE.width - HEAD_GAP;
+    let title = label(
+        marker,
+        CLAUDE_CODE_SWITCH,
+        &interface_font(13.0, 600.0),
+        &tokens.text.ns_color(),
+        NSLineBreakMode::ByTruncatingTail,
+    );
+    let title_size = NSSize::new(title.fittingSize().width.min(text_width), title.fittingSize().height);
+    let explanation = match (choice.found, choice.chosen) {
+        (false, _) => CLAUDE_CODE_MISSING,
+        (true, true) => CLAUDE_CODE_CHOSEN,
+        (true, false) => CLAUDE_CODE_OFFER,
+    };
+    let (note, note_size) = text_block(
+        marker,
+        explanation,
+        &interface_font(12.5, 400.0),
+        &tokens.dim.ns_color(),
+        text_width,
+    );
+    let height = title_size.height + SUBTITLE_GAP + note_size.height;
+    let row = FlippedView::new(marker, NSRect::new(NSPoint::ZERO, NSSize::new(width, height)));
+    title.setFrame(NSRect::new(NSPoint::ZERO, title_size));
+    note.setFrame(NSRect::new(
+        NSPoint::new(0.0, title_size.height + SUBTITLE_GAP),
+        note_size,
+    ));
+    let toggle = ToggleSwitch::new(
+        marker,
+        CLAUDE_CODE_SWITCH,
+        choice.found && choice.chosen,
+        palette,
+        actions,
+        sel!(toggleClaudeCode:),
+    );
+    toggle.setEnabled(choice.found);
+    toggle.setFrame(NSRect::new(
+        NSPoint::new(width - TOGGLE_SIZE.width, (height - TOGGLE_SIZE.height) / 2.0),
+        TOGGLE_SIZE,
+    ));
+    for view in [&*title, &*note] {
+        row.addSubview(view);
+    }
+    row.addSubview(&toggle);
+    row.into_super()
 }
 
 fn catalog_note(

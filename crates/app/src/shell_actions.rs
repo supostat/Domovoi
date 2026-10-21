@@ -159,6 +159,12 @@ define_class!(
             self.dispatch(ShellAction::ToggleAssistant);
         }
 
+        #[cfg(feature = "claude-code")]
+        #[unsafe(method(toggleClaudeCode:))]
+        fn toggle_claude_code(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ToggleClaudeCode);
+        }
+
         #[unsafe(method(downloadModel:))]
         fn download_model(&self, sender: &AnyObject) {
             self.dispatch(ShellAction::DownloadModel(tag_of(sender)));

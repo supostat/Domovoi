@@ -32,6 +32,8 @@ pub enum ShellAction {
     StopAnswer,
     AddAnswerToTray(usize),
     ToggleAssistant,
+    #[cfg(feature = "claude-code")]
+    ToggleClaudeCode,
     DownloadModel(usize),
     PauseDownload(usize),
     CancelDownload(usize),
