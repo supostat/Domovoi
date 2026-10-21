@@ -7,8 +7,9 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use crate::breadcrumbs::Breadcrumbs;
 use crate::button_style::ButtonStyle;
-use crate::label::{label, measure_label};
+use crate::label::{label, measure_label, retext};
 use crate::legend::legend;
+use crate::legend_entry::LegendEntry;
 use crate::level_list::LevelList;
 use crate::probes::Probes;
 use crate::section::Section;
@@ -43,6 +44,9 @@ pub struct MainScreen {
     pub modes: SegmentedSwitch,
     pub diagram_frame: NSRect,
     pub probes: Probes,
+    palette: ShellPalette,
+    legend_content: (Vec<LegendEntry>, Option<String>),
+    legend_views: Vec<Retained<NSView>>,
 }
 
 impl MainScreen {
@@ -74,28 +78,10 @@ impl MainScreen {
             },
         );
         tray.on_click(actions, sel!(openTray:));
-        let tray_size = tray.frame().size;
-        let tray_frame = from_top(pane, right - tray_size.width, HEAD_TOP, tray_size);
-        tray.setFrame(tray_frame);
-        tray.setAutoresizingMask(pinned_top_right);
-        frame.pane.addSubview(&tray);
-        let mut head_right = tray_frame.origin.x - HEAD_GAP;
-        let free = measure_label(
-            marker,
-            &data.free_short(),
-            &mono_font(12.0, 400.0),
-            &tokens.dim.ns_color(),
-        );
-        head_right = place_head(&free, pane, head_right, pinned_top_right, &frame.pane);
+        let free = measure_label(marker, "", &mono_font(12.0, 400.0), &tokens.dim.ns_color());
         let in_cloud = (data.in_cloud_bytes > 0).then(|| {
-            let cloud = measure_label(
-                marker,
-                &format!("{IN_CLOUD} {}", format_size(data.in_cloud_bytes)),
-                &mono_font(12.0, 400.0),
-                &tokens.dim.ns_color(),
-            );
+            let cloud = measure_label(marker, "", &mono_font(12.0, 400.0), &tokens.dim.ns_color());
             cloud.setToolTip(Some(&NSString::from_str(&format!("{OUTSIDE_TOTAL} · {SOURCE_SCAN}"))));
-            head_right = place_head(&cloud, pane, head_right, pinned_top_right, &frame.pane);
             cloud
         });
         let modes = SegmentedSwitch::build(
@@ -108,10 +94,19 @@ impl MainScreen {
             palette,
             (actions, sel!(selectMode:)),
         );
-        let crumbs_right = place_head(&modes.view, pane, head_right, pinned_top_right, &frame.pane);
+        let pin_to_head = |view: &NSView| {
+            view.setAutoresizingMask(pinned_top_right);
+            frame.pane.addSubview(view);
+        };
+        pin_to_head(&tray);
+        pin_to_head(&free);
+        pin_to_head(&modes.view);
+        if let Some(cloud) = &in_cloud {
+            pin_to_head(cloud);
+        }
         let crumbs = Breadcrumbs::new(
             marker,
-            from_top(pane, left, HEAD_TOP, NSSize::new(crumbs_right - left, HEAD_HEIGHT)),
+            NSRect::new(NSPoint::ZERO, NSSize::new(0.0, HEAD_HEIGHT)),
             &data.crumbs(focus),
             palette,
             actions,
@@ -119,26 +114,14 @@ impl MainScreen {
         crumbs.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | pinned_top);
         frame.pane.addSubview(&crumbs);
         let diagram_frame = from_top(pane, left, BODY_TOP, NSSize::new(DIAGRAM_SIDE, DIAGRAM_SIDE));
-        legend_block(marker, &frame.pane, data, palette);
         let list_left = left + DIAGRAM_SIDE + LIST_GAP;
         let list_frame = from_top(pane, list_left, BODY_TOP, NSSize::new(right - list_left, DIAGRAM_SIDE));
-        let list = LevelList::build(marker, list_frame, data.level_rows(focus), *palette, actions);
+        let list = LevelList::build(marker, list_frame, *palette, actions);
         list.scroll.setAutoresizingMask(
             NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
         frame.pane.addSubview(&list.scroll);
-        let pane_x = WindowFrame::pane_origin_x();
-        let probes = Probes {
-            window_background: [WINDOW.width - 8.0, WINDOW.height - 8.0],
-            sidebar: Some([8.0, 8.0]),
-            accent_button: Some([
-                pane_x + tray_frame.origin.x,
-                HEAD_TOP,
-                tray_size.width,
-                tray_size.height,
-            ]),
-        };
-        Self {
+        let mut screen = Self {
             frame,
             crumbs,
             list,
@@ -147,8 +130,73 @@ impl MainScreen {
             tray,
             modes,
             diagram_frame,
-            probes,
+            probes: Probes {
+                window_background: [WINDOW.width - 8.0, WINDOW.height - 8.0],
+                sidebar: Some([8.0, 8.0]),
+                accent_button: None,
+            },
+            palette: *palette,
+            legend_content: (Vec::new(), None),
+            legend_views: Vec::new(),
+        };
+        screen.show(data, focus);
+        let tray_frame = screen.tray.frame();
+        screen.probes.accent_button = Some([
+            WindowFrame::pane_origin_x() + tray_frame.origin.x,
+            HEAD_TOP,
+            tray_frame.size.width,
+            tray_frame.size.height,
+        ]);
+        screen
+    }
+
+    pub fn update(&mut self, data: &ShellData, focus: usize) {
+        self.frame.update(data, Section::Disk);
+        self.show(data, focus);
+    }
+
+    fn show(&mut self, data: &ShellData, focus: usize) {
+        retext(&self.free, &data.free_short());
+        if let Some(cloud) = &self.in_cloud {
+            retext(cloud, &format!("{IN_CLOUD} {}", format_size(data.in_cloud_bytes)));
         }
+        self.crumbs.show_nodes(&data.crumbs(focus));
+        self.lay_out_head();
+        self.list.show(data.level_rows(focus));
+        self.show_legend(data);
+    }
+
+    fn lay_out_head(&self) {
+        let pane = self.frame.pane.frame().size;
+        let mut right_edge = place_head(&self.tray, pane, pane.width - PANE_PADDING);
+        right_edge = place_head(&self.free, pane, right_edge);
+        if let Some(cloud) = &self.in_cloud {
+            right_edge = place_head(cloud, pane, right_edge);
+        }
+        let crumbs_right = place_head(&self.modes.view, pane, right_edge);
+        self.crumbs.setFrame(from_top(
+            pane,
+            PANE_PADDING,
+            HEAD_TOP,
+            NSSize::new(crumbs_right - PANE_PADDING, HEAD_HEIGHT),
+        ));
+    }
+
+    fn show_legend(&mut self, data: &ShellData) {
+        let content = (data.legend(), data.hidden_notice());
+        if content == self.legend_content {
+            return;
+        }
+        for view in self.legend_views.drain(..) {
+            view.removeFromSuperview();
+        }
+        self.legend_views = legend_block(
+            MainThreadMarker::from(&*self.frame.pane),
+            &self.frame.pane,
+            &content,
+            &self.palette,
+        );
+        self.legend_content = content;
     }
 }
 
@@ -161,13 +209,18 @@ impl MainScreen {
     }
 }
 
-fn legend_block(marker: MainThreadMarker, container: &NSView, data: &ShellData, palette: &ShellPalette) {
+fn legend_block(
+    marker: MainThreadMarker,
+    container: &NSView,
+    (entries, notice): &(Vec<LegendEntry>, Option<String>),
+    palette: &ShellPalette,
+) -> Vec<Retained<NSView>> {
     let tokens = palette.tokens;
-    let pane = WindowFrame::pane_size();
+    let pane = NSSize::new(WindowFrame::pane_size().width, container.frame().size.height);
     let left = PANE_PADDING;
     let right = pane.width - PANE_PADDING;
     let pinned_top = NSAutoresizingMaskOptions::ViewMinYMargin;
-    let chips = legend(marker, &data.legend(), palette, right - left);
+    let chips = legend(marker, entries, palette, right - left);
     let chips_size = chips.frame().size;
     chips.setFrame(from_top(
         pane,
@@ -177,10 +230,11 @@ fn legend_block(marker: MainThreadMarker, container: &NSView, data: &ShellData, 
     ));
     chips.setAutoresizingMask(pinned_top);
     container.addSubview(&chips);
-    if let Some(notice) = data.hidden_notice() {
+    let mut views = vec![chips];
+    if let Some(notice) = notice {
         let field = label(
             marker,
-            &notice,
+            notice,
             &interface_font(13.0, 400.0),
             &tokens.mute.ns_color(),
             NSLineBreakMode::ByWordWrapping,
@@ -195,16 +249,12 @@ fn legend_block(marker: MainThreadMarker, container: &NSView, data: &ShellData, 
         ));
         field.setAutoresizingMask(pinned_top);
         container.addSubview(&field);
+        views.push(field.into_super().into_super());
     }
+    views
 }
 
-fn place_head(
-    view: &NSView,
-    pane: NSSize,
-    right_edge: f64,
-    mask: NSAutoresizingMaskOptions,
-    container: &NSView,
-) -> f64 {
+fn place_head(view: &NSView, pane: NSSize, right_edge: f64) -> f64 {
     let size = view.frame().size;
     let frame = from_top(
         pane,
@@ -213,7 +263,5 @@ fn place_head(
         size,
     );
     view.setFrame(frame);
-    view.setAutoresizingMask(mask);
-    container.addSubview(view);
     frame.origin.x - HEAD_GAP
 }

@@ -28,11 +28,12 @@ pub(crate) enum ScreenViews {
 }
 
 impl ScreenViews {
-    pub(crate) fn update(&self, data: &ShellData) {
+    pub(crate) fn update(&mut self, data: &ShellData, focus: usize) {
         match self {
+            Self::Main { screen, .. } => screen.update(data, focus),
             Self::Recommendations(screen) => screen.update(data),
             Self::Duplicates(screen) => screen.update(data),
-            Self::Access(_) | Self::Scanning { .. } | Self::Main { .. } | Self::Assistant(_) | Self::Model(_) => {
+            Self::Access(_) | Self::Scanning { .. } | Self::Assistant(_) | Self::Model(_) => {
                 unreachable!("only screens with a key update in place")
             }
         }

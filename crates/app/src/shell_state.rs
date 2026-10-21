@@ -122,6 +122,8 @@ impl ShellState {
             self.section,
             self.palette,
             self.data.as_ref().expect("the main stage has data"),
+            self.focus,
+            self.mode,
         )
     }
 

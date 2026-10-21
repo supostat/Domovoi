@@ -2,10 +2,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use domovoi_app::{
-    DuplicatesModel, DuplicatesScreen, DuplicatesState, RecommendationsScreen, Screen, ScreenKey, Section,
-    ShellActions, ShellData, ShellFixture, ShellPalette, WINDOW, development_fonts,
+    DuplicatesModel, DuplicatesScreen, DuplicatesState, MainScreen, OutlineFixture, RecommendationsScreen, Screen,
+    ScreenKey, Section, ShellActions, ShellData, ShellFixture, ShellPalette, WINDOW, development_fonts,
 };
-use domovoi_render::register_fonts;
+use domovoi_render::{DiagramMode, ROOT, register_fonts};
 use domovoi_theme::Palette;
 use objc2::MainThreadMarker;
 use objc2::MainThreadOnly;
@@ -17,6 +17,11 @@ const COPIES: usize = 8;
 const SCROLLED: f64 = 600.0;
 const GROWTH: u64 = 1_000_000_000;
 const OFFSET_TOLERANCE: f64 = 0.5;
+const NOTES: &str = "Notes";
+const NOTE_FILES: usize = 30;
+const ARCHIVE: &str = "Archive";
+const LIST_SCROLLED: f64 = 200.0;
+const LONG_FREE_BYTES: u64 = 987_654_321_000;
 
 fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shell_state.json")
@@ -26,6 +31,48 @@ fn shell_data(screen: Screen) -> ShellData {
     ShellFixture::read(&fixture())
         .and_then(|fixture| fixture.shell_data(screen))
         .expect("the fixture builds the screen data")
+}
+
+fn note_files(count: usize, gigabytes: f64) -> Vec<OutlineFixture> {
+    (0..count)
+        .map(|number| OutlineFixture {
+            name: format!("note-{number:02}.txt"),
+            category: "home".to_owned(),
+            gigabytes: Some(gigabytes + number as f64 / 10.0),
+            children: Vec::new(),
+        })
+        .collect()
+}
+
+fn disk_data(files: usize, gigabytes: f64, archive: bool) -> ShellData {
+    let mut fixture = ShellFixture::read(&fixture()).expect("the fixture reads");
+    if archive {
+        fixture.tree.children.push(OutlineFixture {
+            name: ARCHIVE.to_owned(),
+            category: "home".to_owned(),
+            gigabytes: None,
+            children: note_files(2, 100.0),
+        });
+    }
+    fixture.tree.children.push(OutlineFixture {
+        name: NOTES.to_owned(),
+        category: "home".to_owned(),
+        gigabytes: None,
+        children: note_files(files, gigabytes),
+    });
+    fixture
+        .shell_data(Screen::Main)
+        .expect("the fixture builds the disk data")
+}
+
+fn notes_position(data: &ShellData) -> usize {
+    data.tree
+        .node(ROOT)
+        .children
+        .iter()
+        .copied()
+        .find(|child| data.tree.node(*child).name == NOTES)
+        .expect("the notes folder is in the tree")
 }
 
 fn palette(tokens: &'static Palette) -> ShellPalette {
@@ -223,24 +270,132 @@ fn sidebar_follows_the_data(marker: MainThreadMarker, actions: &ShellActions, ch
     );
 }
 
+fn disk_keeps_its_place(marker: MainThreadMarker, actions: &ShellActions, checks: &mut Checks) {
+    let data = disk_data(NOTE_FILES, 0.5, false);
+    let window = offscreen_window(marker);
+    let mut screen = MainScreen::build(
+        marker,
+        &data,
+        notes_position(&data),
+        DiagramMode::Sunburst,
+        &palette(&Palette::DARK),
+        actions,
+    );
+    window.setContentView(Some(&screen.frame.root()));
+    let scroll = screen.list.scroll.clone();
+    lay_out(&window, &scroll);
+    scroll_to(&scroll, LIST_SCROLLED);
+    let before = offset(&scroll);
+    let mut changed = disk_data(NOTE_FILES + 1, 1.5, true);
+    changed.free_bytes = LONG_FREE_BYTES;
+    let moved_focus = notes_position(&changed);
+    screen.update(&changed, moved_focus);
+    lay_out(&window, &scroll);
+    checks.expect(
+        (before - LIST_SCROLLED).abs() < OFFSET_TOLERANCE,
+        format!("disk: the level list scrolls to {LIST_SCROLLED} pt (got {before})"),
+    );
+    let same_scroll = screen
+        .list
+        .table
+        .enclosingScrollView()
+        .is_some_and(|now| std::ptr::eq(Retained::as_ptr(&now), Retained::as_ptr(&scroll)));
+    checks.expect(
+        same_scroll && stays_in(&scroll, &window),
+        "disk: the level list keeps its scroll view in the window",
+    );
+    let after = offset(&scroll);
+    checks.expect(
+        (after - before).abs() < OFFSET_TOLERANCE,
+        format!("disk: the offset stays at {before} pt (got {after})"),
+    );
+    let rows = usize::try_from(screen.list.table.numberOfRows()).expect("a row count is non-negative");
+    checks.expect(
+        rows == NOTE_FILES + 1,
+        format!("disk: the new row is in the list ({rows} rows)"),
+    );
+    checks.expect(
+        moved_focus != notes_position(&data),
+        "disk: the folder moved in the tree, so the crumbs need new nodes",
+    );
+    let current_crumb = screen.crumbs.buttons().last().map(|button| button.tag());
+    checks.expect(
+        current_crumb == isize::try_from(moved_focus).ok(),
+        format!("disk: the current crumb points at the moved folder ({current_crumb:?} vs {moved_focus})"),
+    );
+    checks.expect(
+        screen.free.stringValue().to_string() == changed.free_short(),
+        "disk: the head shows the new free space",
+    );
+    let crumbs = screen.crumbs.frame();
+    let switch = screen.modes.view.frame();
+    let free = screen.free.frame();
+    checks.expect(
+        crumbs.origin.x + crumbs.size.width <= switch.origin.x,
+        format!("disk: the crumbs {crumbs:?} end before the switch {switch:?}"),
+    );
+    checks.expect(
+        switch.origin.x + switch.size.width <= free.origin.x,
+        format!("disk: the switch {switch:?} ends before the longer free figure {free:?}"),
+    );
+}
+
+fn key(section: Section, palette: ShellPalette, data: &ShellData) -> Option<ScreenKey> {
+    ScreenKey::of(section, palette, data, ROOT, DiagramMode::Sunburst)
+}
+
+fn disk_keys_follow_the_level(checks: &mut Checks) {
+    let dark = palette(&Palette::DARK);
+    let disk = disk_data(NOTE_FILES, 0.5, false);
+    let notes = notes_position(&disk);
+    let shown = ScreenKey::of(Section::Disk, dark, &disk, notes, DiagramMode::Sunburst);
+    checks.expect(shown.is_some(), "keys: the disk has a key");
+    checks.expect(
+        shown != ScreenKey::of(Section::Disk, dark, &disk, ROOT, DiagramMode::Sunburst),
+        "keys: another focus is another key",
+    );
+    checks.expect(
+        shown != ScreenKey::of(Section::Disk, dark, &disk, notes, DiagramMode::Treemap),
+        "keys: another mode is another key",
+    );
+    let mut cloud = disk.clone();
+    cloud.in_cloud_bytes = if disk.in_cloud_bytes > 0 { 0 } else { GROWTH };
+    checks.expect(
+        shown != ScreenKey::of(Section::Disk, dark, &cloud, notes, DiagramMode::Sunburst),
+        "keys: the cloud figure appearing is another key",
+    );
+    let grown = disk_data(NOTE_FILES + 1, 1.5, true);
+    checks.expect(
+        shown
+            == ScreenKey::of(
+                Section::Disk,
+                dark,
+                &grown,
+                notes_position(&grown),
+                DiagramMode::Sunburst,
+            ),
+        "keys: the same folder with other sizes and positions keeps the key",
+    );
+}
+
 fn keys_follow_the_shape(checks: &mut Checks) {
     let dark = palette(&Palette::DARK);
     let light = palette(&Palette::LIGHT);
     let recommendations = shell_data(Screen::Recommendations);
-    let shown = ScreenKey::of(Section::Recommendations, dark, &recommendations);
+    let shown = key(Section::Recommendations, dark, &recommendations);
     checks.expect(shown.is_some(), "keys: the recommendations have a key");
     checks.expect(
-        shown != ScreenKey::of(Section::Duplicates, dark, &recommendations),
+        shown != key(Section::Duplicates, dark, &recommendations),
         "keys: another section is another key",
     );
     checks.expect(
-        shown != ScreenKey::of(Section::Recommendations, light, &recommendations),
+        shown != key(Section::Recommendations, light, &recommendations),
         "keys: another palette is another key",
     );
     let mut no_cards = recommendations.clone();
     no_cards.care.recommendations.cards.clear();
     checks.expect(
-        shown != ScreenKey::of(Section::Recommendations, dark, &no_cards),
+        shown != key(Section::Recommendations, dark, &no_cards),
         "keys: no cards is another key",
     );
     let mut grown = recommendations.clone();
@@ -249,26 +404,26 @@ fn keys_follow_the_shape(checks: &mut Checks) {
     }
     grown.free_bytes += GROWTH;
     checks.expect(
-        shown == ScreenKey::of(Section::Recommendations, dark, &grown),
+        shown == key(Section::Recommendations, dark, &grown),
         "keys: other sizes keep the key",
     );
     let duplicates = shell_data(Screen::Duplicates);
-    let found = ScreenKey::of(Section::Duplicates, dark, &duplicates);
+    let found = key(Section::Duplicates, dark, &duplicates);
     let mut idle = duplicates.clone();
     idle.care.duplicates = DuplicatesModel::idle();
     checks.expect(
-        found != ScreenKey::of(Section::Duplicates, dark, &idle),
+        found != key(Section::Duplicates, dark, &idle),
         "keys: another duplicates body is another key",
     );
     let mut cloning = duplicates.clone();
     cloning.care.duplicates.clone_mode = true;
     checks.expect(
-        found != ScreenKey::of(Section::Duplicates, dark, &cloning),
+        found != key(Section::Duplicates, dark, &cloning),
         "keys: the clone mode is another key",
     );
-    for section in [Section::Disk, Section::Assistant, Section::Model] {
+    for section in [Section::Assistant, Section::Model] {
         checks.expect(
-            ScreenKey::of(section, dark, &recommendations).is_none(),
+            key(section, dark, &recommendations).is_none(),
             format!("keys: {section:?} has no key yet"),
         );
     }
@@ -285,7 +440,9 @@ fn main() -> ExitCode {
     recommendations_keep_their_place(marker, &actions, &mut checks);
     duplicates_keep_their_place(marker, &actions, &mut checks);
     sidebar_follows_the_data(marker, &actions, &mut checks);
+    disk_keeps_its_place(marker, &actions, &mut checks);
     keys_follow_the_shape(&mut checks);
+    disk_keys_follow_the_level(&mut checks);
     if checks.failures.is_empty() {
         ExitCode::SUCCESS
     } else {

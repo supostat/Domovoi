@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use objc2::rc::Retained;
 use objc2::runtime::NSObjectProtocol;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
@@ -17,7 +19,7 @@ const REUSE_IDENTIFIER: &str = "level-row";
 
 #[derive(Debug)]
 pub struct LevelListModel {
-    pub rows: Vec<LevelRow>,
+    pub rows: RefCell<Vec<LevelRow>>,
     pub palette: ShellPalette,
     pub width: f64,
 }
@@ -34,7 +36,7 @@ define_class!(
     unsafe impl NSTableViewDataSource for LevelListSource {
         #[unsafe(method(numberOfRowsInTableView:))]
         fn row_count(&self, _table: &NSTableView) -> NSInteger {
-            NSInteger::try_from(self.ivars().rows.len()).expect("a level has few rows")
+            NSInteger::try_from(self.ivars().rows.borrow().len()).expect("a level has few rows")
         }
     }
 
@@ -54,19 +56,17 @@ define_class!(
             row: NSInteger,
         ) -> Option<Retained<NSView>> {
             let model = self.ivars();
-            usize::try_from(row)
-                .ok()
-                .and_then(|row| model.rows.get(row))
-                .map(|row| {
-                    let identifier = NSString::from_str(REUSE_IDENTIFIER);
-                    let cell = unsafe { table.makeViewWithIdentifier_owner(&identifier, None) }
-                        .and_then(|view| view.downcast::<LevelRowCell>().ok())
-                        .unwrap_or_else(|| {
-                            LevelRowCell::new(MainThreadMarker::from(self), &identifier, model.width, ROW_HEIGHT)
-                        });
-                    cell.show(row, &model.palette);
-                    cell.into_super().into_super()
-                })
+            let rows = model.rows.borrow();
+            usize::try_from(row).ok().and_then(|row| rows.get(row)).map(|row| {
+                let identifier = NSString::from_str(REUSE_IDENTIFIER);
+                let cell = unsafe { table.makeViewWithIdentifier_owner(&identifier, None) }
+                    .and_then(|view| view.downcast::<LevelRowCell>().ok())
+                    .unwrap_or_else(|| {
+                        LevelRowCell::new(MainThreadMarker::from(self), &identifier, model.width, ROW_HEIGHT)
+                    });
+                cell.show(row, &model.palette);
+                cell.into_super().into_super()
+            })
         }
     }
 );
@@ -75,5 +75,14 @@ impl LevelListSource {
     pub fn new(marker: MainThreadMarker, model: LevelListModel) -> Retained<Self> {
         let this = Self::alloc(marker).set_ivars(model);
         unsafe { msg_send![super(this), init] }
+    }
+
+    pub fn show(&self, rows: Vec<LevelRow>) -> bool {
+        let model = self.ivars();
+        if *model.rows.borrow() == rows {
+            return false;
+        }
+        model.rows.replace(rows);
+        true
     }
 }

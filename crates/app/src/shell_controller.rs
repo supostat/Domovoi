@@ -440,8 +440,11 @@ impl ShellController {
         }
         let key = state.screen_key();
         let previous = match previous {
-            Some(views) if key.is_some() && key == state.views_key => {
-                views.update(state.data.as_ref().expect("a keyed screen shows built data"));
+            Some(mut views) if key.is_some() && key == state.views_key => {
+                views.update(
+                    state.data.as_ref().expect("a keyed screen shows built data"),
+                    state.focus,
+                );
                 state.views = Some(views);
                 return;
             }

@@ -1,18 +1,27 @@
+use domovoi_render::DiagramMode;
+
 use crate::duplicates_model::DuplicatesModel;
 use crate::duplicates_state::DuplicatesState;
 use crate::section::Section;
 use crate::shell_data::ShellData;
 use crate::shell_palette::ShellPalette;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ScreenKey {
     palette: ShellPalette,
     shape: Shape,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Shape {
-    Recommendations { cards: bool },
+    Disk {
+        level: Vec<String>,
+        mode: DiagramMode,
+        in_cloud: bool,
+    },
+    Recommendations {
+        cards: bool,
+    },
     Duplicates(DuplicatesBody),
 }
 
@@ -25,13 +34,24 @@ enum DuplicatesBody {
 }
 
 impl ScreenKey {
-    pub fn of(section: Section, palette: ShellPalette, data: &ShellData) -> Option<Self> {
+    pub fn of(
+        section: Section,
+        palette: ShellPalette,
+        data: &ShellData,
+        focus: usize,
+        mode: DiagramMode,
+    ) -> Option<Self> {
         let shape = match section {
+            Section::Disk => Shape::Disk {
+                level: data.crumbs(focus).into_iter().map(|crumb| crumb.title).collect(),
+                mode,
+                in_cloud: data.in_cloud_bytes > 0,
+            },
             Section::Recommendations => Shape::Recommendations {
                 cards: !data.care.recommendations.cards.is_empty(),
             },
             Section::Duplicates => Shape::Duplicates(DuplicatesBody::of(&data.care.duplicates)),
-            Section::Disk | Section::Assistant | Section::Model => return None,
+            Section::Assistant | Section::Model => return None,
         };
         Some(Self { palette, shape })
     }

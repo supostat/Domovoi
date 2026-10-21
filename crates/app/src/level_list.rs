@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2::{MainThreadMarker, MainThreadOnly, sel};
@@ -20,13 +22,7 @@ pub struct LevelList {
 }
 
 impl LevelList {
-    pub fn build(
-        marker: MainThreadMarker,
-        frame: NSRect,
-        rows: Vec<LevelRow>,
-        palette: ShellPalette,
-        actions: &ShellActions,
-    ) -> Self {
+    pub fn build(marker: MainThreadMarker, frame: NSRect, palette: ShellPalette, actions: &ShellActions) -> Self {
         let scroll = NSScrollView::initWithFrame(NSScrollView::alloc(marker), frame);
         scroll.setDrawsBackground(false);
         let table = NSTableView::initWithFrame(NSTableView::alloc(marker), frame);
@@ -57,7 +53,7 @@ impl LevelList {
         let source = LevelListSource::new(
             marker,
             LevelListModel {
-                rows,
+                rows: RefCell::new(Vec::new()),
                 palette,
                 width: frame.size.width - 4.0,
             },
@@ -66,9 +62,14 @@ impl LevelList {
             table.setDataSource(Some(ProtocolObject::from_ref(&*source)));
             table.setDelegate(Some(ProtocolObject::from_ref(&*source)));
         }
-        table.reloadData();
         scroll.setDocumentView(Some(&table));
         table.sizeLastColumnToFit();
         Self { scroll, table, source }
+    }
+
+    pub fn show(&self, rows: Vec<LevelRow>) {
+        if self.source.show(rows) {
+            self.table.reloadData();
+        }
     }
 }

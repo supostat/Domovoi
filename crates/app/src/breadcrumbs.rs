@@ -43,7 +43,7 @@ enum Item {
 
 #[derive(Debug)]
 pub struct BreadcrumbsState {
-    path: Vec<Crumb>,
+    path: RefCell<Vec<Crumb>>,
     levels: Vec<Retained<NSButton>>,
     ellipsis: Retained<NSButton>,
     separators: Vec<Retained<NSTextField>>,
@@ -92,7 +92,7 @@ impl Breadcrumbs {
             })
             .collect();
         let this = Self::alloc(marker).set_ivars(BreadcrumbsState {
-            path: path.to_vec(),
+            path: RefCell::new(path.to_vec()),
             levels,
             ellipsis: text_button(marker, ELLIPSIS, LEVEL_WEIGHT),
             separators,
@@ -101,7 +101,19 @@ impl Breadcrumbs {
         });
         let this: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
         this.lay_out();
+        this.show_nodes(path);
         this
+    }
+
+    pub fn show_nodes(&self, path: &[Crumb]) {
+        let state = self.ivars();
+        let marker = MainThreadMarker::from(self);
+        for (button, crumb) in state.levels.iter().zip(path) {
+            button.setTag(tag(crumb.node));
+            unsafe { button.setMenu(Some(&crumb_menu(marker, crumb, &state.actions))) };
+        }
+        state.path.replace(path.to_vec());
+        state.describe_collapsed(marker, state.current());
     }
 
     pub fn buttons(&self) -> Vec<Retained<NSButton>> {
@@ -115,7 +127,7 @@ impl Breadcrumbs {
 
     pub fn collapsed(&self) -> Vec<Crumb> {
         let state = self.ivars();
-        state.path[state.current().hidden()].to_vec()
+        state.path.borrow()[state.current().hidden()].to_vec()
     }
 
     fn lay_out(&self) {
@@ -162,7 +174,7 @@ impl BreadcrumbsState {
     }
 
     fn candidates(&self) -> Vec<Shown> {
-        let count = self.path.len();
+        let count = self.levels.len();
         let mut candidates = vec![Shown { first: true, tail: 1 }];
         candidates.extend((2..count).map(|tail| Shown { first: true, tail }));
         if count > 1 {
@@ -191,7 +203,7 @@ impl BreadcrumbsState {
         if !shown.hidden().is_empty() {
             items.push(Item::Ellipsis);
         }
-        items.extend((shown.tail..self.path.len()).map(Item::Level));
+        items.extend((shown.tail..self.levels.len()).map(Item::Level));
         items
     }
 
@@ -216,7 +228,8 @@ impl BreadcrumbsState {
     }
 
     fn describe_collapsed(&self, marker: MainThreadMarker, shown: Shown) {
-        let collapsed = &self.path[shown.hidden()];
+        let path = self.path.borrow();
+        let collapsed = &path[shown.hidden()];
         let joined = collapsed
             .iter()
             .map(|level| level.title.as_str())
@@ -260,9 +273,7 @@ fn level_button(marker: MainThreadMarker, crumb: &Crumb, current: bool, actions:
     unsafe {
         button.setTarget(Some(actions.target()));
         button.setAction(Some(sel!(focusNode:)));
-        button.setMenu(Some(&crumb_menu(marker, crumb, actions)));
     }
-    button.setTag(tag(crumb.node));
     button
 }
 
