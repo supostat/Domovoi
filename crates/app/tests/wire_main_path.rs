@@ -25,6 +25,9 @@ const DEEP_FOLDER: &str = "Users/tester/Library/Developer/Xcode/DerivedData/App-
 const CHANGE_TIMEOUT_SECONDS: u64 = 10;
 const TRASH_HEAVY_NODES: usize = 2;
 const SNAPSHOTS: usize = 16;
+const NOTES: &str = "Notes";
+const NOTE_FILES: usize = 60;
+const OFFSET_TOLERANCE: f64 = 0.5;
 const PARTIAL_STATUS: u16 = 206;
 const REDIRECT_STATUS: u16 = 302;
 const RANDOM_MODEL_TOKENS_PER_STEP: u32 = 32_768;
@@ -90,6 +93,12 @@ fn populate(root: &Path) {
         .open(root.join("Disk/sparse.img"))
         .and_then(|file| file.set_len(SPARSE_LENGTH))
         .expect("the sparse file grows without data");
+    for number in 0..NOTE_FILES {
+        write(
+            &root.join(NOTES).join(format!("note-{number:02}.txt")),
+            format!("note {number}\n").as_bytes(),
+        );
+    }
     write(&root.join("Locked/secret.txt"), b"closed");
     run(CHMOD, &["000"], &root.join("Locked"));
 }
@@ -171,6 +180,8 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     let fresh_in_root = mount_point.join("fresh.txt");
     let fresh_in_depth = mount_point.join(DEEP_FOLDER).join("fresh.o");
     let next_to_trashed = mount_point.join("Projects/engine/after-trash.txt");
+    let notes = mount_point.join(NOTES);
+    let fresh_note = notes.join("fresh-note.txt");
     let scenario = json!({
         "root": mount_point,
         "state": state.path().join("session"),
@@ -193,6 +204,10 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
                 "heavy_nodes": TRASH_HEAVY_NODES,
             },
             {"step": "restore_last"},
+            {"step": "scroll_disk_list", "path": notes},
+            {"step": "create_file", "path": fresh_note, "bytes": FRESH_FILE_BYTES},
+            {"step": "await_change", "path": fresh_note, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
+            {"step": "update_disk_screen"},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
             {"step": "purge_trash"},
@@ -230,6 +245,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_index_and_care(&report, &mount_point);
+    assert_disk_update(&report);
     assert_model_and_answer(&report, &server);
     assert_snapshots(&report);
 }
@@ -251,7 +267,7 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
         "events resume from the rescan, not from the cache: {rescan}"
     );
     let changes = steps(report, "await_change");
-    assert_eq!(changes.len(), 3, "{report:#}");
+    assert_eq!(changes.len(), 4, "{report:#}");
     for change in &changes[..2] {
         assert!(change["allocated"].as_u64().is_some_and(|bytes| bytes > 0), "{change}");
         assert_eq!(
@@ -321,6 +337,33 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
     assert_eq!(
         purge["paths_left"], 0,
         "the Trash no longer holds the removed set: {purge}"
+    );
+}
+
+fn assert_disk_update(report: &Value) {
+    let shown = step(report, "scroll_disk_list");
+    let updated = step(report, "update_disk_screen");
+    assert_eq!(
+        shown["rows"].as_u64(),
+        Some(NOTE_FILES as u64),
+        "the notes folder lists every note: {shown}"
+    );
+    let offset = shown["offset"].as_f64().expect("the list reports its offset");
+    assert!(offset > 0.0, "the notes list scrolls to its end: {shown}");
+    assert_eq!(
+        updated["same_scroll"], true,
+        "a real FSEvents batch keeps the list in its scroll view: {updated}"
+    );
+    assert_eq!(updated["same_table"], true, "the list keeps its table: {updated}");
+    assert_eq!(
+        updated["rows"].as_u64(),
+        Some(NOTE_FILES as u64 + 1),
+        "the fresh note joins the list: {updated}"
+    );
+    let kept = updated["offset"].as_f64().expect("the list reports its offset");
+    assert!(
+        (kept - offset).abs() < OFFSET_TOLERANCE,
+        "the list stays where it was ({offset} → {kept} pt): {updated}"
     );
 }
 

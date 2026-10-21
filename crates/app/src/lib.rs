@@ -43,6 +43,7 @@ mod delta_job;
 mod deny_reason_text;
 mod diagram_preference;
 mod disk_overview;
+mod disk_probe;
 mod document_swap;
 mod duplicate_job;
 mod duplicate_rows;

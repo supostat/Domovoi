@@ -12,9 +12,10 @@ use domovoi_agent::AgentLimits;
 use domovoi_downloader::{
     Catalog, CatalogEntry, DownloadOutcome, Downloader, ModelSource, ModelStore, Sha256Hasher, is_excluded_from_backup,
 };
-use domovoi_index::ModelEvent;
+use domovoi_index::{ModelEvent, NodeId};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::Timeouts;
+use domovoi_render::NodeOrigin;
 use domovoi_scanner::{CancelToken, VolumeEvent};
 use objc2::MainThreadMarker;
 use objc2_foundation::NSTimer;
@@ -28,6 +29,7 @@ use crate::cache_opening::CacheOpening;
 use crate::care_models::CareModels;
 use crate::chat_model::ChatModel;
 use crate::disk_overview::DiskOverview;
+use crate::disk_probe::DiskProbe;
 use crate::duplicate_summary::DuplicateSummary;
 use crate::duplicates_model::DuplicatesModel;
 use crate::event_effect::EventEffect;
@@ -95,6 +97,7 @@ struct EndToEnd {
     duplicates: Option<DuplicateSummary>,
     model: Option<(CatalogEntry, PathBuf)>,
     snapshots: Vec<PathBuf>,
+    disk: Option<(PathBuf, DiskProbe)>,
 }
 
 impl EndToEnd {
@@ -107,6 +110,7 @@ impl EndToEnd {
             duplicates: None,
             model: None,
             snapshots: Vec::new(),
+            disk: None,
         })
     }
 
@@ -187,6 +191,8 @@ impl EndToEnd {
                 question,
                 max_tokens_per_step,
             } => self.ask_assistant(question, *max_tokens_per_step),
+            ScenarioStep::ScrollDiskList { path } => self.scroll_disk_list(marker, path),
+            ScenarioStep::UpdateDiskScreen => self.update_disk_screen(),
             ScenarioStep::Snapshots { directory, scale } => {
                 let written = self.snapshots(marker, directory, *scale)?;
                 self.snapshots.extend(written.iter().cloned());
@@ -473,15 +479,72 @@ impl EndToEnd {
     }
 
     fn snapshots(&mut self, marker: MainThreadMarker, directory: &Path, scale: f64) -> Result<Vec<PathBuf>, String> {
+        let root = self.session().index().expect("snapshots follow a scan").root();
+        let data = self.live_data(root)?;
+        let mut written = Vec::new();
+        for dark in [true, false] {
+            let options = SnapshotOptions {
+                screen: Screen::Access,
+                dark,
+                scale,
+                high_contrast: false,
+                directory: directory.to_path_buf(),
+            };
+            written.extend(write_snapshots(marker, &data, &Screen::primary(), &options)?);
+        }
+        Ok(written)
+    }
+
+    fn scroll_disk_list(&mut self, marker: MainThreadMarker, path: &Path) -> Result<Value, String> {
+        let (data, focus) = self.live_disk(path)?;
+        let probe = DiskProbe::scrolled_to_the_end(marker, &data, focus);
+        let report = json!({ "step": "scroll_disk_list", "rows": probe.rows(), "offset": probe.offset() });
+        self.disk = Some((path.to_path_buf(), probe));
+        Ok(report)
+    }
+
+    fn update_disk_screen(&mut self) -> Result<Value, String> {
+        let (path, mut probe) = self
+            .disk
+            .take()
+            .ok_or("scroll_disk_list shows the disk screen before it updates")?;
+        let (data, focus) = self.live_disk(&path)?;
+        probe.update(&data, focus);
+        let report = json!({
+            "step": "update_disk_screen",
+            "same_scroll": probe.keeps_its_scroll(),
+            "same_table": probe.keeps_its_table(),
+            "rows": probe.rows(),
+            "offset": probe.offset(),
+        });
+        self.disk = Some((path, probe));
+        Ok(report)
+    }
+
+    fn live_disk(&mut self, path: &Path) -> Result<(ShellData, usize), String> {
+        let node = self
+            .session()
+            .index()
+            .expect("the disk screen follows a scan")
+            .find(path)
+            .ok_or_else(|| format!("{} is not in the index", path.display()))?;
+        let data = self.live_data(node)?;
+        let focus = data
+            .tree_position(NodeOrigin::Indexed(node))
+            .ok_or_else(|| format!("{} is not in the diagram", path.display()))?;
+        Ok((data, focus))
+    }
+
+    fn live_data(&mut self, focus: NodeId) -> Result<ShellData, String> {
         let overview = DiskOverview::measure(&self.root).map_err(|error| error.to_string())?;
         let recommendations = self.recommendations();
         let duplicates = match self.duplicates {
             Some(summary) => self.duplicates_model(summary.seconds)?,
             None => DuplicatesModel::idle(),
         };
-        let index = self.session().index().expect("snapshots follow a scan");
+        let index = self.session().index().expect("live data follows a scan");
         let (tray, _) = self.measured_tray()?;
-        let expansion = Expansion::around(index, index.root(), NODE_BUDGET);
+        let expansion = Expansion::around(index, focus, NODE_BUDGET);
         let root = index.node(index.root());
         let scan = ScanStatus {
             bytes: root.allocated,
@@ -500,7 +563,7 @@ impl EndToEnd {
         let models = ModelStore::open(&self.paths.models).map_err(|error| error.to_string())?;
         let mut assistant = Assistant::new(models, Catalog::bundled(), AssistantSettings::default());
         assistant.library.finish_scan()?;
-        let data = ShellData {
+        Ok(ShellData {
             rescan_allowed: true,
             ..ShellData::measured(
                 AccessState::probe(),
@@ -511,19 +574,7 @@ impl EndToEnd {
                 care,
                 assistant.models(),
             )
-        };
-        let mut written = Vec::new();
-        for dark in [true, false] {
-            let options = SnapshotOptions {
-                screen: Screen::Access,
-                dark,
-                scale,
-                high_contrast: false,
-                directory: directory.to_path_buf(),
-            };
-            written.extend(write_snapshots(marker, &data, &Screen::primary(), &options)?);
-        }
-        Ok(written)
+        })
     }
 }
 
@@ -542,6 +593,8 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::PurgeTrash => "purge_trash",
         ScenarioStep::DownloadModel { .. } => "download_model",
         ScenarioStep::AskAssistant { .. } => "ask_assistant",
+        ScenarioStep::ScrollDiskList { .. } => "scroll_disk_list",
+        ScenarioStep::UpdateDiskScreen => "update_disk_screen",
         ScenarioStep::Snapshots { .. } => "snapshots",
     }
 }

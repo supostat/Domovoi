@@ -41,6 +41,10 @@ pub enum ScenarioStep {
         #[serde(default)]
         max_tokens_per_step: Option<u32>,
     },
+    ScrollDiskList {
+        path: PathBuf,
+    },
+    UpdateDiskScreen,
     Snapshots {
         directory: PathBuf,
         scale: f64,
