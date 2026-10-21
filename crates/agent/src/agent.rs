@@ -10,7 +10,7 @@ use crate::agent_context::AgentContext;
 use crate::agent_error::AgentError;
 use crate::agent_limits::AgentLimits;
 use crate::conversation::Conversation;
-use crate::home_path::expanded;
+use crate::home_path::resolved;
 use crate::instructions::INSTRUCTIONS;
 use crate::past_turn::PastTurn;
 use crate::suggested_action::SuggestedAction;
@@ -142,7 +142,12 @@ fn finish(context: &AgentContext<'_>, answer: FinalAnswer, steps: Vec<ToolStep>)
     let hypotheses = answer
         .hypotheses
         .into_iter()
-        .map(|hypothesis| (expanded(&hypothesis.path, context.home), hypothesis.guess))
+        .map(|hypothesis| {
+            (
+                resolved(&hypothesis.path, context.home, context.index),
+                hypothesis.guess,
+            )
+        })
         .filter(|(path, _)| context.index.find(path).is_some())
         .map(|(path, explanation)| Hypothesis { path, explanation })
         .collect();

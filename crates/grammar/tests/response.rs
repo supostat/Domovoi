@@ -108,12 +108,18 @@ fn the_first_step_grammar_admits_only_tool_calls() {
         ResponseError::Schema(_)
     ));
     let prompt = system_prompt("Ты — Домовой.", &schema);
-    assert!(prompt.contains(&schema.document().to_string()));
+    assert!(
+        !prompt.contains(&schema.document().to_string()),
+        "the grammar holds the form, so the prompt carries no schema: {prompt}"
+    );
     assert!(prompt.contains("Пример вызова инструмента"));
     assert!(!prompt.contains("Пример ответа"));
     for tool in Tool::ALL {
-        assert!(prompt.contains(tool.name()), "{}", tool.name());
+        assert!(prompt.contains(&format!("- {}(", tool.name())), "{}", tool.name());
     }
+    assert!(prompt.contains("level?: safe|recoverable|check_yourself"), "{prompt}");
+    assert!(prompt.contains("path_prefix?: строка"), "{prompt}");
+    assert!(prompt.contains("inspect_node(path: строка)"), "{prompt}");
 }
 
 #[test]
@@ -136,5 +142,9 @@ fn the_system_prompt_names_no_user_and_writes_paths_from_home() {
     let prompt = system_prompt("Ты — Домовой.", &ResponseSchema::answers_and_tool_calls());
     assert!(prompt.contains("Пример ответа"));
     assert!(!prompt.contains("/Users/"), "{prompt}");
-    assert!(prompt.contains("~/Library/"), "{prompt}");
+    assert!(prompt.contains("\"path\":\"~/"), "{prompt}");
+    assert!(
+        !prompt.contains("Application Support"),
+        "the example does not steer guesses to one folder: {prompt}"
+    );
 }

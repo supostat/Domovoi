@@ -8,6 +8,8 @@ use fixture::{Fixture, loaded_fake, say};
 use serde_json::{Value, json};
 
 const CONTEXT_LENGTH: u32 = 16_384;
+const EXTRA_FOLDERS: usize = 20;
+const LISTED_CHILDREN: usize = 15;
 const TEMPLATE: ChatTemplate = ChatTemplate {
     family: PromptFamily::ChatMl,
     empty_think_before_answer: true,
@@ -178,6 +180,33 @@ fn unknown_rules_and_paths_answer_with_an_error_instead_of_failing_the_loop() {
     assert_eq!(answer.steps[0].result["error"], "правило не найдено");
     assert_eq!(answer.steps[1].result["error"], "узел не найден");
     assert!(answer.steps.iter().all(|step| step.nodes.is_empty()));
+}
+
+#[test]
+fn inspect_node_lists_the_fifteen_largest_children_and_counts_them_all() {
+    let extra: Vec<String> = (0..EXTRA_FOLDERS).map(|number| format!("extra-{number:02}")).collect();
+    let names: Vec<&str> = extra.iter().map(String::as_str).collect();
+    let fixture = Fixture::with_folders(&names);
+    let mut backend = loaded_fake(vec![
+        tool_call("inspect_node", &json!({"path": fixture.root_path()})),
+        final_answer("Вот содержимое.", &json!([])),
+    ]);
+    let answer = Agent::new(&mut backend, TEMPLATE, limits())
+        .ask(
+            &fixture.context(),
+            "Что лежит в домашней папке?",
+            &CancelFlag::default(),
+            &mut |_| {},
+        )
+        .expect("the agent answers");
+    let root = &answer.steps[0].result;
+    let total = fixture.index.children(fixture.index.root()).count();
+    assert!(
+        total > LISTED_CHILDREN,
+        "the fixture has more children than one look shows"
+    );
+    assert_eq!(root["children_total"], total);
+    assert_eq!(root["largest_children"].as_array().map(Vec::len), Some(LISTED_CHILDREN));
 }
 
 #[test]

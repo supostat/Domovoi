@@ -1,5 +1,7 @@
 mod fixture;
 
+use std::path::Path;
+
 use domovoi_agent::{Agent, AgentAnswer, AgentLimits};
 use domovoi_grammar::{ChatTemplate, PromptFamily};
 use domovoi_inference::CancelFlag;
@@ -109,4 +111,39 @@ fn an_empty_query_tells_whether_its_prefix_exists() {
     let filtered_out = &answer.steps[1].result;
     assert_eq!(filtered_out["total"], 0);
     assert_eq!(filtered_out["prefix_found"], true);
+    assert!(
+        filtered_out["without_filters"].as_u64().is_some_and(|found| found > 0),
+        "the empty query tells that the path matches without level and category: {filtered_out}"
+    );
+    assert!(
+        missing.get("without_filters").is_none_or(|found| found == 0),
+        "a missing path finds nothing even without filters: {missing}"
+    );
+}
+
+#[test]
+fn the_home_folder_name_after_the_tilde_still_means_home() {
+    let fixture = Fixture::with_folders(&[]);
+    let home = fixture.root_path();
+    let name = Path::new(&home)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("home has a name")
+        .to_owned();
+    let (answer, _) = ask(
+        &fixture,
+        vec![
+            tool_call("inspect_node", &json!({"path": format!("~/{name}/engine")})),
+            tool_call("inspect_node", &json!({"path": format!("~/{name}")})),
+            tool_call(
+                "query_index",
+                &json!({"path_prefix": format!("~/{name}/notes"), "level": "safe"}),
+            ),
+            final_answer(&json!([])),
+        ],
+    );
+    assert_eq!(answer.steps[0].result["path"], fixture.path("engine"));
+    assert_eq!(answer.steps[1].result["path"], home);
+    let notes = &answer.steps[2].result;
+    assert_eq!(notes["prefix_found"], true, "{notes}");
 }

@@ -6,12 +6,12 @@ use domovoi_index::{Category, NodeId, NodeKind, Query};
 use serde_json::{Map, Value, json};
 
 use crate::agent_context::AgentContext;
-use crate::home_path::expanded;
+use crate::home_path::resolved;
 use crate::level_name::{level_name, level_named};
 use crate::tool_outcome::ToolOutcome;
 
 const DEFAULT_LIMIT: usize = 10;
-const LARGEST_CHILDREN: usize = 5;
+const LARGEST_CHILDREN: usize = 15;
 const FOCUS_CHILDREN: usize = 10;
 const LARGEST_RULES: usize = 10;
 const FOUND_BY_RULE: usize = 5;
@@ -88,7 +88,7 @@ impl<'a> ToolRunner<'a> {
                     .checked_sub(Duration::from_secs(days * SECONDS_PER_DAY))
                     .unwrap_or(UNIX_EPOCH)
             }),
-            path_prefix: text("path_prefix").map(|prefix| expanded(prefix, self.context.home)),
+            path_prefix: text("path_prefix").map(|prefix| resolved(prefix, self.context.home, self.context.index)),
         };
         let limit = number("limit").map_or(DEFAULT_LIMIT, |limit| limit as usize);
         let matches = self.context.index.query(&query, self.context.rules);
@@ -99,12 +99,24 @@ impl<'a> ToolRunner<'a> {
             && matches.is_empty()
         {
             result["prefix_found"] = self.context.index.find(prefix).is_some().into();
+            if query.level.is_some() || query.category.is_some() {
+                let unfiltered = Query {
+                    category: None,
+                    level: None,
+                    ..query.clone()
+                };
+                result["without_filters"] = self.context.index.query(&unfiltered, self.context.rules).len().into();
+            }
         }
         ToolOutcome { result, nodes }
     }
 
     fn inspect_node(&self, path: &str) -> ToolOutcome {
-        let Some(node) = self.context.index.find(&expanded(path, self.context.home)) else {
+        let Some(node) = self
+            .context
+            .index
+            .find(&resolved(path, self.context.home, self.context.index))
+        else {
             return ToolOutcome {
                 result: json!({"error": "узел не найден", "path": path}),
                 nodes: Vec::new(),
@@ -117,10 +129,12 @@ impl<'a> ToolRunner<'a> {
     fn with_largest_children(&self, node: NodeId, count: usize) -> (Value, Vec<NodeId>) {
         let index = self.context.index;
         let mut children: Vec<NodeId> = index.children(node).collect();
+        let children_total = children.len();
         children.sort_by_key(|child| std::cmp::Reverse(index.node(*child).allocated));
         children.truncate(count);
         let mut description = self.describe(node);
         description["largest_children"] = children.iter().map(|child| self.describe(*child)).collect();
+        description["children_total"] = children_total.into();
         let mut nodes = vec![node];
         nodes.extend(children);
         (description, nodes)
