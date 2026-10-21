@@ -13,6 +13,8 @@ pub enum ChatEntry {
         tool: String,
         arguments: String,
         found: Option<u64>,
+        #[serde(skip)]
+        paths: Vec<String>,
     },
     Answer {
         text: String,

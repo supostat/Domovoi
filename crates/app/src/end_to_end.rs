@@ -8,7 +8,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use block2::RcBlock;
 
-use domovoi_agent::AgentLimits;
+use domovoi_agent::{AgentLimits, FocusContext};
 use domovoi_downloader::{
     Catalog, CatalogEntry, DownloadOutcome, Downloader, ModelSource, ModelStore, Sha256Hasher, is_excluded_from_backup,
 };
@@ -37,6 +37,7 @@ use crate::event_queue::{EventQueue, HEAVY_DELTA_NODES};
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
 use crate::purge_job::PurgeJob;
+use crate::question::Question;
 use crate::recommendations_model::RecommendationsModel;
 use crate::safety_badge::SafetyBadge;
 use crate::scan_job::ScanJob;
@@ -407,6 +408,11 @@ impl EndToEnd {
             ..defaults
         };
         let mut chat = ChatModel::default();
+        let asked = Question {
+            text: question.to_owned(),
+            history: chat.past_turns(),
+            focus: FocusContext::default(),
+        };
         chat.ask(question);
         let answer = self
             .session()
@@ -414,7 +420,7 @@ impl EndToEnd {
                 &mut client,
                 &entry,
                 limits,
-                question,
+                &asked,
                 &CancelFlag::default(),
                 &mut |step| {
                     chat.record_step(step);

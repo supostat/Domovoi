@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-use domovoi_agent::AgentContext;
+use domovoi_agent::{AgentContext, FocusContext};
 use domovoi_index::{Enrichment, Index, IndexRoot, NodeId};
 use domovoi_inference::{CancelFlag, FakeBackend, InferenceBackend};
 use domovoi_inference_proto::ModelClass;
@@ -87,6 +87,8 @@ impl Fixture {
             denylist: &self.denylist,
             totals: self.totals,
             home: &self.home,
+            history: &[],
+            focus: FocusContext::none(),
         }
     }
 

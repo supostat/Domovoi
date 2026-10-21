@@ -12,6 +12,7 @@ use crate::tool_outcome::ToolOutcome;
 
 const DEFAULT_LIMIT: usize = 10;
 const LARGEST_CHILDREN: usize = 5;
+const FOCUS_CHILDREN: usize = 10;
 const LARGEST_RULES: usize = 10;
 const FOUND_BY_RULE: usize = 5;
 const SECONDS_PER_DAY: u64 = 86_400;
@@ -44,7 +45,7 @@ impl<'a> ToolRunner<'a> {
     pub(crate) fn overview(&self) -> Value {
         let index = self.context.index;
         let totals = self.context.totals;
-        json!({
+        let mut overview = json!({
             "home": self.context.home.to_string_lossy(),
             "used_bytes": index.node(index.root()).allocated,
             "reclaimable": {
@@ -54,7 +55,18 @@ impl<'a> ToolRunner<'a> {
                 "total": totals.total()
             },
             "categories": self.category_totals()
-        })
+        });
+        let focus = self.context.focus;
+        if let Some(node) = focus.folder.as_deref().and_then(|folder| index.find(folder)) {
+            overview["focus"] = self.with_largest_children(node, FOCUS_CHILDREN).0;
+        }
+        if !focus.selected.is_empty() {
+            overview["selected"] = json!(focus.selected);
+        }
+        if let Some(last) = self.context.history.last().filter(|turn| !turn.paths.is_empty()) {
+            overview["last_paths"] = json!(last.paths);
+        }
+        overview
     }
 
     fn summary(&self) -> Value {
@@ -92,21 +104,26 @@ impl<'a> ToolRunner<'a> {
     }
 
     fn inspect_node(&self, path: &str) -> ToolOutcome {
-        let index = self.context.index;
-        let Some(node) = index.find(&expanded(path, self.context.home)) else {
+        let Some(node) = self.context.index.find(&expanded(path, self.context.home)) else {
             return ToolOutcome {
                 result: json!({"error": "узел не найден", "path": path}),
                 nodes: Vec::new(),
             };
         };
+        let (result, nodes) = self.with_largest_children(node, LARGEST_CHILDREN);
+        ToolOutcome { result, nodes }
+    }
+
+    fn with_largest_children(&self, node: NodeId, count: usize) -> (Value, Vec<NodeId>) {
+        let index = self.context.index;
         let mut children: Vec<NodeId> = index.children(node).collect();
         children.sort_by_key(|child| std::cmp::Reverse(index.node(*child).allocated));
-        children.truncate(LARGEST_CHILDREN);
-        let mut result = self.describe(node);
-        result["largest_children"] = children.iter().map(|child| self.describe(*child)).collect();
+        children.truncate(count);
+        let mut description = self.describe(node);
+        description["largest_children"] = children.iter().map(|child| self.describe(*child)).collect();
         let mut nodes = vec![node];
         nodes.extend(children);
-        ToolOutcome { result, nodes }
+        (description, nodes)
     }
 
     fn rule_explain(&self, id: &str) -> ToolOutcome {

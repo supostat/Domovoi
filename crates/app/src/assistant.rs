@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use domovoi_agent::FocusContext;
 use domovoi_downloader::{Catalog, CatalogEntry, ModelStore};
 use domovoi_inference::InferenceBackend;
 use objc2::rc::Retained;
@@ -14,6 +15,7 @@ use crate::availability::Availability;
 use crate::chat_model::ChatModel;
 use crate::inference_client::InferenceClient;
 use crate::model_library::ModelLibrary;
+use crate::question::Question;
 use crate::session::Session;
 
 #[derive(Debug)]
@@ -84,13 +86,14 @@ impl Assistant {
         true
     }
 
-    pub(crate) fn begin(&mut self, session: Session, question: String, timer: Retained<NSTimer>) {
+    pub(crate) fn begin(&mut self, session: Session, question: String, focus: FocusContext, timer: Retained<NSTimer>) {
         let (model, weights) = self
             .active_model()
             .map(|(entry, path)| (entry.clone(), path.to_path_buf()))
             .expect("questions are asked with an active model");
         let reload = self.loaded() != Some(model.id.as_str());
         self.cancel_unload();
+        let history = self.chat.past_turns();
         self.chat.ask(&question);
         self.chat.draft.clear();
         self.job = Some(AskJob::start(
@@ -98,7 +101,11 @@ impl Assistant {
             self.client.take(),
             model,
             reload.then_some(weights),
-            question,
+            Question {
+                text: question,
+                history,
+                focus,
+            },
             timer,
         ));
     }

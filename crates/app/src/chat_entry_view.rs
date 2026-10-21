@@ -68,7 +68,9 @@ pub(crate) fn chat_entry_view(
                 style,
             )
         }
-        ChatEntry::ToolCall { tool, arguments, found } => tool_call(
+        ChatEntry::ToolCall {
+            tool, arguments, found, ..
+        } => tool_call(
             marker,
             tool,
             arguments,

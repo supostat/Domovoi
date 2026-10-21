@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use domovoi_agent::{Agent, AgentContext, AgentError, AgentLimits};
+use domovoi_agent::{Agent, AgentContext, AgentError, AgentLimits, FocusContext};
 use domovoi_grammar::{ChatMessage, ChatTemplate, ResponseSchema, system_prompt};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::GenerateRequest;
@@ -33,6 +33,8 @@ impl Evaluation<'_> {
             denylist: &self.fixture.denylist,
             totals: self.fixture.totals,
             home: Path::new(FIXTURE_HOME),
+            history: &[],
+            focus: FocusContext::none(),
         };
         self.tasks
             .tasks

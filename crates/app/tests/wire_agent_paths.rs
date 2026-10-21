@@ -2,7 +2,7 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
 use domovoi_agent::{AgentAnswer, AgentLimits};
-use domovoi_app::{Session, SessionPaths};
+use domovoi_app::{Question, Session, SessionPaths};
 use domovoi_downloader::{Catalog, CatalogEntry};
 use domovoi_inference::{CancelFlag, FakeBackend, InferenceBackend};
 use domovoi_scanner::CancelToken;
@@ -68,7 +68,10 @@ fn ask(session: &Session, entry: &CatalogEntry, weights: &Path) -> AgentAnswer {
                 max_steps: STEPS,
                 ..AgentLimits::for_context_length(entry.context_length)
             },
-            QUESTION,
+            &Question {
+                text: QUESTION.to_owned(),
+                ..Question::default()
+            },
             &CancelFlag::default(),
             &mut |_| {},
         )

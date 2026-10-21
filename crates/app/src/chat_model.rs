@@ -1,7 +1,8 @@
-use domovoi_agent::{AgentAnswer, AgentError, ToolStep};
+use domovoi_agent::{AgentAnswer, AgentError, PastTurn, ToolStep};
 use domovoi_grammar::Tool;
 use domovoi_inference_proto::ErrorCode;
 use serde::Deserialize;
+use serde_json::Value;
 
 use crate::answer_item::AnswerItem;
 use crate::answer_target::AnswerTarget;
@@ -12,6 +13,9 @@ use crate::strings::{
     SERVICE_UNAVAILABLE, rule_title,
 };
 use crate::tilde::tilde;
+
+const PAST_TURNS: usize = 6;
+const PATH_ARGUMENTS: [&str; 2] = ["path", "path_prefix"];
 
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,7 +44,47 @@ impl ChatModel {
             tool: step.tool.name().to_owned(),
             arguments: arguments.join(", "),
             found: (step.tool == Tool::QueryIndex).then_some(step.nodes.len() as u64),
+            paths: PATH_ARGUMENTS
+                .iter()
+                .filter_map(|name| step.arguments.get(*name).and_then(Value::as_str))
+                .map(str::to_owned)
+                .collect(),
         });
+    }
+
+    pub fn past_turns(&self) -> Vec<PastTurn> {
+        let mut turns: Vec<PastTurn> = Vec::new();
+        let mut open: Option<PastTurn> = None;
+        for entry in &self.entries {
+            match entry {
+                ChatEntry::Question { text } => {
+                    open = Some(PastTurn {
+                        question: text.clone(),
+                        ..PastTurn::default()
+                    });
+                }
+                ChatEntry::ToolCall { paths, .. } => {
+                    if let Some(turn) = open.as_mut() {
+                        mention(turn, paths.iter().cloned());
+                    }
+                }
+                ChatEntry::Answer { text, targets, .. } => {
+                    if let Some(mut turn) = open.take() {
+                        turn.answer.clone_from(text);
+                        mention(&mut turn, targets.iter().map(|target| tilde(&target.path)));
+                        turns.push(turn);
+                    }
+                }
+                ChatEntry::Hypothesis { path, .. } => {
+                    if let Some(turn) = turns.last_mut() {
+                        mention(turn, [path.clone()]);
+                    }
+                }
+                ChatEntry::Failure { .. } => open = None,
+            }
+        }
+        let forgotten = turns.len().saturating_sub(PAST_TURNS);
+        turns.split_off(forgotten)
     }
 
     pub fn record_answer(&mut self, answer: &AgentAnswer) {
@@ -92,5 +136,13 @@ impl ChatModel {
 
     pub fn record_problem(&mut self, text: &str) {
         self.entries.push(ChatEntry::Failure { text: text.to_owned() });
+    }
+}
+
+fn mention(turn: &mut PastTurn, paths: impl IntoIterator<Item = String>) {
+    for path in paths {
+        if !turn.paths.contains(&path) {
+            turn.paths.push(path);
+        }
     }
 }

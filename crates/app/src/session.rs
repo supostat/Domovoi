@@ -29,6 +29,7 @@ use crate::event_effect::EventEffect;
 use crate::event_request::EventRequest;
 use crate::group_paths::GroupPaths;
 use crate::pending_delta::PendingDelta;
+use crate::question::Question;
 use crate::remapping::Remapping;
 use crate::session_error::SessionError;
 use crate::session_paths::SessionPaths;
@@ -264,7 +265,7 @@ impl Session {
         backend: &mut dyn InferenceBackend,
         model: &CatalogEntry,
         limits: AgentLimits,
-        question: &str,
+        question: &Question,
         cancel: &CancelFlag,
         observer: &mut dyn FnMut(&ToolStep),
     ) -> Result<AgentAnswer, AgentError> {
@@ -279,10 +280,15 @@ impl Session {
                 .map(|recommendations| recommendations.totals)
                 .unwrap_or_default(),
             home: &self.paths.home,
+            history: &question.history,
+            focus: &question.focus,
         };
-        Agent::new(backend, model.template, limits)
-            .calling_a_tool_first()
-            .ask(&context, question, cancel, observer)
+        Agent::new(backend, model.template, limits).calling_a_tool_first().ask(
+            &context,
+            &question.text,
+            cancel,
+            observer,
+        )
     }
 
     pub fn apply_model_event(&mut self, event: &ModelEvent) {

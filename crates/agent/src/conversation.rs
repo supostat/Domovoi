@@ -5,15 +5,21 @@ use crate::agent_error::AgentError;
 use crate::agent_limits::AgentLimits;
 
 const TRIMMED_RESULT: &str = r#"{"trimmed":true}"#;
+const MESSAGES_PER_PAST_TURN: usize = 2;
 
 pub(crate) struct Conversation {
     messages: Vec<ChatMessage>,
+    past_messages: usize,
 }
 
 impl Conversation {
-    pub(crate) fn opening(content: String) -> Self {
+    pub(crate) fn opening(past: Vec<ChatMessage>, content: String) -> Self {
+        let past_messages = past.len();
+        let mut messages = past;
+        messages.push(ChatMessage::user(content));
         Self {
-            messages: vec![ChatMessage::user(content)],
+            messages,
+            past_messages,
         }
     }
 
@@ -35,17 +41,33 @@ impl Conversation {
             if prompt_tokens + limits.max_tokens_per_step <= limits.context_length {
                 return Ok(prompt);
             }
-            let Some(oldest) = self
-                .messages
-                .iter_mut()
-                .find(|message| message.role == ChatRole::Tool && message.content != TRIMMED_RESULT)
-            else {
+            if !self.trim_oldest_tool_result() && !self.forget_oldest_past_turn() {
                 return Err(AgentError::ContextOverflow {
                     prompt_tokens,
                     context_length: limits.context_length,
                 });
-            };
-            TRIMMED_RESULT.clone_into(&mut oldest.content);
+            }
         }
+    }
+
+    fn trim_oldest_tool_result(&mut self) -> bool {
+        let Some(oldest) = self
+            .messages
+            .iter_mut()
+            .find(|message| message.role == ChatRole::Tool && message.content != TRIMMED_RESULT)
+        else {
+            return false;
+        };
+        TRIMMED_RESULT.clone_into(&mut oldest.content);
+        true
+    }
+
+    fn forget_oldest_past_turn(&mut self) -> bool {
+        if self.past_messages < MESSAGES_PER_PAST_TURN {
+            return false;
+        }
+        self.messages.drain(..MESSAGES_PER_PAST_TURN);
+        self.past_messages -= MESSAGES_PER_PAST_TURN;
+        true
     }
 }

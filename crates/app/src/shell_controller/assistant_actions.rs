@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use domovoi_agent::FocusContext;
 use objc2::{MainThreadOnly, sel};
 use objc2_app_kit::{
     NSAlert, NSAlertFirstButtonReturn, NSControlStateValueOff, NSControlStateValueOn, NSMenu, NSMenuItem,
@@ -90,8 +91,19 @@ impl ShellController {
             if let Some(ScreenViews::Assistant(screen)) = &state.views {
                 screen.clear_draft();
             }
+            let focus = FocusContext {
+                folder: state.focus_path.clone(),
+                selected: state
+                    .care()
+                    .recommendations
+                    .cards
+                    .iter()
+                    .filter(|card| card.selected && card.selectable())
+                    .flat_map(|card| card.paths.iter().cloned())
+                    .collect(),
+            };
             let session = state.session.take().expect("a question needs an open session");
-            state.assistant.begin(session, question, timer);
+            state.assistant.begin(session, question, focus, timer);
         }
         self.show_current();
     }

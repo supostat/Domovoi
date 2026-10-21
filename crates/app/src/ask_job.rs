@@ -14,6 +14,7 @@ use crate::ask_event::AskEvent;
 use crate::ask_outcome::AskOutcome;
 use crate::chat_model::ChatModel;
 use crate::inference_client::InferenceClient;
+use crate::question::Question;
 use crate::service_address::ServiceAddress;
 use crate::session::Session;
 
@@ -32,7 +33,7 @@ impl AskJob {
         client: Option<InferenceClient>,
         model: CatalogEntry,
         weights: Option<PathBuf>,
-        question: String,
+        question: Question,
         timer: Retained<NSTimer>,
     ) -> Self {
         let (sender, events) = mpsc::channel();
@@ -85,7 +86,7 @@ fn answer(
     client: Option<InferenceClient>,
     model: &CatalogEntry,
     weights: Option<PathBuf>,
-    question: &str,
+    question: &Question,
     cancel: &CancelFlag,
     events: &Sender<AskEvent>,
 ) -> AskOutcome {

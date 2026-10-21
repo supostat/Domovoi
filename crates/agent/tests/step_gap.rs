@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use domovoi_agent::{Agent, AgentContext, AgentLimits};
+use domovoi_agent::{Agent, AgentContext, AgentLimits, FocusContext};
 use domovoi_apfs_sys::{EntryAttributes, ObjectKind};
 use domovoi_grammar::{ChatTemplate, PromptFamily};
 use domovoi_index::{Enrichment, Index, IndexRoot};
@@ -228,6 +228,8 @@ impl Volume {
             denylist: &self.denylist,
             totals: self.totals,
             home: self.tree.path(),
+            history: &[],
+            focus: FocusContext::none(),
         }
     }
 

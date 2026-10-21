@@ -6,7 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use domovoi_agent::AgentLimits;
-use domovoi_app::{ChatEntry, ChatModel, InferenceClient, ServiceAddress, Session, SessionPaths, strings};
+use domovoi_app::{ChatEntry, ChatModel, InferenceClient, Question, ServiceAddress, Session, SessionPaths, strings};
 use domovoi_downloader::{Catalog, CatalogEntry};
 use domovoi_inference::{
     AnonymousService, CancelFlag, FakeBackend, InferenceBackend, InferenceService, PRESSURE_IDLE_GRACE, PressureLevel,
@@ -86,7 +86,10 @@ impl Assistant {
             &mut self.client,
             &self.entry,
             AgentLimits::for_context_length(self.entry.context_length),
-            QUESTION,
+            &Question {
+                text: QUESTION.to_owned(),
+                ..Question::default()
+            },
             &CancelFlag::default(),
             &mut |step| chat.record_step(step),
         );

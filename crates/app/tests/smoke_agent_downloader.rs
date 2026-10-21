@@ -2,7 +2,9 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
 use domovoi_agent::AgentLimits;
-use domovoi_app::{AssistantSettings, ChatEntry, ChatModel, ModelCardState, ModelLibrary, Session, SessionPaths};
+use domovoi_app::{
+    AssistantSettings, ChatEntry, ChatModel, ModelCardState, ModelLibrary, Question, Session, SessionPaths,
+};
 use domovoi_downloader::{Catalog, CatalogEntry, ModelSource, ModelStore};
 use domovoi_index::{Category, ModelEvent};
 use domovoi_inference::{CancelFlag, FakeBackend, InferenceBackend};
@@ -57,7 +59,10 @@ fn chat_over_fake_model(session: &Session, entry: &CatalogEntry, model_path: &Pa
             &mut backend,
             entry,
             AgentLimits::for_context_length(entry.context_length),
-            QUESTION,
+            &Question {
+                text: QUESTION.to_owned(),
+                ..Question::default()
+            },
             &CancelFlag::default(),
             &mut |step| chat.record_step(step),
         )
@@ -68,7 +73,9 @@ fn chat_over_fake_model(session: &Session, entry: &CatalogEntry, model_path: &Pa
 
 fn assert_chat_shows_the_call_and_the_action(chat: &ChatModel) {
     match &chat.entries[1] {
-        ChatEntry::ToolCall { tool, arguments, found } => {
+        ChatEntry::ToolCall {
+            tool, arguments, found, ..
+        } => {
             assert_eq!(tool, "query_index");
             assert!(arguments.contains("level: \"safe\""), "{arguments}");
             assert!(found.is_some_and(|count| count > 0), "the call found nodes: {found:?}");
