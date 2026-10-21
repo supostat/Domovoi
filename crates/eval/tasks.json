@@ -454,6 +454,112 @@
       "expected_tool": null,
       "needs_tool": false,
       "reference": "Потому что это гипотезы модели по метаданным; проверять их нужно самому."
+    },
+    {
+      "id": "turns-largest-inside",
+      "before": [
+        {
+          "question": "Что в Application Support?",
+          "answer": "В ~/Library/Application Support три папки: MobileSync с резервной копией iPhone (25,3 ГБ), Domovoi с моделью Домового (2,7 ГБ) и com.tinyapp.helper (1,8 ГБ).",
+          "paths": [
+            "/Users/fixture/Library/Application Support"
+          ]
+        }
+      ],
+      "question": "А внутри самой большой?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Смотрит MobileSync: внутри папка Backup с резервной копией iPhone 00008110-001A2B3C4D5E (25,3 ГБ, около 210 дней); удалять её — решать самому, если копия не нужна."
+    },
+    {
+      "id": "turns-backup-safe",
+      "before": [
+        {
+          "question": "Что в Application Support?",
+          "answer": "В ~/Library/Application Support три папки: MobileSync с резервной копией iPhone (25,3 ГБ), Domovoi с моделью Домового (2,7 ГБ) и com.tinyapp.helper (1,8 ГБ).",
+          "paths": [
+            "/Users/fixture/Library/Application Support"
+          ]
+        },
+        {
+          "question": "А внутри самой большой?",
+          "answer": "В MobileSync лежит папка Backup с резервной копией iPhone 00008110-001A2B3C4D5E на 25,3 ГБ; её не меняли около 210 дней.",
+          "paths": [
+            "/Users/fixture/Library/Application Support/MobileSync",
+            "/Users/fixture/Library/Application Support/MobileSync/Backup/00008110-001A2B3C4D5E"
+          ]
+        }
+      ],
+      "question": "А эта папка безопасна для удаления?",
+      "expected_tool": "inspect_node",
+      "needs_tool": true,
+      "reference": "Нет: это резервная копия iPhone, уровень «проверьте сами» — возможно, других копий этих данных нет; удалять только если копия точно не нужна."
+    },
+    {
+      "id": "turns-first-rule",
+      "before": [
+        {
+          "question": "Что из найденного требует моей проверки перед удалением?",
+          "answer": "Проверки требуют диск Docker (40 ГБ, правило docker.vm), резервная копия iPhone (25,3 ГБ, правило ios.backups), данные симулятора (8,2 ГБ) и архив Xcode (3,1 ГБ, правило xcode.archives).",
+          "paths": [
+            "/Users/fixture/Library/Containers/com.docker.docker/Data/vms",
+            "/Users/fixture/Library/Application Support/MobileSync/Backup/00008110-001A2B3C4D5E",
+            "/Users/fixture/Library/Developer/CoreSimulator/Devices",
+            "/Users/fixture/Library/Developer/Xcode/Archives"
+          ]
+        }
+      ],
+      "question": "А почему первое нельзя удалить просто так?",
+      "expected_tool": "rule_explain",
+      "needs_tool": true,
+      "reference": "Правило docker.vm: это диск виртуальной машины Docker на 40 ГБ — в нём образы, контейнеры и тома, удаление сотрёт их, поэтому решать самому."
+    },
+    {
+      "id": "turns-other-projects",
+      "before": [
+        {
+          "question": "Расскажи про папку /Users/fixture/Projects/engine.",
+          "answer": "Это проект Rust: исходники занимают меньше мегабайта, а папка target — 7,5 ГБ результатов сборки; cargo соберёт их заново.",
+          "paths": [
+            "/Users/fixture/Projects/engine",
+            "/Users/fixture/Projects/engine/target"
+          ]
+        }
+      ],
+      "question": "А в остальных проектах что можно удалить без риска?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "Папки node_modules: в site 900 МБ и в old-site 500 МБ — зависимости, вернутся после установки пакетов; old-site к тому же не трогали около 420 дней."
+    },
+    {
+      "id": "turns-safe-largest",
+      "before": [
+        {
+          "question": "Сколько места можно освободить?",
+          "answer": "Безопасно около 36 ГБ: сборки Xcode и Rust, зависимости и кэши. Ещё около 7 ГБ можно восстановить, около 77 ГБ требует проверки.",
+          "paths": []
+        }
+      ],
+      "question": "А что из безопасного самое большое?",
+      "expected_tool": "query_index",
+      "needs_tool": true,
+      "reference": "DerivedData Xcode — около 18,5 ГБ (сборки Domovoi 12,4 ГБ и Widget 6,1 ГБ); следом папка target проекта engine, 7,5 ГБ. Всё это пересоздаётся при сборке."
+    },
+    {
+      "id": "turns-explain-simpler",
+      "before": [
+        {
+          "question": "Объясни правило cache.cargo-registry.",
+          "answer": "Правило cache.cargo-registry описывает ~/.cargo/registry — скачанные пакеты crates.io, 2,2 ГБ. Уровень «можно восстановить»: cargo скачает их заново, но без сети сборка не пройдёт.",
+          "paths": [
+            "/Users/fixture/.cargo/registry"
+          ]
+        }
+      ],
+      "question": "Так удалять или нет? Ответь одним предложением.",
+      "expected_tool": null,
+      "needs_tool": false,
+      "reference": "Удалить можно, если под рукой есть сеть: cargo скачает пакеты заново при следующей сборке; искать заново для этого не нужно."
     }
   ]
 }

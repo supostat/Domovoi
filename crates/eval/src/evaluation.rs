@@ -6,6 +6,7 @@ use domovoi_grammar::{ChatMessage, ChatTemplate, ResponseSchema, system_prompt};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::GenerateRequest;
 
+use crate::eval_task::EvalTask;
 use crate::fixture_index::{FIXTURE_HOME, FixtureIndex};
 use crate::judge::Judge;
 use crate::task_outcome::TaskOutcome;
@@ -27,38 +28,41 @@ pub struct Evaluation<'a> {
 
 impl Evaluation<'_> {
     pub fn answer_all(&self, backend: &mut dyn InferenceBackend) -> Vec<TaskOutcome> {
+        self.tasks
+            .tasks
+            .iter()
+            .map(|task| self.answer(&mut *backend, task))
+            .collect()
+    }
+
+    fn answer(&self, backend: &mut dyn InferenceBackend, task: &EvalTask) -> TaskOutcome {
+        let history = task.history();
         let context = AgentContext {
             index: &self.fixture.index,
             rules: &self.fixture.rules,
             denylist: &self.fixture.denylist,
             totals: self.fixture.totals,
             home: Path::new(FIXTURE_HOME),
-            history: &[],
+            history: &history,
             focus: FocusContext::none(),
         };
-        self.tasks
-            .tasks
-            .iter()
-            .map(|task| {
-                let mut tools = Vec::new();
-                let result = Agent::new(&mut *backend, self.template, self.limits).ask(
-                    &context,
-                    &task.question,
-                    &CancelFlag::default(),
-                    &mut |step| tools.push(step.tool.name().to_owned()),
-                );
-                TaskOutcome {
-                    id: task.id.clone(),
-                    first_tool: tools.first().cloned(),
-                    tools,
-                    schema_valid: !matches!(result, Err(AgentError::InvalidResponse { .. })),
-                    answer: result.as_ref().ok().map(|answer| answer.text.clone()),
-                    error: result.err().map(|error| error.to_string()),
-                    score: None,
-                    judge_reason: None,
-                }
-            })
-            .collect()
+        let mut tools = Vec::new();
+        let result = Agent::new(backend, self.template, self.limits).ask(
+            &context,
+            &task.question,
+            &CancelFlag::default(),
+            &mut |step| tools.push(step.tool.name().to_owned()),
+        );
+        TaskOutcome {
+            id: task.id.clone(),
+            first_tool: tools.first().cloned(),
+            tools,
+            schema_valid: !matches!(result, Err(AgentError::InvalidResponse { .. })),
+            answer: result.as_ref().ok().map(|answer| answer.text.clone()),
+            error: result.err().map(|error| error.to_string()),
+            score: None,
+            judge_reason: None,
+        }
     }
 
     pub fn judge_all(&self, backend: &mut dyn InferenceBackend, judge: &Judge, outcomes: &mut [TaskOutcome]) {

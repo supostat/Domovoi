@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use domovoi_grammar::{ChatMessage, ChatTemplate, CompiledSchema};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::{GenerateRequest, Sampling};
@@ -46,12 +48,23 @@ impl Judge {
     }
 
     pub fn score(&self, backend: &mut dyn InferenceBackend, task: &EvalTask, answer: &str) -> Option<(u8, String)> {
-        let message = format!(
+        let mut message = String::new();
+        for turn in &task.before {
+            writeln!(
+                message,
+                "Раньше спросили: {}\nДомовой ответил: {}",
+                turn.question, turn.answer
+            )
+            .expect("writing to a string succeeds");
+        }
+        write!(
+            message,
             "Вопрос: {}\nЭталон: {}\nОтвет Домового: {}",
             task.question,
             task.reference,
             answer.replace('<', "‹").replace('>', "›")
-        );
+        )
+        .expect("writing to a string succeeds");
         let request = GenerateRequest {
             prompt: self.template.render(RUBRIC, &[ChatMessage::user(message)]),
             grammar: Some(self.schema.grammar().as_str().to_owned()),

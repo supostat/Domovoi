@@ -6,13 +6,22 @@ use std::path::Path;
 
 use domovoi_agent::AgentLimits;
 use domovoi_downloader::Catalog;
-use domovoi_eval::{EvalMetrics, Evaluation, FIXTURE_HOME, FixtureIndex, Judge, TaskSet};
-use domovoi_grammar::Tool;
-use domovoi_inference::{CancelFlag, DeviceProfile, InferenceBackend, LlamaBackend};
+use domovoi_eval::{EvalMetrics, EvalTask, Evaluation, FIXTURE_HOME, FixtureIndex, Judge, TaskSet};
+use domovoi_grammar::{ChatTemplate, PromptFamily, Tool};
+use domovoi_inference::{CancelFlag, DeviceProfile, FakeBackend, InferenceBackend, LlamaBackend};
 use domovoi_inference_proto::ModelClass;
 use serde_json::json;
 
-const MINIMUM_TASKS: usize = 60;
+const MINIMUM_TASKS: usize = 70;
+const MINIMUM_FOLLOW_UPS: usize = 6;
+const TINY_MODEL: &str = "../../assets/test/tiny-random.gguf";
+const FAKE_CONTEXT: u32 = 2048;
+const FOLLOW_UP_CONTEXT: u32 = 65_536;
+const FAKE_TEMPLATE: ChatTemplate = ChatTemplate {
+    family: PromptFamily::ChatMl,
+    empty_think_before_answer: true,
+    empty_think_in_tool_steps: false,
+};
 const CLASS_VARIABLE: &str = "DOMOVOI_EVAL_CLASS";
 const METALLIBS: [&str; 2] = ["default.metallib", "ggml-tensor.metallib"];
 const REPORT_DIRECTORY: &str = "../../target/eval";
@@ -31,8 +40,35 @@ const CLAIMED_RULES: [&str; 12] = [
     "dev.deps",
 ];
 
+fn is_russian(text: &str) -> bool {
+    text.chars()
+        .any(|letter| ('а'..='я').contains(&letter.to_lowercase().next().unwrap_or(letter)))
+}
+
+fn follow_ups() -> Vec<EvalTask> {
+    TaskSet::bundled()
+        .tasks
+        .into_iter()
+        .filter(|task| !task.before.is_empty())
+        .collect()
+}
+
+fn loaded_fake(replies: Vec<String>) -> FakeBackend {
+    let mut backend = FakeBackend::replying(replies);
+    let weights = File::open(Path::new(env!("CARGO_MANIFEST_DIR")).join(TINY_MODEL)).expect("the weights open");
+    backend
+        .load(
+            weights.into(),
+            ModelClass::Compact,
+            FAKE_CONTEXT,
+            &CancelFlag::default(),
+        )
+        .expect("the fake backend loads");
+    backend
+}
+
 #[test]
-fn the_task_set_holds_sixty_russian_tasks_across_every_tool() {
+fn the_task_set_holds_seventy_russian_tasks_across_every_tool() {
     let tasks = TaskSet::bundled();
     assert!(tasks.tasks.len() >= MINIMUM_TASKS, "{} tasks", tasks.tasks.len());
     for tool in Tool::ALL {
@@ -44,14 +80,83 @@ fn the_task_set_holds_sixty_russian_tasks_across_every_tool() {
     }
     assert!(tasks.tasks.iter().any(|task| !task.needs_tool));
     for task in &tasks.tasks {
-        assert!(
-            task.question
-                .chars()
-                .any(|letter| ('а'..='я').contains(&letter.to_lowercase().next().unwrap_or(letter))),
-            "{} is not asked in Russian",
-            task.id
-        );
+        assert!(is_russian(&task.question), "{} is not asked in Russian", task.id);
         assert!(!task.reference.trim().is_empty(), "{} has no reference", task.id);
+    }
+}
+
+#[test]
+fn six_follow_up_tasks_carry_earlier_turns_about_the_fixture() {
+    let fixture = FixtureIndex::build();
+    let follow_ups = follow_ups();
+    assert!(
+        follow_ups.len() >= MINIMUM_FOLLOW_UPS,
+        "{} follow-ups",
+        follow_ups.len()
+    );
+    for task in &follow_ups {
+        for turn in &task.before {
+            assert!(
+                is_russian(&turn.question),
+                "{}: an earlier question is not Russian",
+                task.id
+            );
+            assert!(
+                !turn.answer.trim().is_empty(),
+                "{}: an earlier turn has no answer",
+                task.id
+            );
+            for path in &turn.paths {
+                assert!(
+                    fixture.index.find(Path::new(path)).is_some(),
+                    "{}: {path} is not in the fixture",
+                    task.id
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn follow_up_tasks_reach_the_agent_with_their_earlier_turns() {
+    let fixture = FixtureIndex::build();
+    let tasks = TaskSet { tasks: follow_ups() };
+    let final_answer = json!({"kind": "final", "answer": "Ок.", "hypotheses": []});
+    let mut backend = loaded_fake(tasks.tasks.iter().map(|_| format!("token {final_answer}")).collect());
+    let evaluation = Evaluation {
+        fixture: &fixture,
+        tasks: &tasks,
+        template: FAKE_TEMPLATE,
+        limits: AgentLimits::for_context_length(FOLLOW_UP_CONTEXT),
+    };
+    let outcomes = evaluation.answer_all(&mut backend);
+    for ((task, outcome), request) in tasks.tasks.iter().zip(&outcomes).zip(backend.requests()) {
+        assert_eq!(
+            outcome.answer.as_deref(),
+            Some("Ок."),
+            "{}: {:?}",
+            task.id,
+            outcome.error
+        );
+        let prompt = &request.prompt;
+        let current = prompt
+            .rfind(&task.question)
+            .unwrap_or_else(|| panic!("{}: the question is in the prompt", task.id));
+        for turn in &task.before {
+            let earlier = prompt
+                .find(&turn.question)
+                .unwrap_or_else(|| panic!("{}: an earlier question is in the prompt", task.id));
+            assert!(earlier < current, "{}: {prompt}", task.id);
+            assert!(prompt.contains(&turn.answer), "{}: {prompt}", task.id);
+        }
+        let last = task.before.last().expect("a follow-up has an earlier turn");
+        if !last.paths.is_empty() {
+            assert!(
+                prompt.contains(&format!(r#""last_paths":{}"#, json!(last.paths))),
+                "{}: {prompt}",
+                task.id
+            );
+        }
     }
 }
 

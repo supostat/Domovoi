@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod earlier_turn;
 mod eval_metrics;
 mod eval_task;
 mod evaluation;
@@ -9,6 +10,7 @@ mod task_outcome;
 mod task_set;
 mod tpot_comparison;
 
+pub use earlier_turn::EarlierTurn;
 pub use eval_metrics::EvalMetrics;
 pub use eval_task::EvalTask;
 pub use evaluation::Evaluation;
