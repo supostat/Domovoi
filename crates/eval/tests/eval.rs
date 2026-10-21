@@ -53,6 +53,16 @@ fn follow_ups() -> Vec<EvalTask> {
         .collect()
 }
 
+fn write_report(name: &str, report: &serde_json::Value) {
+    let reports = Path::new(env!("CARGO_MANIFEST_DIR")).join(REPORT_DIRECTORY);
+    fs::create_dir_all(&reports).expect("the report directory is created");
+    fs::write(
+        reports.join(format!("{name}.json")),
+        serde_json::to_string_pretty(report).expect("the report serialises"),
+    )
+    .expect("the report is written");
+}
+
 fn loaded_fake(replies: Vec<String>) -> FakeBackend {
     let mut backend = FakeBackend::replying(replies);
     let weights = File::open(Path::new(env!("CARGO_MANIFEST_DIR")).join(TINY_MODEL)).expect("the weights open");
@@ -237,17 +247,12 @@ fn the_primary_model_of_a_class_meets_the_eval_thresholds() {
     let mut outcomes = evaluation.answer_all(&mut backend);
     evaluation.judge_all(&mut backend, &Judge::new(entry.template), &mut outcomes);
     let tpot = evaluation.compare_time_per_token(&mut backend);
-    let metrics = EvalMetrics::measure(&tasks, &outcomes, tpot);
+    let metrics = EvalMetrics::measure(&tasks, &outcomes, Some(tpot));
 
-    let reports = Path::new(env!("CARGO_MANIFEST_DIR")).join(REPORT_DIRECTORY);
-    fs::create_dir_all(&reports).expect("the report directory is created");
-    let report =
-        json!({"class": class_name, "entry": entry.id, "metrics": metrics, "tpot": tpot, "outcomes": outcomes});
-    fs::write(
-        reports.join(format!("{class_name}.json")),
-        serde_json::to_string_pretty(&report).expect("the report serialises"),
-    )
-    .expect("the report is written");
+    write_report(
+        &class_name,
+        &json!({"class": class_name, "entry": entry.id, "metrics": metrics, "tpot": tpot, "outcomes": outcomes}),
+    );
     eprintln!("{} on {class_name}: {metrics:?}", entry.id);
     let shortfalls = metrics.shortfalls();
     assert!(
@@ -255,4 +260,59 @@ fn the_primary_model_of_a_class_meets_the_eval_thresholds() {
         "{} misses the thresholds: {shortfalls:?}",
         entry.id
     );
+}
+
+#[cfg(feature = "claude-code")]
+mod claude_code {
+    use std::env;
+    use std::fs;
+    use std::path::PathBuf;
+
+    use domovoi_agent::ClaudeCode;
+    use domovoi_eval::{ClaudeEvaluation, EvalMetrics, FixtureIndex, TaskSet};
+    use serde_json::json;
+
+    use super::write_report;
+
+    const PROXY_VARIABLE: &str = "DOMOVOI_MCP_PROXY";
+    const PROGRAM: &str = "claude";
+    const MODEL: &str = "sonnet";
+    const MAX_TURNS: u32 = 8;
+    const WORKSPACE: &str = "domovoi-claude-eval";
+    const REPORT: &str = "claude-code";
+
+    #[test]
+    #[ignore = "asks Claude Code on the developer's subscription; cargo xtask eval --claude-code runs it"]
+    fn meets_the_eval_thresholds() {
+        let proxy = env::var_os(PROXY_VARIABLE)
+            .unwrap_or_else(|| panic!("{PROXY_VARIABLE} names the domovoi binary built with claude-code"));
+        let workspace = env::temp_dir().join(WORKSPACE);
+        fs::create_dir_all(&workspace).expect("the Claude workspace is created");
+        let claude = ClaudeCode {
+            program: PathBuf::from(PROGRAM),
+            proxy: PathBuf::from(proxy),
+            workspace,
+            model: MODEL.to_owned(),
+            max_turns: MAX_TURNS,
+            keep_sessions: false,
+        };
+        let fixture = FixtureIndex::build();
+        let tasks = TaskSet::bundled();
+        let evaluation = ClaudeEvaluation {
+            fixture: &fixture,
+            tasks: &tasks,
+            claude: &claude,
+        };
+        let mut outcomes = evaluation.answer_all();
+        evaluation.judge_all(&mut outcomes);
+        let metrics = EvalMetrics::measure(&tasks, &outcomes, None);
+
+        write_report(
+            REPORT,
+            &json!({"provider": REPORT, "model": MODEL, "metrics": metrics, "outcomes": outcomes}),
+        );
+        eprintln!("{MODEL} through Claude Code: {metrics:?}");
+        let shortfalls = metrics.shortfalls();
+        assert!(shortfalls.is_empty(), "{MODEL} misses the thresholds: {shortfalls:?}");
+    }
 }

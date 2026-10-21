@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use domovoi_agent::{AgentContext, FocusContext, PastTurn};
 use domovoi_apfs_sys::{EntryAttributes, ObjectKind};
 use domovoi_index::SafetyLevel;
 use domovoi_index::{Enrichment, Index, IndexRoot};
@@ -140,6 +141,18 @@ impl FixtureIndex {
 
     pub fn path(relative: &str) -> PathBuf {
         Path::new(FIXTURE_HOME).join(relative)
+    }
+
+    pub fn context<'a>(&'a self, history: &'a [PastTurn]) -> AgentContext<'a> {
+        AgentContext {
+            index: &self.index,
+            rules: &self.rules,
+            denylist: &self.denylist,
+            totals: self.totals,
+            home: Path::new(FIXTURE_HOME),
+            history,
+            focus: FocusContext::none(),
+        }
     }
 }
 

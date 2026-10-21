@@ -14,9 +14,6 @@ const TOOL_CALL_KIND: &str = "tool_call";
 const FINAL_KIND: &str = "final";
 const FINAL_DEFINITION: &str = "final_answer";
 const LONGEST_ANSWER: u64 = 1500;
-const LONGEST_PATH: u64 = 1024;
-const LONGEST_GUESS: u64 = 200;
-const MOST_HYPOTHESES: u64 = 5;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResponseSchema {
@@ -72,7 +69,7 @@ impl ResponseSchema {
                     .as_array()
                     .expect("the schema makes hypotheses an array")
                     .iter()
-                    .map(hypothesis)
+                    .map(ModelHypothesis::from_validated)
                     .collect(),
             }),
             other => unreachable!("the schema allows only known kinds, got {other:?}"),
@@ -124,36 +121,11 @@ fn final_answer_schema() -> Value {
             "answer": {"type": "string", "minLength": 1, "maxLength": LONGEST_ANSWER},
             "hypotheses": {
                 "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "minLength": 1, "maxLength": LONGEST_PATH},
-                        "guess": {"type": "string", "minLength": 1, "maxLength": LONGEST_GUESS},
-                        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
-                    },
-                    "required": ["path", "guess", "confidence"],
-                    "additionalProperties": false
-                },
-                "maxItems": MOST_HYPOTHESES
+                "items": ModelHypothesis::schema(),
+                "maxItems": ModelHypothesis::MOST_PER_ANSWER
             }
         },
         "required": ["kind", "answer", "hypotheses"],
         "additionalProperties": false
     })
-}
-
-fn hypothesis(value: &Value) -> ModelHypothesis {
-    let text = |name: &str| {
-        value[name]
-            .as_str()
-            .expect("the schema makes hypothesis fields strings")
-            .to_owned()
-    };
-    ModelHypothesis {
-        path: text("path"),
-        guess: text("guess"),
-        confidence: value["confidence"]
-            .as_f64()
-            .expect("the schema makes confidence a number"),
-    }
 }

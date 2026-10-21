@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "claude-code")]
+mod claude_evaluation;
 mod earlier_turn;
 mod eval_metrics;
 mod eval_task;
@@ -10,6 +12,8 @@ mod task_outcome;
 mod task_set;
 mod tpot_comparison;
 
+#[cfg(feature = "claude-code")]
+pub use claude_evaluation::ClaudeEvaluation;
 pub use earlier_turn::EarlierTurn;
 pub use eval_metrics::EvalMetrics;
 pub use eval_task::EvalTask;

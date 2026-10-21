@@ -8,6 +8,9 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+claude-code = ["domovoi-agent/claude-code"]
+
 [dependencies]
 domovoi-agent.workspace = true
 domovoi-apfs-sys.workspace = true

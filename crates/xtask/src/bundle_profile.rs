@@ -5,7 +5,8 @@ use crate::signing::Signing;
 
 const IDENTITY_VARIABLE: &str = "DOMOVOI_SIGNING_IDENTITY";
 const TEAM_VARIABLE: &str = "DOMOVOI_TEAM_IDENTIFIER";
-const AD_HOC_FEATURES: &str = "domovoi-xpc-sys/adhoc";
+const DEVELOPER_FEATURES: &str = "domovoi-app/claude-code";
+const AD_HOC_FEATURES: &str = "domovoi-xpc-sys/adhoc,domovoi-app/claude-code";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BundleProfile {
@@ -40,8 +41,9 @@ impl BundleProfile {
 
     pub(crate) fn cargo_features(self) -> Option<&'static str> {
         match self {
+            Self::Dev => Some(DEVELOPER_FEATURES),
             Self::Adhoc => Some(AD_HOC_FEATURES),
-            Self::Dev | Self::Release => None,
+            Self::Release => None,
         }
     }
 }
@@ -51,4 +53,25 @@ pub(crate) fn required(variable: &str) -> io::Result<String> {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("{variable} is not set")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BundleProfile;
+
+    const CLAUDE_CODE: &str = "domovoi-app/claude-code";
+
+    fn features(profile: BundleProfile) -> Vec<&'static str> {
+        profile
+            .cargo_features()
+            .map_or_else(Vec::new, |features| features.split(',').collect())
+    }
+
+    #[test]
+    fn claude_code_ships_only_in_the_developer_bundles() {
+        assert!(features(BundleProfile::Dev).contains(&CLAUDE_CODE));
+        assert!(features(BundleProfile::Adhoc).contains(&CLAUDE_CODE));
+        assert!(features(BundleProfile::Adhoc).contains(&"domovoi-xpc-sys/adhoc"));
+        assert!(!features(BundleProfile::Release).contains(&CLAUDE_CODE));
+    }
 }

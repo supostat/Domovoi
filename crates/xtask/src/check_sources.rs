@@ -46,6 +46,7 @@ const TEST_DIRECTORY: &str = "tests";
 const TEST_SUPPORT_CRATE: &str = "testkit";
 const THIS_CHECK: &str = "xtask/src/check_sources.rs";
 const PURGE_MODULE: &str = "rules/src/trash_purge.rs";
+const MCP_SOCKET_MODULE: &str = "agent/src/private_socket.rs";
 
 pub(crate) fn run() -> io::Result<Vec<Finding>> {
     let root = workspace::root();
@@ -74,7 +75,10 @@ fn removal_findings(path: &Path, content: &str) -> Vec<Finding> {
     let in_tests = path
         .components()
         .any(|component| component.as_os_str() == TEST_DIRECTORY);
-    if in_tests || path.ends_with(THIS_CHECK) || path.ends_with(PURGE_MODULE) {
+    let removes_own_files = [THIS_CHECK, PURGE_MODULE, MCP_SOCKET_MODULE]
+        .iter()
+        .any(|module| path.ends_with(module));
+    if in_tests || removes_own_files {
         return Vec::new();
     }
     let mut findings = Vec::new();
@@ -86,7 +90,9 @@ fn removal_findings(path: &Path, content: &str) -> Vec<Finding> {
             findings.push(Finding {
                 path: path.to_path_buf(),
                 line: index + 1,
-                reason: format!("{call} outside tests and the purge module: files leave only through the Trash"),
+                reason: format!(
+                    "{call} outside tests, the purge module and the MCP socket: files leave only through the Trash"
+                ),
             });
         }
     }
@@ -120,6 +126,16 @@ mod tests {
         let elsewhere = removal_findings(Path::new("crates/rules/src/trash_journal.rs"), REMOVAL);
         assert_eq!(elsewhere.len(), 1, "a removal outside the purge module is a finding");
         assert_eq!(elsewhere[0].line, 1);
+    }
+
+    #[test]
+    fn check_sources_lets_the_mcp_socket_remove_its_own_directory() {
+        let cleanup = "        fs::remove_file(&self.path)?;\n        fs::remove_dir(&self.directory)\n";
+        assert!(removal_findings(Path::new("crates/agent/src/private_socket.rs"), cleanup).is_empty());
+        assert_eq!(
+            removal_findings(Path::new("crates/agent/src/claude_code.rs"), cleanup).len(),
+            2
+        );
     }
 
     #[test]

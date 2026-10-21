@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+#[cfg(feature = "claude-code")]
+use domovoi_agent::MCP_PROXY_FLAG;
+
 use crate::screen::Screen;
 use crate::snapshot_options::SnapshotOptions;
 
@@ -15,6 +18,10 @@ pub enum CommandLine {
         scenario: PathBuf,
         report: PathBuf,
     },
+    #[cfg(feature = "claude-code")]
+    McpProxy {
+        socket: PathBuf,
+    },
 }
 
 impl CommandLine {
@@ -27,6 +34,10 @@ impl CommandLine {
                 report: PathBuf::from(report),
             }),
             ["--snapshot", rest @ ..] => Self::snapshot(rest),
+            #[cfg(feature = "claude-code")]
+            [MCP_PROXY_FLAG, socket] => Ok(Self::McpProxy {
+                socket: PathBuf::from(socket),
+            }),
             _ => Err(usage()),
         }
     }

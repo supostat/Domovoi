@@ -1,6 +1,8 @@
 use std::env;
 use std::process::ExitCode;
 
+#[cfg(feature = "claude-code")]
+use domovoi_agent::relay_mcp_stdio;
 use domovoi_app::{
     CommandLine, ShellFixture, SnapshotOptions, development_fonts, run_end_to_end, run_interactive, write_snapshots,
 };
@@ -19,18 +21,14 @@ fn main() -> ExitCode {
 }
 
 fn run(arguments: &[String]) -> Result<(), String> {
-    let command = CommandLine::parse(arguments)?;
-    let marker = MainThreadMarker::new().ok_or("DOMOVOI runs on the main thread")?;
-    if let Some(fonts) = development_fonts() {
-        register_fonts(fonts)?;
-    }
-    match command {
-        CommandLine::Interactive => run_interactive(marker),
+    match CommandLine::parse(arguments)? {
+        CommandLine::Interactive => run_interactive(windowed()?),
         CommandLine::Snapshot {
             screens,
             options,
             state,
         } => {
+            let marker = windowed()?;
             let fixture = ShellFixture::read(&state)?;
             for screen in screens {
                 let options = SnapshotOptions {
@@ -41,6 +39,16 @@ fn run(arguments: &[String]) -> Result<(), String> {
             }
             Ok(())
         }
-        CommandLine::EndToEnd { scenario, report } => run_end_to_end(marker, &scenario, &report),
+        CommandLine::EndToEnd { scenario, report } => run_end_to_end(windowed()?, &scenario, &report),
+        #[cfg(feature = "claude-code")]
+        CommandLine::McpProxy { socket } => relay_mcp_stdio(&socket).map_err(|error| error.to_string()),
     }
+}
+
+fn windowed() -> Result<MainThreadMarker, String> {
+    let marker = MainThreadMarker::new().ok_or("DOMOVOI runs on the main thread")?;
+    if let Some(fonts) = development_fonts() {
+        register_fonts(fonts)?;
+    }
+    Ok(marker)
 }

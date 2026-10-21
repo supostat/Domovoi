@@ -79,10 +79,22 @@
 - Политика (проверено 21.10.2026, `docs/ASSISTANT-OPTIONS.md`): подписка Max — для «ordinary, individual usage of
   Claude Code and the Agent SDK»; встраивать вход claude.ai или запросы через подписку пользователей в раздаваемый
   продукт нельзя. Поэтому фича выключена в `release`; `claude -p` расходует общий лимит подписки.
-- Флаги `-p`, `--output-format json` (поля `result`, `session_id`), `--mcp-config`, `--strict-mcp-config`,
-  `--tools ""`, `--allowedTools`, `--append-system-prompt`, `--model`, `--max-turns`, `--resume` — по справке CLI;
-  `--bare` не использовать (не читает подписку). Руками не проверены — `claude-core` начинается с живого прогона
-  одного вопроса.
+- Флаги проверены живым прогоном 21.10.2026 на Claude Code 2.1.299 (`claude-core`): `-p` с вопросом через stdin,
+  `--output-format json` (поля `type`, `subtype` = `success`, `is_error`, `result`, `session_id`, `num_turns`),
+  `--mcp-config` JSON-строкой, `--strict-mcp-config`, `--tools ""` (встроенных нет, MCP-инструменты остаются),
+  `--allowedTools mcp__domovoi__*` (без отказов), `--append-system-prompt`, `--model`, `--resume` (`session_id`
+  тот же). `--max-turns` в справке не показан, но принимается. `--bare` не использовать (не читает подписку).
+- Расхождения с Stack, найденные прогоном: без `--setting-sources ""` в запуск попадают `CLAUDE.md`, хуки и
+  плагины пользователя — `ClaudeCode` передаёт его и запускает `claude` в отдельном пустом рабочем каталоге;
+  `--safe-mode` не годится — он выключает и сервер из `--mcp-config`. Сессии Claude Code хранятся по рабочему
+  каталогу, поэтому для `--resume` он постоянный (`ClaudeCode.workspace`), а сокет — свой на каждый вопрос.
+  Перед `initialize` клиент шлёт пробу `server/discover` со строковым `id` и после −32601 переходит на
+  `initialize` с версией 2025-11-25. Без указания формы Claude отвечает в Markdown — в инструкции добавлена строка
+  «обычным текстом без Markdown». Судья эвала идёт через `--json-schema` (ответ в `structured_output`, нужно
+  не меньше 2 ходов) с `--no-session-persistence`; эвал не хранит сессии.
+- Сокет MCP — собственный файл Домового в каталоге 0700 во временной папке: `check-sources` разрешает
+  `agent/src/private_socket.rs` удалить только этот сокет и пустой каталог (`remove_file` и `remove_dir`, без
+  `remove_dir_all`).
 - Приложение из Dock видит минимальный `PATH`: `claude` ищется по известным местам установки; не найден —
   переключатель недоступен с пояснением.
 - Транспорт MCP: Claude запускает `domovoi --mcp-proxy <сокет>`, прослойка гонит JSON-RPC stdin/stdout ↔ сокет;

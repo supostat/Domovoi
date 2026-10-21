@@ -1,13 +1,12 @@
-use std::path::Path;
 use std::time::Duration;
 
-use domovoi_agent::{Agent, AgentContext, AgentError, AgentLimits, FocusContext};
+use domovoi_agent::{Agent, AgentError, AgentLimits};
 use domovoi_grammar::{ChatMessage, ChatTemplate, ResponseSchema, system_prompt};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::GenerateRequest;
 
 use crate::eval_task::EvalTask;
-use crate::fixture_index::{FIXTURE_HOME, FixtureIndex};
+use crate::fixture_index::FixtureIndex;
 use crate::judge::Judge;
 use crate::task_outcome::TaskOutcome;
 use crate::task_set::TaskSet;
@@ -37,18 +36,9 @@ impl Evaluation<'_> {
 
     fn answer(&self, backend: &mut dyn InferenceBackend, task: &EvalTask) -> TaskOutcome {
         let history = task.history();
-        let context = AgentContext {
-            index: &self.fixture.index,
-            rules: &self.fixture.rules,
-            denylist: &self.fixture.denylist,
-            totals: self.fixture.totals,
-            home: Path::new(FIXTURE_HOME),
-            history: &history,
-            focus: FocusContext::none(),
-        };
         let mut tools = Vec::new();
         let result = Agent::new(backend, self.template, self.limits).ask(
-            &context,
+            &self.fixture.context(&history),
             &task.question,
             &CancelFlag::default(),
             &mut |step| tools.push(step.tool.name().to_owned()),

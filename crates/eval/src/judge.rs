@@ -14,7 +14,7 @@ const GREEDY: Sampling = Sampling {
     top_p: 1.0,
     seed: 0,
 };
-const RUBRIC: &str = "Ты — строгий редактор ответов помощника «Домовой» о месте на диске Mac. Оцени ответ по шкале от 1 до 5.
+pub(crate) const RUBRIC: &str = "Ты — строгий редактор ответов помощника «Домовой» о месте на диске Mac. Оцени ответ по шкале от 1 до 5.
 5 — верно по фактам эталона; спокойно и по делу, как мастер, который знает дом; вещи названы так, как их видно в Finder; \
 догадки сформулированы как гипотезы («Похоже на…»); нет восклицаний, шуток про мусор и обещаний вроде «Mac теперь летает».
 4 — верно по фактам, есть мелкие отступления от этого голоса.
@@ -32,41 +32,17 @@ pub struct Judge {
 
 impl Judge {
     pub fn new(template: ChatTemplate) -> Self {
-        let document = json!({
-            "type": "object",
-            "properties": {
-                "score": {"type": "integer", "minimum": 1, "maximum": 5},
-                "reason": {"type": "string", "minLength": 1, "maxLength": 300}
-            },
-            "required": ["score", "reason"],
-            "additionalProperties": false
-        });
         Self {
             template,
-            schema: CompiledSchema::compile(&document).expect("the verdict schema stays inside the safe subset"),
+            schema: verdict_schema(),
         }
     }
 
     pub fn score(&self, backend: &mut dyn InferenceBackend, task: &EvalTask, answer: &str) -> Option<(u8, String)> {
-        let mut message = String::new();
-        for turn in &task.before {
-            writeln!(
-                message,
-                "Раньше спросили: {}\nДомовой ответил: {}",
-                turn.question, turn.answer
-            )
-            .expect("writing to a string succeeds");
-        }
-        write!(
-            message,
-            "Вопрос: {}\nЭталон: {}\nОтвет Домового: {}",
-            task.question,
-            task.reference,
-            answer.replace('<', "‹").replace('>', "›")
-        )
-        .expect("writing to a string succeeds");
         let request = GenerateRequest {
-            prompt: self.template.render(RUBRIC, &[ChatMessage::user(message)]),
+            prompt: self
+                .template
+                .render(RUBRIC, &[ChatMessage::user(judged_message(task, answer))]),
             grammar: Some(self.schema.grammar().as_str().to_owned()),
             sampling: GREEDY,
             max_tokens: MAX_TOKENS,
@@ -75,9 +51,49 @@ impl Judge {
         backend
             .generate(&request, &CancelFlag::default(), &mut |piece| text.push_str(piece))
             .ok()?;
-        let verdict: Value = serde_json::from_str(&text).ok()?;
-        self.schema.validate(&verdict).ok()?;
-        let score = u8::try_from(verdict["score"].as_u64()?).ok()?;
-        Some((score, verdict["reason"].as_str()?.to_owned()))
+        verdict_of(&self.schema, &serde_json::from_str(&text).ok()?)
     }
+}
+
+pub(crate) fn verdict_document() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "score": {"type": "integer", "minimum": 1, "maximum": 5},
+            "reason": {"type": "string", "minLength": 1, "maxLength": 300}
+        },
+        "required": ["score", "reason"],
+        "additionalProperties": false
+    })
+}
+
+pub(crate) fn verdict_schema() -> CompiledSchema {
+    CompiledSchema::compile(&verdict_document()).expect("the verdict schema stays inside the safe subset")
+}
+
+pub(crate) fn judged_message(task: &EvalTask, answer: &str) -> String {
+    let mut message = String::new();
+    for turn in &task.before {
+        writeln!(
+            message,
+            "Раньше спросили: {}\nДомовой ответил: {}",
+            turn.question, turn.answer
+        )
+        .expect("writing to a string succeeds");
+    }
+    write!(
+        message,
+        "Вопрос: {}\nЭталон: {}\nОтвет Домового: {}",
+        task.question,
+        task.reference,
+        answer.replace('<', "‹").replace('>', "›")
+    )
+    .expect("writing to a string succeeds");
+    message
+}
+
+pub(crate) fn verdict_of(schema: &CompiledSchema, verdict: &Value) -> Option<(u8, String)> {
+    schema.validate(verdict).ok()?;
+    let score = u8::try_from(verdict["score"].as_u64()?).ok()?;
+    Some((score, verdict["reason"].as_str()?.to_owned()))
 }

@@ -35,7 +35,7 @@ use std::process::ExitCode;
 
 use finding::Finding;
 
-const USAGE: &str = "usage: cargo xtask <check-comments | check-tokens | check-sources | theme [--check] | fetch-test-models | eval --class <compact|standard|extended> | bundle --profile <dev|adhoc|release> | check-bundle <app> | release>";
+const USAGE: &str = "usage: cargo xtask <check-comments | check-tokens | check-sources | theme [--check] | fetch-test-models | eval --class <compact|standard|extended> | eval --claude-code | bundle --profile <dev|adhoc|release> | check-bundle <app> | release>";
 
 fn main() -> ExitCode {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -47,6 +47,7 @@ fn main() -> ExitCode {
         ["theme", "--check"] => theme::run(theme::Mode::Check),
         ["fetch-test-models"] => fetch_test_models::run(),
         ["eval", "--class", class] => eval::run(class),
+        ["eval", "--claude-code"] => eval::run_claude_code(),
         ["bundle", "--profile", profile] => bundle::run(profile),
         ["check-bundle", app] => check_bundle::run(app),
         ["release"] => release::run(),

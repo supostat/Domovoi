@@ -8,6 +8,9 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+claude-code = []
+
 [dependencies]
 domovoi-grammar.workspace = true
 domovoi-index.workspace = true
@@ -20,3 +23,7 @@ serde_json.workspace = true
 domovoi-apfs-sys.workspace = true
 domovoi-scanner.workspace = true
 domovoi-testkit.workspace = true
+
+[[test]]
+name = "mcp_tools"
+required-features = ["claude-code"]

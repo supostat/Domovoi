@@ -17,11 +17,11 @@ pub struct EvalMetrics {
     pub schema_validity: f64,
     pub tool_call_rate: f64,
     pub explanation_score: f64,
-    pub tpot_ratio: f64,
+    pub tpot_ratio: Option<f64>,
 }
 
 impl EvalMetrics {
-    pub fn measure(tasks: &TaskSet, outcomes: &[TaskOutcome], tpot: TpotComparison) -> Self {
+    pub fn measure(tasks: &TaskSet, outcomes: &[TaskOutcome], tpot: Option<TpotComparison>) -> Self {
         assert_eq!(tasks.tasks.len(), outcomes.len(), "every task has an outcome");
         let pairs = || tasks.tasks.iter().zip(outcomes);
         let share = |hits: usize, total: usize| if total == 0 { 1.0 } else { hits as f64 / total as f64 };
@@ -44,7 +44,7 @@ impl EvalMetrics {
             ),
             tool_call_rate: share(needing.iter().filter(|hit| **hit).count(), needing.len()),
             explanation_score: scores.iter().sum::<f64>() / scores.len().max(1) as f64,
-            tpot_ratio: tpot.ratio(),
+            tpot_ratio: tpot.map(|comparison| comparison.ratio()),
         }
     }
 
@@ -59,8 +59,10 @@ impl EvalMetrics {
         floor("schema validity", self.schema_validity, SCHEMA_VALIDITY);
         floor("tool call rate", self.tool_call_rate, TOOL_CALL_RATE);
         floor("explanation", self.explanation_score, EXPLANATION_SCORE);
-        if self.tpot_ratio > TPOT_RATIO {
-            shortfalls.push(format!("TPOT ratio {:.3} > {TPOT_RATIO}", self.tpot_ratio));
+        if let Some(ratio) = self.tpot_ratio
+            && ratio > TPOT_RATIO
+        {
+            shortfalls.push(format!("TPOT ratio {ratio:.3} > {TPOT_RATIO}"));
         }
         shortfalls
     }
