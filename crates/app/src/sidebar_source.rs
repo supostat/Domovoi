@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObjectProtocol};
@@ -27,7 +27,7 @@ const GROUP_TRACKING: f64 = 0.1;
 
 #[derive(Debug)]
 pub struct SidebarModel {
-    pub groups: Vec<SidebarEntry>,
+    pub groups: RefCell<Vec<SidebarEntry>>,
     pub palette: ShellPalette,
     pub width: f64,
     actions: Retained<ShellActions>,
@@ -35,9 +35,9 @@ pub struct SidebarModel {
 }
 
 impl SidebarModel {
-    pub fn new(groups: Vec<SidebarEntry>, palette: ShellPalette, width: f64, actions: Retained<ShellActions>) -> Self {
+    pub fn new(palette: ShellPalette, width: f64, actions: Retained<ShellActions>) -> Self {
         Self {
-            groups,
+            groups: RefCell::new(Vec::new()),
             palette,
             width,
             actions,
@@ -63,11 +63,11 @@ impl SidebarModel {
         (parts.next().expect("a key names a group"), parts.next())
     }
 
-    fn entry(&self, item: &AnyObject) -> &SidebarEntry {
-        match Self::locate(item) {
-            (group, None) => &self.groups[group],
-            (group, Some(child)) => &self.groups[group].children[child],
-        }
+    fn entry(&self, item: &AnyObject) -> Ref<'_, SidebarEntry> {
+        Ref::map(self.groups.borrow(), |groups| match Self::locate(item) {
+            (group, None) => &groups[group],
+            (group, Some(child)) => &groups[group].children[child],
+        })
     }
 }
 
@@ -84,10 +84,11 @@ define_class!(
         #[unsafe(method(outlineView:numberOfChildrenOfItem:))]
         fn children_count(&self, _outline: &NSOutlineView, item: Option<&AnyObject>) -> NSInteger {
             let model = self.ivars();
+            let groups = model.groups.borrow();
             let count = match item {
-                None => model.groups.len(),
+                None => groups.len(),
                 Some(item) => match SidebarModel::locate(item) {
-                    (group, None) => model.groups[group].children.len(),
+                    (group, None) => groups[group].children.len(),
                     (_, Some(_)) => 0,
                 },
             };
@@ -138,8 +139,11 @@ define_class!(
                 return;
             };
             let model = self.ivars();
-            let entry = model.entry(&item);
-            if let Some(section) = entry.section.filter(|_| !entry.selected) {
+            let target = {
+                let entry = model.entry(&item);
+                entry.section.filter(|_| !entry.selected)
+            };
+            if let Some(section) = target {
                 model.actions.dispatch(ShellAction::Navigate(section));
             }
         }
@@ -180,7 +184,7 @@ define_class!(
                 ));
                 field.into_super().into_super()
             } else {
-                SidebarItemView::build(marker, entry, model.width, ROW_HEIGHT, &model.palette)
+                SidebarItemView::build(marker, &entry, model.width, ROW_HEIGHT, &model.palette)
                     .view
                     .into_super()
             };
@@ -193,6 +197,19 @@ impl SidebarSource {
     pub fn new(marker: MainThreadMarker, model: SidebarModel) -> Retained<Self> {
         let this = Self::alloc(marker).set_ivars(model);
         unsafe { msg_send![super(this), init] }
+    }
+
+    pub fn show(&self, outline: &NSOutlineView, groups: Vec<SidebarEntry>) -> bool {
+        let model = self.ivars();
+        if *model.groups.borrow() == groups {
+            return false;
+        }
+        model.groups.replace(groups);
+        let previous_keys = model.keys.take();
+        outline.reloadData();
+        unsafe { outline.expandItem_expandChildren(None, true) };
+        drop(previous_keys);
+        true
     }
 }
 

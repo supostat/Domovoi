@@ -13,7 +13,7 @@ use crate::cards_layout::CardsLayout;
 use crate::cards_model::CardsModel;
 use crate::cards_source::{CARD_ITEM, CardsSource};
 use crate::empty_state::empty_state;
-use crate::label::label;
+use crate::label::{label, retext};
 use crate::pane_head::pane_head;
 use crate::probes::Probes;
 use crate::recommendations_model::RecommendationsModel;
@@ -55,33 +55,25 @@ impl RecommendationsScreen {
         let pinned = NSAutoresizingMaskOptions::ViewMinYMargin;
         let total = label(
             marker,
-            &model.total_line(),
+            "",
             &interface_font(17.0, 600.0),
             &tokens.text.ns_color(),
             NSLineBreakMode::ByTruncatingTail,
         );
-        let total_size = total.fittingSize();
-        total.setFrame(from_top(head_size, PANE_PADDING, TITLE_TOP, total_size));
         total.setAutoresizingMask(pinned);
         head.addSubview(&total);
         let split = label(
             marker,
-            &model.split_line(),
+            "",
             &interface_font(12.5, 400.0),
             &tokens.dim.ns_color(),
             NSLineBreakMode::ByTruncatingTail,
         );
-        split.setFrame(from_top(
-            head_size,
-            PANE_PADDING,
-            TITLE_TOP + total_size.height + SPLIT_GAP,
-            split.fittingSize(),
-        ));
         split.setAutoresizingMask(pinned);
         head.addSubview(&split);
         let send = ShellButton::new(
             marker,
-            &send_title(model),
+            "",
             NSPoint::ZERO,
             BUTTON_HEIGHT,
             ButtonStyle {
@@ -92,15 +84,13 @@ impl RecommendationsScreen {
             },
         );
         send.on_click(actions, sel!(sendCardsToTray:));
-        send.setEnabled(model.selected_total() > 0);
         let send_size = send.frame().size;
-        let send_frame = from_top(
+        send.setFrame(from_top(
             head_size,
             pane.width - PANE_PADDING - send_size.width,
             (HEAD_HEIGHT - BUTTON_HEIGHT) / 2.0,
             send_size,
-        );
-        send.setFrame(send_frame);
+        ));
         send.setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinXMargin | pinned);
         head.addSubview(&send);
         let body = NSRect::new(NSPoint::ZERO, NSSize::new(pane.width, pane.height - HEAD_HEIGHT));
@@ -109,32 +99,63 @@ impl RecommendationsScreen {
             frame.pane.addSubview(&empty);
             None
         } else {
-            Some(cards(marker, &frame, body, model, palette, actions))
+            Some(cards(marker, &frame, body, palette, actions))
         };
-        let pane_x = WindowFrame::pane_origin_x();
-        let probes = Probes {
-            window_background: [WINDOW.width - 8.0, WINDOW.height - 8.0],
-            sidebar: Some([8.0, 8.0]),
-            accent_button: Some([
-                pane_x + send_frame.origin.x,
-                (HEAD_HEIGHT - BUTTON_HEIGHT) / 2.0,
-                send_size.width,
-                send_size.height,
-            ]),
-        };
-        Self {
+        let mut screen = Self {
             frame,
             total,
             split,
             send,
             collection,
-            probes,
-        }
+            probes: Probes {
+                window_background: [WINDOW.width - 8.0, WINDOW.height - 8.0],
+                sidebar: Some([8.0, 8.0]),
+                accent_button: None,
+            },
+        };
+        screen.show(model);
+        let send_frame = screen.send.frame();
+        screen.probes.accent_button = Some([
+            WindowFrame::pane_origin_x() + send_frame.origin.x,
+            (HEAD_HEIGHT - BUTTON_HEIGHT) / 2.0,
+            send_frame.size.width,
+            send_frame.size.height,
+        ]);
+        screen
+    }
+
+    pub fn update(&self, data: &ShellData) {
+        self.frame.update(data, Section::Recommendations);
+        self.show(&data.care.recommendations);
     }
 
     pub fn show_selection(&self, model: &RecommendationsModel) {
         self.send.retitle(&send_title(model));
         self.send.setEnabled(model.selected_total() > 0);
+    }
+
+    fn show(&self, model: &RecommendationsModel) {
+        let head = NSSize::new(WindowFrame::pane_size().width, HEAD_HEIGHT);
+        retext(&self.total, &model.total_line());
+        let total_size = self.total.frame().size;
+        self.total
+            .setFrameOrigin(from_top(head, PANE_PADDING, TITLE_TOP, total_size).origin);
+        retext(&self.split, &model.split_line());
+        self.split.setFrameOrigin(
+            from_top(
+                head,
+                PANE_PADDING,
+                TITLE_TOP + total_size.height + SPLIT_GAP,
+                self.split.frame().size,
+            )
+            .origin,
+        );
+        self.show_selection(model);
+        if let Some((collection, source)) = &self.collection
+            && source.show(&model.cards)
+        {
+            collection.reloadData();
+        }
     }
 }
 
@@ -146,18 +167,17 @@ fn cards(
     marker: MainThreadMarker,
     frame: &WindowFrame,
     body: NSRect,
-    model: &RecommendationsModel,
     palette: &ShellPalette,
     actions: &ShellActions,
 ) -> (Retained<NSCollectionView>, Retained<CardsSource>) {
     let source = CardsSource::new(
         marker,
         CardsModel {
-            cards: model.cards.clone(),
+            cards: RefCell::new(Vec::new()),
             inset: PANE_PADDING,
             palette: *palette,
             actions: actions.retain(),
-            heights: RefCell::new((0.0, Vec::new())),
+            heights: RefCell::new(None),
             measurements: Cell::new(0),
         },
     );
@@ -185,6 +205,5 @@ fn cards(
         NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
     );
     frame.pane.addSubview(&scroll);
-    collection.reloadData();
     (collection, source)
 }

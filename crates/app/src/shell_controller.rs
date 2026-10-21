@@ -59,6 +59,7 @@ use crate::purge_status::PurgeStatus;
 use crate::recommendations_screen::RecommendationsScreen;
 use crate::scan_job::ScanJob;
 use crate::scanning_screen::{ScanningScreen, center_lines};
+use crate::screen_key::ScreenKey;
 use crate::screen_views::ScreenViews;
 use crate::section::Section;
 use crate::session::Session;
@@ -423,10 +424,10 @@ impl ShellController {
     }
 
     fn show_current(&self) {
-        autoreleasepool(|_| self.rebuild_current_views());
+        autoreleasepool(|_| self.show_current_views());
     }
 
-    fn rebuild_current_views(&self) {
+    fn show_current_views(&self) {
         let marker = self.marker;
         let mut state = self.state.borrow_mut();
         state.palette = self.palette();
@@ -437,6 +438,15 @@ impl ShellController {
         if let Some(data) = state.data.as_mut() {
             data.rescan_allowed = rescan_allowed;
         }
+        let key = state.screen_key();
+        let previous = match previous {
+            Some(views) if key.is_some() && key == state.views_key => {
+                views.update(state.data.as_ref().expect("a keyed screen shows built data"));
+                state.views = Some(views);
+                return;
+            }
+            previous => previous,
+        };
         let views = match (state.stage, state.section) {
             (Stage::Access(access), _) => {
                 let screen = AccessScreen::build(marker, access, &palette, &self.actions);
@@ -507,6 +517,10 @@ impl ShellController {
                 ScreenViews::Main { screen, diagram }
             }
         };
+        self.present_built_views(&mut state, views, key);
+    }
+
+    fn present_built_views(&self, state: &mut ShellState, views: ScreenViews, key: Option<ScreenKey>) {
         let content: Retained<NSView> = match &views {
             ScreenViews::Access(screen) => screen.root.clone().into_super(),
             ScreenViews::Scanning { screen, .. } => screen.frame.root(),
@@ -525,6 +539,7 @@ impl ShellController {
         {
             self.window.makeFirstResponder(Some(input));
         }
+        state.views_key = key;
         state.views = Some(views);
     }
 

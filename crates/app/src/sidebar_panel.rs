@@ -6,11 +6,11 @@ use objc2_app_kit::{
     NSOutlineView, NSScrollView, NSTableColumn, NSTableViewColumnAutoresizingStyle, NSTableViewSelectionHighlightStyle,
     NSTableViewStyle, NSTextField,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_foundation::{NSIndexSet, NSPoint, NSRect, NSSize, NSString};
 
 use crate::button_style::ButtonStyle;
 use crate::fill_view::{FillStyle, FillView};
-use crate::label::measure_label;
+use crate::label::{measure_label, retext};
 use crate::navigation::Navigation;
 use crate::shell_actions::ShellActions;
 use crate::shell_button::ShellButton;
@@ -36,6 +36,7 @@ pub struct SidebarPanel {
     pub source: Retained<SidebarSource>,
     pub free: Retained<NSTextField>,
     pub rescan: Retained<ShellButton>,
+    used: Retained<FillView>,
 }
 
 impl SidebarPanel {
@@ -47,7 +48,6 @@ impl SidebarPanel {
         palette: ShellPalette,
         actions: &ShellActions,
     ) -> Self {
-        let groups = data.sidebar(navigation);
         let tokens = palette.tokens;
         let view = FillView::new(
             marker,
@@ -72,15 +72,9 @@ impl SidebarPanel {
                 dashed: false,
             },
         );
-        let bar_fill = FillView::new(
+        let used = FillView::new(
             marker,
-            NSRect::new(
-                NSPoint::new(INSET, BAR_BOTTOM),
-                NSSize::new(
-                    (size.width - 2.0 * INSET) * data.used_share().clamp(0.0, 1.0),
-                    BAR_HEIGHT,
-                ),
-            ),
+            NSRect::new(NSPoint::new(INSET, BAR_BOTTOM), NSSize::new(0.0, BAR_HEIGHT)),
             FillStyle {
                 fill: Some(tokens.wax.ns_color()),
                 border: None,
@@ -88,16 +82,11 @@ impl SidebarPanel {
                 dashed: false,
             },
         );
-        let free = measure_label(
-            marker,
-            &data.free_line(),
-            &mono_font(11.5, 400.0),
-            &tokens.dim.ns_color(),
-        );
+        let free = measure_label(marker, "", &mono_font(11.5, 400.0), &tokens.dim.ns_color());
         free.setFrameOrigin(NSPoint::new(INSET, FREE_BOTTOM));
-        let rescan = rescan_button(marker, palette, actions, data.rescan_allowed);
+        let rescan = rescan_button(marker, palette, actions);
         view.addSubview(&bar_track);
-        view.addSubview(&bar_fill);
+        view.addSubview(&used);
         view.addSubview(&free);
         view.addSubview(&rescan);
 
@@ -118,36 +107,44 @@ impl SidebarPanel {
         column.setWidth(size.width);
         outline.addTableColumn(&column);
         unsafe { outline.setOutlineTableColumn(Some(&column)) };
-        let selected = selected_row(&groups);
-        let source = SidebarSource::new(marker, SidebarModel::new(groups, palette, size.width, actions.retain()));
+        let source = SidebarSource::new(marker, SidebarModel::new(palette, size.width, actions.retain()));
         unsafe {
             outline.setDataSource(Some(ProtocolObject::from_ref(&*source)));
             outline.setDelegate(Some(ProtocolObject::from_ref(&*source)));
         }
-        outline.reloadData();
-        unsafe { outline.expandItem_expandChildren(None, true) };
-        if let Some(row) = selected {
-            outline.selectRowIndexes_byExtendingSelection(&objc2_foundation::NSIndexSet::indexSetWithIndex(row), false);
-        }
         scroll.setDocumentView(Some(&outline));
         outline.sizeLastColumnToFit();
         view.addSubview(&scroll);
-        Self {
+        let panel = Self {
             view,
             outline,
             source,
             free,
             rescan,
+            used,
+        };
+        panel.show(data, navigation);
+        panel
+    }
+
+    pub fn show(&self, data: &ShellData, navigation: Navigation) {
+        retext(&self.free, &data.free_line());
+        let track = self.view.frame().size.width - 2.0 * INSET;
+        self.used
+            .setFrameSize(NSSize::new(track * data.used_share().clamp(0.0, 1.0), BAR_HEIGHT));
+        self.rescan.setEnabled(data.rescan_allowed);
+        let groups = data.sidebar(navigation);
+        let selected = selected_row(&groups);
+        if self.source.show(&self.outline, groups)
+            && let Some(row) = selected
+        {
+            self.outline
+                .selectRowIndexes_byExtendingSelection(&NSIndexSet::indexSetWithIndex(row), false);
         }
     }
 }
 
-fn rescan_button(
-    marker: MainThreadMarker,
-    palette: ShellPalette,
-    actions: &ShellActions,
-    enabled: bool,
-) -> Retained<ShellButton> {
+fn rescan_button(marker: MainThreadMarker, palette: ShellPalette, actions: &ShellActions) -> Retained<ShellButton> {
     let rescan = ShellButton::new(
         marker,
         RESCAN,
@@ -161,7 +158,6 @@ fn rescan_button(
         },
     );
     rescan.on_click(actions, sel!(rescanDisk:));
-    rescan.setEnabled(enabled);
     rescan
 }
 

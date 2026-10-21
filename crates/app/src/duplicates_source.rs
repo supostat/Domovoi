@@ -9,7 +9,9 @@ use objc2_core_foundation::CGFloat;
 use objc2_foundation::{NSInteger, NSObject, NSString};
 
 use crate::duplicate_rows::{GROUP_GAP, GROUP_HEIGHT, MEMBER_HEIGHT, group_row, member_row};
+use crate::duplicates_layout::DuplicatesLayout;
 use crate::duplicates_source_model::DuplicatesSourceModel;
+use crate::group_model::GroupModel;
 
 define_class!(
     #[unsafe(super(NSObject))]
@@ -23,10 +25,10 @@ define_class!(
     unsafe impl NSOutlineViewDataSource for DuplicatesSource {
         #[unsafe(method(outlineView:numberOfChildrenOfItem:))]
         fn child_count(&self, _outline: &NSOutlineView, item: Option<&AnyObject>) -> NSInteger {
-            let model = self.ivars();
+            let groups = self.ivars().groups.borrow();
             let count = match item.map(locate) {
-                None => model.groups.len(),
-                Some((group, None)) => model.groups[group].copies.len() + 1,
+                None => groups.len(),
+                Some((group, None)) => groups[group].copies.len() + 1,
                 Some((_, Some(_))) => 0,
             };
             NSInteger::try_from(count).expect("groups are few")
@@ -83,12 +85,13 @@ define_class!(
         ) -> Option<Retained<NSView>> {
             let model = self.ivars();
             let marker = MainThreadMarker::from(self);
+            let groups = model.groups.borrow();
             Some(match locate(item) {
-                (group, None) => group_row(marker, &model.groups[group], model.width, &model.palette),
+                (group, None) => group_row(marker, &groups[group], model.width, &model.palette),
                 (group, Some(0)) => {
                     member_row(
                         marker,
-                        &model.groups[group].keep,
+                        &groups[group].keep,
                         None,
                         model.clone_mode,
                         model.width,
@@ -100,8 +103,8 @@ define_class!(
                 (group, Some(member)) => {
                     member_row(
                         marker,
-                        &model.groups[group].copies[member - 1],
-                        Some(model.layout.tag(group, member - 1)),
+                        &groups[group].copies[member - 1],
+                        Some(model.layout.borrow().tag(group, member - 1)),
                         model.clone_mode,
                         model.width,
                         &model.palette,
@@ -118,6 +121,20 @@ impl DuplicatesSource {
     pub(crate) fn new(marker: MainThreadMarker, model: DuplicatesSourceModel) -> Retained<Self> {
         let this = Self::alloc(marker).set_ivars(model);
         unsafe { msg_send![super(this), init] }
+    }
+
+    pub(crate) fn show(&self, outline: &NSOutlineView, groups: &[GroupModel]) -> bool {
+        let model = self.ivars();
+        if model.groups.borrow().as_slice() == groups {
+            return false;
+        }
+        model.layout.replace(DuplicatesLayout::of(groups));
+        model.groups.replace(groups.to_vec());
+        let previous_keys = model.keys.take();
+        outline.reloadData();
+        unsafe { outline.expandItem_expandChildren(None, true) };
+        drop(previous_keys);
+        true
     }
 }
 

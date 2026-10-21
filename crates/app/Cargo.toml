@@ -116,5 +116,9 @@ name = "sidebar_rescan"
 harness = false
 
 [[test]]
+name = "screen_update"
+harness = false
+
+[[test]]
 name = "smoke_inference_client"
 harness = false

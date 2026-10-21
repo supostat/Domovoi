@@ -85,6 +85,16 @@ impl WindowFrame {
         }
     }
 
+    pub fn update(&self, data: &ShellData, current: Section) {
+        self.sidebar.show(
+            data,
+            Navigation {
+                current,
+                care_ready: data.care_ready,
+            },
+        );
+    }
+
     pub fn root(&self) -> Retained<NSView> {
         self.controller.view()
     }

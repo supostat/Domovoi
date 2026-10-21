@@ -25,6 +25,7 @@ use crate::recommendations_model::RecommendationsModel;
 use crate::scan_job::ScanJob;
 use crate::scan_stage::ScanStage;
 use crate::scan_status::ScanStatus;
+use crate::screen_key::ScreenKey;
 use crate::screen_views::ScreenViews;
 use crate::section::Section;
 use crate::session::Session;
@@ -50,6 +51,7 @@ pub(crate) struct ShellState {
     pub focus_path: Option<PathBuf>,
     pub mode: DiagramMode,
     pub views: Option<ScreenViews>,
+    pub views_key: Option<ScreenKey>,
     pub scan: Option<ScanJob>,
     pub search: Option<DuplicateJob>,
     pub duplicate_summary: Option<DuplicateSummary>,
@@ -85,6 +87,7 @@ impl ShellState {
             focus_path: None,
             mode,
             views: None,
+            views_key: None,
             scan: None,
             search: None,
             duplicate_summary: None,
@@ -109,6 +112,17 @@ impl ShellState {
             tray_open: self.tray.is_some(),
             searching: self.search.is_some(),
         }
+    }
+
+    pub(crate) fn screen_key(&self) -> Option<ScreenKey> {
+        if self.stage != Stage::Main {
+            return None;
+        }
+        ScreenKey::of(
+            self.section,
+            self.palette,
+            self.data.as_ref().expect("the main stage has data"),
+        )
     }
 
     pub(crate) fn overview(&self) -> &DiskOverview {

@@ -8,10 +8,10 @@ use crate::shell_palette::ShellPalette;
 
 #[derive(Debug)]
 pub struct CardsModel {
-    pub cards: Vec<CardModel>,
+    pub cards: RefCell<Vec<CardModel>>,
     pub inset: f64,
     pub palette: ShellPalette,
     pub actions: Retained<ShellActions>,
-    pub heights: RefCell<(f64, Vec<f64>)>,
+    pub heights: RefCell<Option<(f64, Vec<f64>)>>,
     pub measurements: Cell<usize>,
 }

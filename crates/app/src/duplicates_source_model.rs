@@ -10,8 +10,8 @@ use crate::shell_palette::ShellPalette;
 
 #[derive(Debug)]
 pub struct DuplicatesSourceModel {
-    pub groups: Vec<GroupModel>,
-    pub layout: DuplicatesLayout,
+    pub groups: RefCell<Vec<GroupModel>>,
+    pub layout: RefCell<DuplicatesLayout>,
     pub clone_mode: bool,
     pub palette: ShellPalette,
     pub width: f64,

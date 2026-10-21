@@ -49,6 +49,11 @@ pub(crate) fn measure_label(
     field
 }
 
+pub(crate) fn retext(field: &NSTextField, text: &str) {
+    field.setStringValue(&NSString::from_str(text));
+    field.sizeToFit();
+}
+
 pub(crate) fn place(field: &NSTextField, origin: NSPoint, width: f64) {
     let height = field.fittingSize().height;
     field.setFrame(NSRect::new(origin, NSSize::new(width, height)));

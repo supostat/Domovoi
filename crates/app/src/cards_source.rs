@@ -8,6 +8,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSIndexPath, NSInteger, NSObject, NSSize, NSString};
 
+use crate::card_model::CardModel;
 use crate::cards_model::CardsModel;
 use crate::recommendation_card::RecommendationCard;
 
@@ -26,7 +27,7 @@ define_class!(
     unsafe impl NSCollectionViewDataSource for CardsSource {
         #[unsafe(method(collectionView:numberOfItemsInSection:))]
         fn item_count(&self, _collection: &NSCollectionView, _section: NSInteger) -> NSInteger {
-            NSInteger::try_from(self.ivars().cards.len()).expect("cards are few")
+            NSInteger::try_from(self.ivars().cards.borrow().len()).expect("cards are few")
         }
 
         #[unsafe(method_id(collectionView:itemForRepresentedObjectAtIndexPath:))]
@@ -40,7 +41,7 @@ define_class!(
             }
             let card = RecommendationCard::build(
                 MainThreadMarker::from(self),
-                &model.cards[position],
+                &model.cards.borrow()[position],
                 position,
                 self.card_width(collection),
                 &model.palette,
@@ -78,6 +79,16 @@ impl CardsSource {
         self.ivars().measurements.get()
     }
 
+    pub(crate) fn show(&self, cards: &[CardModel]) -> bool {
+        let model = self.ivars();
+        if model.cards.borrow().as_slice() == cards {
+            return false;
+        }
+        model.cards.replace(cards.to_vec());
+        model.heights.replace(None);
+        true
+    }
+
     fn card_width(&self, collection: &NSCollectionView) -> f64 {
         let scroll = collection
             .enclosingScrollView()
@@ -88,20 +99,24 @@ impl CardsSource {
     fn heights(&self, width: f64) -> Vec<f64> {
         let model = self.ivars();
         let mut cached = model.heights.borrow_mut();
-        if cached.0.to_bits() != width.to_bits() || cached.1.len() != model.cards.len() {
-            model.measurements.set(model.measurements.get() + 1);
-            let marker = MainThreadMarker::from(self);
-            cached.1 = model
-                .cards
-                .iter()
-                .enumerate()
-                .map(|(position, card)| {
-                    RecommendationCard::build(marker, card, position, width, &model.palette, &model.actions).height
-                })
-                .collect();
-            cached.0 = width;
+        if let Some((measured_width, heights)) = cached.as_ref()
+            && measured_width.to_bits() == width.to_bits()
+        {
+            return heights.clone();
         }
-        cached.1.clone()
+        model.measurements.set(model.measurements.get() + 1);
+        let marker = MainThreadMarker::from(self);
+        let heights: Vec<f64> = model
+            .cards
+            .borrow()
+            .iter()
+            .enumerate()
+            .map(|(position, card)| {
+                RecommendationCard::build(marker, card, position, width, &model.palette, &model.actions).height
+            })
+            .collect();
+        *cached = Some((width, heights.clone()));
+        heights
     }
 }
 

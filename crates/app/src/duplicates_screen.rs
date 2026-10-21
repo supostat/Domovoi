@@ -19,7 +19,7 @@ use crate::duplicates_source_model::DuplicatesSourceModel;
 use crate::duplicates_state::DuplicatesState;
 use crate::empty_state::empty_state;
 use crate::fill_view::{FillStyle, FillView};
-use crate::label::{label, measure_label};
+use crate::label::{label, measure_label, retext};
 use crate::pane_head::pane_head;
 use crate::probes::Probes;
 use crate::section::Section;
@@ -52,6 +52,7 @@ const PROGRESS_GAP: f64 = 14.0;
 pub struct DuplicatesScreen {
     pub frame: WindowFrame,
     pub title: Retained<NSTextField>,
+    pub subtitle: Retained<NSTextField>,
     pub toggle: Retained<ToggleSwitch>,
     pub action: Option<SegmentedSwitch>,
     pub apply: Option<Retained<ShellButton>>,
@@ -66,7 +67,7 @@ impl DuplicatesScreen {
         let frame = WindowFrame::build(marker, data, Section::Duplicates, palette, actions);
         let pane = WindowFrame::pane_size();
         let head = pane_head(marker, &frame.pane, HEAD_HEIGHT, palette);
-        let title = head_titles(marker, &head, model, palette);
+        let (title, subtitle) = head_titles(marker, &head, palette);
         let groups = model.groups();
         let (toggle, action) = head_controls(marker, &head, model, palette, actions);
         let (footer_height, apply) = if groups.is_empty() {
@@ -111,16 +112,24 @@ impl DuplicatesScreen {
             sidebar: Some([8.0, 8.0]),
             accent_button: None,
         };
-        Self {
+        let screen = Self {
             frame,
             title,
+            subtitle,
             toggle,
             action,
             apply,
             outline,
             progress,
             probes,
-        }
+        };
+        screen.show(model);
+        screen
+    }
+
+    pub fn update(&self, data: &ShellData) {
+        self.frame.update(data, Section::Duplicates);
+        self.show(&data.care.duplicates);
     }
 
     pub fn show_progress(&self, stage: &str, done: u64, total: u64) {
@@ -133,59 +142,79 @@ impl DuplicatesScreen {
     }
 
     pub fn show_selection(&self, model: &DuplicatesModel) {
-        if let Some(title) = model.title_line() {
-            self.title.setStringValue(&NSString::from_str(&title));
-        }
+        self.show_titles(model);
         if let Some(apply) = &self.apply {
             apply.retitle(&apply_title(model));
             apply.setEnabled(model.will_free() > 0);
         }
+    }
+
+    fn show(&self, model: &DuplicatesModel) {
+        self.show_selection(model);
+        if let DuplicatesState::Searching { stage, done, total } = &model.state {
+            self.show_progress(stage.title(), *done, *total);
+        }
+        if let Some((outline, source)) = &self.outline {
+            source.show(outline, model.groups());
+        }
+    }
+
+    fn show_titles(&self, model: &DuplicatesModel) {
+        let head = NSSize::new(WindowFrame::pane_size().width, HEAD_HEIGHT);
+        retext(
+            &self.title,
+            &model.title_line().unwrap_or_else(|| DUPLICATES.to_owned()),
+        );
+        let title_size = self.title.frame().size;
+        self.title
+            .setFrameOrigin(from_top(head, PANE_PADDING, TITLE_TOP, title_size).origin);
+        retext(&self.subtitle, &subtitle_line(model).unwrap_or_default());
+        self.subtitle.setFrameOrigin(
+            from_top(
+                head,
+                PANE_PADDING,
+                TITLE_TOP + title_size.height + LINE_GAP,
+                self.subtitle.frame().size,
+            )
+            .origin,
+        );
     }
 }
 
 fn head_titles(
     marker: MainThreadMarker,
     head: &FillView,
-    model: &DuplicatesModel,
     palette: &ShellPalette,
-) -> Retained<NSTextField> {
+) -> (Retained<NSTextField>, Retained<NSTextField>) {
     let tokens = palette.tokens;
-    let head_size = head.frame().size;
     let pinned = NSAutoresizingMaskOptions::ViewMinYMargin;
     let title = label(
         marker,
-        &model.title_line().unwrap_or_else(|| DUPLICATES.to_owned()),
+        "",
         &interface_font(17.0, 600.0),
         &tokens.text.ns_color(),
         NSLineBreakMode::ByTruncatingTail,
     );
-    let title_size = title.fittingSize();
-    title.setFrame(from_top(head_size, PANE_PADDING, TITLE_TOP, title_size));
     title.setAutoresizingMask(pinned);
     head.addSubview(&title);
-    let subtitle = match &model.state {
+    let subtitle = label(
+        marker,
+        "",
+        &interface_font(12.5, 400.0),
+        &tokens.dim.ns_color(),
+        NSLineBreakMode::ByTruncatingTail,
+    );
+    subtitle.setAutoresizingMask(pinned);
+    head.addSubview(&subtitle);
+    (title, subtitle)
+}
+
+fn subtitle_line(model: &DuplicatesModel) -> Option<String> {
+    match &model.state {
         DuplicatesState::Found { .. } => model.checked_line(),
         DuplicatesState::Searching { stage, .. } => Some(stage.title().to_owned()),
         DuplicatesState::Idle => None,
-    };
-    if let Some(subtitle) = subtitle {
-        let small = label(
-            marker,
-            &subtitle,
-            &interface_font(12.5, 400.0),
-            &tokens.dim.ns_color(),
-            NSLineBreakMode::ByTruncatingTail,
-        );
-        small.setFrame(from_top(
-            head_size,
-            PANE_PADDING,
-            TITLE_TOP + title_size.height + LINE_GAP,
-            small.fittingSize(),
-        ));
-        small.setAutoresizingMask(pinned);
-        head.addSubview(&small);
     }
-    title
 }
 
 fn head_controls(
@@ -507,12 +536,11 @@ fn groups_outline(
     column.setWidth(inner.size.width);
     outline.addTableColumn(&column);
     unsafe { outline.setOutlineTableColumn(Some(&column)) };
-    let groups = model.groups().to_vec();
     let source = DuplicatesSource::new(
         marker,
         DuplicatesSourceModel {
-            layout: DuplicatesLayout::of(&groups),
-            groups,
+            groups: RefCell::new(Vec::new()),
+            layout: RefCell::new(DuplicatesLayout::default()),
             clone_mode: model.clone_mode,
             palette: *palette,
             width: inner.size.width,
@@ -524,8 +552,6 @@ fn groups_outline(
         outline.setDataSource(Some(ProtocolObject::from_ref(&*source)));
         outline.setDelegate(Some(ProtocolObject::from_ref(&*source)));
     }
-    outline.reloadData();
-    unsafe { outline.expandItem_expandChildren(None, true) };
     scroll.setDocumentView(Some(&outline));
     outline.sizeLastColumnToFit();
     pane.addSubview(&scroll);
