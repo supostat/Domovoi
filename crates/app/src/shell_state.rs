@@ -118,13 +118,13 @@ impl ShellState {
         if self.stage != Stage::Main {
             return None;
         }
-        ScreenKey::of(
+        Some(ScreenKey::of(
             self.section,
             self.palette,
             self.data.as_ref().expect("the main stage has data"),
             self.focus,
             self.mode,
-        )
+        ))
     }
 
     pub(crate) fn overview(&self) -> &DiskOverview {

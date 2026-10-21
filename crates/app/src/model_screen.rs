@@ -1,10 +1,12 @@
 use domovoi_theme::RADII;
+use objc2::Message;
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly, sel};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSLineBreakMode, NSScrollView, NSView};
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 use crate::chat_entry_view::text_block;
+use crate::document_swap::swap_document_keeping_offset;
 use crate::fill_view::{FillStyle, FillView};
 use crate::flipped_view::FlippedView;
 use crate::label::{label, measure_label};
@@ -41,50 +43,71 @@ pub struct ModelScreen {
     pub toggle: Retained<ToggleSwitch>,
     pub unload: Retained<ShellButton>,
     pub probes: Probes,
+    palette: ShellPalette,
+    actions: Retained<ShellActions>,
 }
 
 impl ModelScreen {
     pub fn build(marker: MainThreadMarker, data: &ShellData, palette: &ShellPalette, actions: &ShellActions) -> Self {
-        let model = &data.ai.model;
         let frame = WindowFrame::build(marker, data, Section::Model, palette, actions);
-        let pane = WindowFrame::pane_size();
-        let width = pane.width - 2.0 * PANE_SIDE;
-        let document = FlippedView::new(marker, NSRect::new(NSPoint::ZERO, pane));
-        let mut top = PANE_TOP;
-        let (head_height, toggle) = head(marker, &document, model, width, palette, actions);
-        top += head_height + BLOCK_GAP;
-        for (position, card) in model.cards.iter().enumerate() {
-            let view = model_card_view(marker, card, position, model.fits(card), width, palette, actions);
-            top = stack(&document, &view, top);
-        }
-        let (board, unload) = model_board(marker, model, width, palette, actions);
-        top = stack(&document, &board, top);
-        let note = catalog_note(marker, model, width, palette);
-        top = stack(&document, &note, top) - BLOCK_GAP + PANE_BOTTOM;
-        document.setFrameSize(NSSize::new(pane.width, top.max(pane.height)));
-        document.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
-        let content = NSScrollView::initWithFrame(NSScrollView::alloc(marker), NSRect::new(NSPoint::ZERO, pane));
+        let content = NSScrollView::initWithFrame(
+            NSScrollView::alloc(marker),
+            NSRect::new(NSPoint::ZERO, WindowFrame::pane_size()),
+        );
         content.setDrawsBackground(false);
         content.setHasVerticalScroller(true);
         content.setAutohidesScrollers(true);
         content.setAutoresizingMask(
             NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
-        content.setDocumentView(Some(&document));
         frame.pane.addSubview(&content);
-        let probes = Probes {
-            window_background: [WINDOW.width - PROBE_INSET, WINDOW.height - PROBE_INSET],
-            sidebar: Some([PROBE_INSET, PROBE_INSET]),
-            accent_button: None,
-        };
+        let (toggle, unload) = show(&content, &data.ai.model, palette, actions);
         Self {
             frame,
             content,
             toggle,
             unload,
-            probes,
+            probes: Probes {
+                window_background: [WINDOW.width - PROBE_INSET, WINDOW.height - PROBE_INSET],
+                sidebar: Some([PROBE_INSET, PROBE_INSET]),
+                accent_button: None,
+            },
+            palette: *palette,
+            actions: actions.retain(),
         }
     }
+
+    pub fn update(&mut self, data: &ShellData) {
+        self.frame.update(data, Section::Model);
+        (self.toggle, self.unload) = show(&self.content, &data.ai.model, &self.palette, &self.actions);
+    }
+}
+
+fn show(
+    content: &NSScrollView,
+    model: &ModelScreenModel,
+    palette: &ShellPalette,
+    actions: &ShellActions,
+) -> (Retained<ToggleSwitch>, Retained<ShellButton>) {
+    let marker = MainThreadMarker::from(content);
+    let size = content.frame().size;
+    let width = size.width - 2.0 * PANE_SIDE;
+    let document = FlippedView::new(marker, NSRect::new(NSPoint::ZERO, size));
+    let mut top = PANE_TOP;
+    let (head_height, toggle) = head(marker, &document, model, width, palette, actions);
+    top += head_height + BLOCK_GAP;
+    for (position, card) in model.cards.iter().enumerate() {
+        let view = model_card_view(marker, card, position, model.fits(card), width, palette, actions);
+        top = stack(&document, &view, top);
+    }
+    let (board, unload) = model_board(marker, model, width, palette, actions);
+    top = stack(&document, &board, top);
+    let note = catalog_note(marker, model, width, palette);
+    top = stack(&document, &note, top) - BLOCK_GAP + PANE_BOTTOM;
+    document.setFrameSize(NSSize::new(size.width, top.max(size.height)));
+    document.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
+    swap_document_keeping_offset(content, &document);
+    (toggle, unload)
 }
 
 fn stack(document: &NSView, view: &NSView, top: f64) -> f64 {

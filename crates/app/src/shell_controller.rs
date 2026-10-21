@@ -445,6 +445,7 @@ impl ShellController {
                     state.data.as_ref().expect("a keyed screen shows built data"),
                     state.focus,
                 );
+                self.focus_assistant_input(&views);
                 state.views = Some(views);
                 return;
             }
@@ -537,13 +538,25 @@ impl ShellController {
             NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
         self.root.show(&content);
-        if let ScreenViews::Assistant(screen) = &views
-            && let Some(input) = screen.input.as_ref().filter(|input| input.isEditable())
-        {
-            self.window.makeFirstResponder(Some(input));
-        }
+        self.focus_assistant_input(&views);
         state.views_key = key;
         state.views = Some(views);
+    }
+
+    fn focus_assistant_input(&self, views: &ScreenViews) {
+        let ScreenViews::Assistant(screen) = views else {
+            return;
+        };
+        let Some(text) = screen.input.as_ref().map(|input| &input.text) else {
+            return;
+        };
+        let focused = self
+            .window
+            .firstResponder()
+            .is_some_and(|responder| std::ptr::eq(Retained::as_ptr(&responder).cast(), Retained::as_ptr(text)));
+        if text.isEditable() && !focused {
+            self.window.makeFirstResponder(Some(text));
+        }
     }
 
     fn diagram_view(&self, mut diagram: DiagramState) -> Result<Retained<DiagramView>, String> {

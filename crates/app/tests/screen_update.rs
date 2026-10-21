@@ -2,8 +2,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use domovoi_app::{
-    DuplicatesModel, DuplicatesScreen, DuplicatesState, MainScreen, OutlineFixture, RecommendationsScreen, Screen,
-    ScreenKey, Section, ShellActions, ShellData, ShellFixture, ShellPalette, WINDOW, development_fonts,
+    AssistantScreen, Availability, DuplicatesModel, DuplicatesScreen, DuplicatesState, MainScreen, ModelScreen,
+    ModelVariant, OutlineFixture, RecommendationsScreen, Screen, ScreenKey, Section, ShellActions, ShellData,
+    ShellFixture, ShellPalette, WINDOW, development_fonts,
 };
 use domovoi_render::{DiagramMode, ROOT, register_fonts};
 use domovoi_theme::Palette;
@@ -11,7 +12,7 @@ use objc2::MainThreadMarker;
 use objc2::MainThreadOnly;
 use objc2::rc::Retained;
 use objc2_app_kit::{NSApplication, NSBackingStoreType, NSScrollView, NSWindow, NSWindowStyleMask};
-use objc2_foundation::{NSPoint, NSRect};
+use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize, NSString};
 
 const COPIES: usize = 8;
 const SCROLLED: f64 = 600.0;
@@ -22,6 +23,10 @@ const NOTE_FILES: usize = 30;
 const ARCHIVE: &str = "Archive";
 const LIST_SCROLLED: f64 = 200.0;
 const LONG_FREE_BYTES: u64 = 987_654_321_000;
+const SHORT_WINDOW: f64 = 360.0;
+const TRANSCRIPT_COPIES: usize = 6;
+const DRAFT: &str = "Что лежит в Application Support?";
+const SELECTION: (usize, usize) = (4, 5);
 
 fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shell_state.json")
@@ -340,7 +345,7 @@ fn disk_keeps_its_place(marker: MainThreadMarker, actions: &ShellActions, checks
     );
 }
 
-fn key(section: Section, palette: ShellPalette, data: &ShellData) -> Option<ScreenKey> {
+fn key(section: Section, palette: ShellPalette, data: &ShellData) -> ScreenKey {
     ScreenKey::of(section, palette, data, ROOT, DiagramMode::Sunburst)
 }
 
@@ -349,7 +354,6 @@ fn disk_keys_follow_the_level(checks: &mut Checks) {
     let disk = disk_data(NOTE_FILES, 0.5, false);
     let notes = notes_position(&disk);
     let shown = ScreenKey::of(Section::Disk, dark, &disk, notes, DiagramMode::Sunburst);
-    checks.expect(shown.is_some(), "keys: the disk has a key");
     checks.expect(
         shown != ScreenKey::of(Section::Disk, dark, &disk, ROOT, DiagramMode::Sunburst),
         "keys: another focus is another key",
@@ -383,7 +387,6 @@ fn keys_follow_the_shape(checks: &mut Checks) {
     let light = palette(&Palette::LIGHT);
     let recommendations = shell_data(Screen::Recommendations);
     let shown = key(Section::Recommendations, dark, &recommendations);
-    checks.expect(shown.is_some(), "keys: the recommendations have a key");
     checks.expect(
         shown != key(Section::Duplicates, dark, &recommendations),
         "keys: another section is another key",
@@ -421,12 +424,177 @@ fn keys_follow_the_shape(checks: &mut Checks) {
         found != key(Section::Duplicates, dark, &cloning),
         "keys: the clone mode is another key",
     );
-    for section in [Section::Assistant, Section::Model] {
-        checks.expect(
-            key(section, dark, &recommendations).is_none(),
-            format!("keys: {section:?} has no key yet"),
-        );
-    }
+    let chat = shell_data(Screen::Assistant(Availability::Ready));
+    let mut answering = chat.clone();
+    answering.ai.chat.availability = Availability::Answering;
+    checks.expect(
+        key(Section::Assistant, dark, &chat) == key(Section::Assistant, dark, &answering),
+        "keys: an answer in progress keeps the transcript key",
+    );
+    let mut off = chat.clone();
+    off.ai.chat.availability = Availability::Off;
+    checks.expect(
+        key(Section::Assistant, dark, &chat) != key(Section::Assistant, dark, &off),
+        "keys: the transcript and the unavailable notice are different keys",
+    );
+    checks.expect(
+        key(Section::Model, dark, &chat) == key(Section::Model, dark, &recommendations),
+        "keys: the model screen keeps one key",
+    );
+}
+
+fn shorten(window: &NSWindow) {
+    window.setContentSize(NSSize::new(WINDOW.width, SHORT_WINDOW));
+}
+
+fn document_height(scroll: &NSScrollView) -> f64 {
+    scroll
+        .documentView()
+        .expect("the scroll view shows a document")
+        .frame()
+        .size
+        .height
+}
+
+fn same_scroll(now: Option<&Retained<NSScrollView>>, before: &Retained<NSScrollView>) -> bool {
+    now.is_some_and(|now| std::ptr::eq(Retained::as_ptr(now), Retained::as_ptr(before)))
+}
+
+fn model_keeps_its_place(marker: MainThreadMarker, actions: &ShellActions, checks: &mut Checks) {
+    let data = shell_data(Screen::Model(ModelVariant::Catalog));
+    let window = offscreen_window(marker);
+    let mut screen = ModelScreen::build(marker, &data, &palette(&Palette::DARK), actions);
+    window.setContentView(Some(&screen.frame.root()));
+    shorten(&window);
+    let scroll = screen.content.clone();
+    lay_out(&window, &scroll);
+    scroll_to(&scroll, LIST_SCROLLED);
+    let before = offset(&scroll);
+    screen.update(&data);
+    lay_out(&window, &scroll);
+    checks.expect(
+        (before - LIST_SCROLLED).abs() < OFFSET_TOLERANCE,
+        format!("model: the catalog scrolls to {LIST_SCROLLED} pt (got {before})"),
+    );
+    checks.expect(
+        same_scroll(Some(&screen.content), &scroll) && stays_in(&scroll, &window),
+        "model: the catalog keeps its scroll view in the window",
+    );
+    let after = offset(&scroll);
+    checks.expect(
+        (after - before).abs() < OFFSET_TOLERANCE,
+        format!("model: the offset stays at {before} pt (got {after})"),
+    );
+    checks.expect(
+        screen.toggle.window().is_some() && screen.unload.window().is_some(),
+        "model: the switch and the unload button point at the shown views",
+    );
+}
+
+fn long_chat(availability: Availability) -> ShellData {
+    let mut data = shell_data(Screen::Assistant(availability));
+    let entries = data.ai.chat.entries.clone();
+    data.ai.chat.entries = (0..TRANSCRIPT_COPIES).flat_map(|_| entries.iter().cloned()).collect();
+    data
+}
+
+fn with_one_more_entry(data: &ShellData) -> ShellData {
+    let mut changed = data.clone();
+    let last = changed.ai.chat.entries.last().cloned().expect("the chat has entries");
+    changed.ai.chat.entries.push(last);
+    changed
+}
+
+fn shown_assistant(
+    marker: MainThreadMarker,
+    data: &ShellData,
+    actions: &ShellActions,
+) -> (Retained<NSWindow>, AssistantScreen, Retained<NSScrollView>) {
+    let window = offscreen_window(marker);
+    let screen = AssistantScreen::build(marker, data, &palette(&Palette::DARK), actions);
+    window.setContentView(Some(&screen.frame.root()));
+    shorten(&window);
+    let scroll = screen.transcript.clone().expect("the assistant shows the transcript");
+    lay_out(&window, &scroll);
+    (window, screen, scroll)
+}
+
+fn assistant_follows_the_bottom(marker: MainThreadMarker, actions: &ShellActions, checks: &mut Checks) {
+    let data = long_chat(Availability::Ready);
+    let (window, mut screen, scroll) = shown_assistant(marker, &data, actions);
+    let bottom = document_height(&scroll) - scroll.contentView().bounds().size.height;
+    scroll_to(&scroll, bottom);
+    let height_before = document_height(&scroll);
+    screen.update(&with_one_more_entry(&data));
+    lay_out(&window, &scroll);
+    let height_after = document_height(&scroll);
+    let visible = scroll.contentView().bounds();
+    checks.expect(
+        bottom > 0.0 && height_after > height_before,
+        format!("assistant: the transcript is taller than the window and grows ({height_before} → {height_after} pt)"),
+    );
+    checks.expect(
+        same_scroll(screen.transcript.as_ref(), &scroll) && stays_in(&scroll, &window),
+        "assistant: the transcript keeps its scroll view in the window",
+    );
+    let shown_bottom = visible.origin.y + visible.size.height;
+    checks.expect(
+        (shown_bottom - height_after).abs() < OFFSET_TOLERANCE,
+        format!("assistant: a reader at the bottom sees the new bottom ({shown_bottom} of {height_after} pt)"),
+    );
+}
+
+fn assistant_keeps_a_reader_in_place(marker: MainThreadMarker, actions: &ShellActions, checks: &mut Checks) {
+    let data = long_chat(Availability::Ready);
+    let (window, mut screen, scroll) = shown_assistant(marker, &data, actions);
+    scroll_to(&scroll, LIST_SCROLLED);
+    let before = offset(&scroll);
+    screen.update(&with_one_more_entry(&data));
+    lay_out(&window, &scroll);
+    let after = offset(&scroll);
+    checks.expect(
+        (before - LIST_SCROLLED).abs() < OFFSET_TOLERANCE && (after - before).abs() < OFFSET_TOLERANCE,
+        format!("assistant: a reader scrolled up stays at {LIST_SCROLLED} pt (got {before} → {after})"),
+    );
+}
+
+fn assistant_keeps_the_draft(marker: MainThreadMarker, actions: &ShellActions, checks: &mut Checks) {
+    let data = long_chat(Availability::Ready);
+    let (_window, mut screen, _scroll) = shown_assistant(marker, &data, actions);
+    let input = screen.input.as_ref().expect("a ready assistant shows the input");
+    let text = input.text.clone();
+    text.setString(&NSString::from_str(DRAFT));
+    text.setSelectedRange(NSRange::new(SELECTION.0, SELECTION.1));
+    let changed = with_one_more_entry(&data);
+    screen.update(&changed);
+    let input = screen.input.as_ref().expect("the input stays");
+    let selection = input.text.selectedRange();
+    checks.expect(
+        std::ptr::eq(Retained::as_ptr(&input.text), Retained::as_ptr(&text)),
+        "assistant: the input stays the same view",
+    );
+    checks.expect(
+        input.text.string().to_string() == DRAFT && (selection.location, selection.length) == SELECTION,
+        "assistant: the draft and its selection survive the update",
+    );
+    let mut answering = changed.clone();
+    answering.ai.chat.availability = Availability::Answering;
+    screen.update(&answering);
+    let input = screen.input.as_ref().expect("the input stays");
+    let stop = input.trailing.clone();
+    let blocked = !input.text.isEditable();
+    let mut answered = answering.clone();
+    answered.ai.chat.availability = Availability::Ready;
+    screen.update(&answered);
+    let input = screen.input.as_ref().expect("the input stays");
+    checks.expect(
+        blocked && input.text.isEditable(),
+        "assistant: the input is closed while answering and opens when ready",
+    );
+    checks.expect(
+        !std::ptr::eq(Retained::as_ptr(&input.trailing), Retained::as_ptr(&stop)),
+        "assistant: the stop button gives way to the send key when ready",
+    );
 }
 
 fn main() -> ExitCode {
@@ -441,6 +609,10 @@ fn main() -> ExitCode {
     duplicates_keep_their_place(marker, &actions, &mut checks);
     sidebar_follows_the_data(marker, &actions, &mut checks);
     disk_keeps_its_place(marker, &actions, &mut checks);
+    model_keeps_its_place(marker, &actions, &mut checks);
+    assistant_follows_the_bottom(marker, &actions, &mut checks);
+    assistant_keeps_a_reader_in_place(marker, &actions, &mut checks);
+    assistant_keeps_the_draft(marker, &actions, &mut checks);
     keys_follow_the_shape(&mut checks);
     disk_keys_follow_the_level(&mut checks);
     if checks.failures.is_empty() {

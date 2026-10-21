@@ -1,5 +1,6 @@
 use domovoi_render::DiagramMode;
 
+use crate::availability::Availability;
 use crate::duplicates_model::DuplicatesModel;
 use crate::duplicates_state::DuplicatesState;
 use crate::section::Section;
@@ -23,6 +24,8 @@ enum Shape {
         cards: bool,
     },
     Duplicates(DuplicatesBody),
+    Assistant(AssistantBody),
+    Model,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,14 +36,14 @@ enum DuplicatesBody {
     Found { clone_mode: bool, clone_available: bool },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AssistantBody {
+    Transcript,
+    Unavailable(Availability),
+}
+
 impl ScreenKey {
-    pub fn of(
-        section: Section,
-        palette: ShellPalette,
-        data: &ShellData,
-        focus: usize,
-        mode: DiagramMode,
-    ) -> Option<Self> {
+    pub fn of(section: Section, palette: ShellPalette, data: &ShellData, focus: usize, mode: DiagramMode) -> Self {
         let shape = match section {
             Section::Disk => Shape::Disk {
                 level: data.crumbs(focus).into_iter().map(|crumb| crumb.title).collect(),
@@ -51,9 +54,10 @@ impl ScreenKey {
                 cards: !data.care.recommendations.cards.is_empty(),
             },
             Section::Duplicates => Shape::Duplicates(DuplicatesBody::of(&data.care.duplicates)),
-            Section::Assistant | Section::Model => return None,
+            Section::Assistant => Shape::Assistant(AssistantBody::of(data.ai.chat.availability)),
+            Section::Model => Shape::Model,
         };
-        Some(Self { palette, shape })
+        Self { palette, shape }
     }
 }
 
@@ -67,6 +71,16 @@ impl DuplicatesBody {
                 clone_mode: model.clone_mode,
                 clone_available: model.clone_available(),
             },
+        }
+    }
+}
+
+impl AssistantBody {
+    fn of(availability: Availability) -> Self {
+        if availability.shows_transcript() {
+            Self::Transcript
+        } else {
+            Self::Unavailable(availability)
         }
     }
 }

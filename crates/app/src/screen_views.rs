@@ -33,9 +33,9 @@ impl ScreenViews {
             Self::Main { screen, .. } => screen.update(data, focus),
             Self::Recommendations(screen) => screen.update(data),
             Self::Duplicates(screen) => screen.update(data),
-            Self::Access(_) | Self::Scanning { .. } | Self::Assistant(_) | Self::Model(_) => {
-                unreachable!("only screens with a key update in place")
-            }
+            Self::Assistant(screen) => screen.update(data),
+            Self::Model(screen) => screen.update(data),
+            Self::Access(_) | Self::Scanning { .. } => unreachable!("only main-stage screens update in place"),
         }
     }
 

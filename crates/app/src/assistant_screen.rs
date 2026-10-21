@@ -1,17 +1,16 @@
 use objc2::rc::Retained;
-use objc2::runtime::ProtocolObject;
 use objc2::{MainThreadMarker, MainThreadOnly, Message, sel};
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSLineBreakMode, NSScrollView, NSTextView, NSView};
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSLineBreakMode, NSScrollView, NSView};
+use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 use crate::availability::Availability;
 use crate::button_style::ButtonStyle;
 use crate::chat_entry::ChatEntry;
 use crate::chat_entry_view::chat_entry_view;
-use crate::chat_input_delegate::ChatInputDelegate;
+use crate::chat_input::{ChatInput, INPUT_HEIGHT};
 use crate::chat_model::ChatModel;
+use crate::document_swap::swap_document_following_bottom;
 use crate::empty_state::empty_state;
-use crate::fill_view::{FillStyle, FillView};
 use crate::flipped_view::FlippedView;
 use crate::label::label;
 use crate::probes::Probes;
@@ -21,25 +20,16 @@ use crate::shell_button::ShellButton;
 use crate::shell_data::ShellData;
 use crate::shell_layout::WINDOW;
 use crate::shell_palette::ShellPalette;
-use crate::strings::{
-    ANSWERING, ASK_PLACEHOLDER, ASK_PLACEHOLDER_UNLOADED, ASSISTANT_NO_MODEL, ASSISTANT_OFF, CHAT_FOOT, GO_TO_MODEL,
-    MODEL_LOADING, SEND_KEY, STOP_ANSWER,
-};
+use crate::strings::{ASSISTANT_NO_MODEL, ASSISTANT_OFF, CHAT_FOOT, GO_TO_MODEL};
 use crate::ui_font::{interface_font, mono_font};
 use crate::window_frame::WindowFrame;
 
 const CHAT_PADDING: f64 = 22.0;
 const ENTRY_GAP: f64 = 14.0;
 const BUBBLE_SHARE: f64 = 0.88;
-const INPUT_HEIGHT: f64 = 40.0;
-const INPUT_RADIUS: f64 = 10.0;
-const INPUT_PADDING: f64 = 12.0;
-const INPUT_LINE: f64 = 20.0;
 const INPUT_TOP_GAP: f64 = 14.0;
-const TRAILING_GAP: f64 = 10.0;
 const FOOT_GAP: f64 = 22.0;
 const FOOT_BOTTOM: f64 = 16.0;
-const STOP_HEIGHT: f64 = 26.0;
 const GO_HEIGHT: f64 = 34.0;
 const PROBE_INSET: f64 = 8.0;
 
@@ -47,9 +37,10 @@ const PROBE_INSET: f64 = 8.0;
 pub struct AssistantScreen {
     pub frame: WindowFrame,
     pub transcript: Option<Retained<NSScrollView>>,
-    pub input: Option<Retained<NSTextView>>,
-    _input_delegate: Option<Retained<ChatInputDelegate>>,
+    pub input: Option<ChatInput>,
     pub probes: Probes,
+    palette: ShellPalette,
+    actions: Retained<ShellActions>,
 }
 
 impl AssistantScreen {
@@ -67,8 +58,9 @@ impl AssistantScreen {
                 frame,
                 transcript: None,
                 input: None,
-                _input_delegate: None,
                 probes,
+                palette: *palette,
+                actions: actions.retain(),
             };
         }
         let pane = WindowFrame::pane_size();
@@ -89,39 +81,73 @@ impl AssistantScreen {
         );
         frame.pane.addSubview(&foot);
         let input_bottom = FOOT_BOTTOM + foot_height + FOOT_GAP;
-        let (input, input_delegate) = input_box(marker, &frame.pane, input_bottom, chat, palette, actions);
-        let transcript_bottom = input_bottom + INPUT_HEIGHT + INPUT_TOP_GAP;
-        let transcript = transcript(
+        let input = ChatInput::build(
             marker,
+            &frame.pane,
+            NSRect::new(
+                NSPoint::new(CHAT_PADDING, input_bottom),
+                NSSize::new(pane.width - 2.0 * CHAT_PADDING, INPUT_HEIGHT),
+            ),
+            &chat.draft,
+            palette,
+            actions,
+        );
+        let transcript_bottom = input_bottom + INPUT_HEIGHT + INPUT_TOP_GAP;
+        let transcript = NSScrollView::initWithFrame(
+            NSScrollView::alloc(marker),
             NSRect::new(
                 NSPoint::new(0.0, transcript_bottom),
                 NSSize::new(pane.width, pane.height - transcript_bottom),
             ),
-            chat,
-            palette,
-            actions,
+        );
+        transcript.setDrawsBackground(false);
+        transcript.setHasVerticalScroller(true);
+        transcript.setAutohidesScrollers(true);
+        transcript.setAutoresizingMask(
+            NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
         frame.pane.addSubview(&transcript);
-        Self {
+        let mut screen = Self {
             frame,
             transcript: Some(transcript),
             input: Some(input),
-            _input_delegate: Some(input_delegate),
             probes,
-        }
+            palette: *palette,
+            actions: actions.retain(),
+        };
+        screen.show(chat);
+        screen
+    }
+
+    pub fn update(&mut self, data: &ShellData) {
+        self.frame.update(data, Section::Assistant);
+        self.show(&data.ai.chat);
     }
 
     pub fn clear_draft(&self) {
         if let Some(input) = &self.input {
-            input.setString(&NSString::new());
+            input.clear();
         }
     }
 
     pub fn draft(&self) -> String {
-        self.input
-            .as_ref()
-            .map(|input| input.string().to_string())
-            .unwrap_or_default()
+        self.input.as_ref().map(ChatInput::draft).unwrap_or_default()
+    }
+
+    fn show(&mut self, chat: &ChatModel) {
+        if let Some(transcript) = &self.transcript {
+            let document = transcript_document(
+                MainThreadMarker::from(&**transcript),
+                transcript.frame().size,
+                chat,
+                &self.palette,
+                &self.actions,
+            );
+            swap_document_following_bottom(transcript, &document);
+        }
+        if let Some(input) = &mut self.input {
+            input.show(chat.availability, &self.palette, &self.actions);
+        }
     }
 }
 
@@ -163,137 +189,16 @@ fn unavailable(
     ]
 }
 
-fn input_box(
+fn transcript_document(
     marker: MainThreadMarker,
-    pane: &NSView,
-    bottom: f64,
+    size: NSSize,
     chat: &ChatModel,
     palette: &ShellPalette,
     actions: &ShellActions,
-) -> (Retained<NSTextView>, Retained<ChatInputDelegate>) {
-    let tokens = palette.tokens;
-    let width = WindowFrame::pane_size().width - 2.0 * CHAT_PADDING;
-    let field = FillView::new(
-        marker,
-        NSRect::new(NSPoint::new(CHAT_PADDING, bottom), NSSize::new(width, INPUT_HEIGHT)),
-        FillStyle {
-            fill: Some(tokens.bg_2.ns_color()),
-            border: Some(palette.line()),
-            radius: INPUT_RADIUS,
-            dashed: false,
-        },
-    );
-    field.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewMaxYMargin);
-    pane.addSubview(&field);
-    let trailing = trailing_control(marker, chat.availability, palette, actions);
-    let trailing_size = trailing.frame().size;
-    trailing.setFrameOrigin(NSPoint::new(
-        width - INPUT_PADDING - trailing_size.width,
-        (INPUT_HEIGHT - trailing_size.height) / 2.0,
-    ));
-    trailing.setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinXMargin);
-    field.addSubview(&trailing);
-    let text_frame = NSRect::new(
-        NSPoint::new(INPUT_PADDING, (INPUT_HEIGHT - INPUT_LINE) / 2.0),
-        NSSize::new(
-            width - 2.0 * INPUT_PADDING - trailing_size.width - TRAILING_GAP,
-            INPUT_LINE,
-        ),
-    );
-    let placeholder = label(
-        marker,
-        match chat.availability {
-            Availability::Loading => MODEL_LOADING,
-            Availability::Answering => ANSWERING,
-            Availability::Unloaded => ASK_PLACEHOLDER_UNLOADED,
-            Availability::Off | Availability::NoModel | Availability::Ready => ASK_PLACEHOLDER,
-        },
-        &interface_font(14.0, 400.0),
-        &tokens.dim.ns_color(),
-        NSLineBreakMode::ByTruncatingTail,
-    );
-    let placeholder_height = placeholder.fittingSize().height;
-    placeholder.setFrame(NSRect::new(
-        NSPoint::new(
-            text_frame.origin.x,
-            text_frame.origin.y + (INPUT_LINE - placeholder_height) / 2.0,
-        ),
-        NSSize::new(text_frame.size.width, placeholder_height),
-    ));
-    placeholder.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
-    placeholder.setHidden(!chat.draft.is_empty());
-    field.addSubview(&placeholder);
-    let scroll = NSTextView::scrollableTextView(marker);
-    scroll.setFrame(text_frame);
-    scroll.setDrawsBackground(false);
-    scroll.setHasVerticalScroller(false);
-    scroll.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
-    let input = scroll
-        .documentView()
-        .and_then(|document| document.downcast::<NSTextView>().ok())
-        .expect("a scrollable text view hosts a text view");
-    input.setFont(Some(&interface_font(14.0, 400.0)));
-    input.setTextColor(Some(&tokens.text.ns_color()));
-    input.setInsertionPointColor(Some(&tokens.text.ns_color()));
-    input.setDrawsBackground(false);
-    input.setRichText(false);
-    input.setTextContainerInset(NSSize::new(0.0, 0.0));
-    if let Some(container) = unsafe { input.textContainer() } {
-        container.setLineFragmentPadding(0.0);
-    }
-    input.setString(&NSString::from_str(&chat.draft));
-    input.setEditable(chat.availability.accepts_questions());
-    input.setSelectable(chat.availability.accepts_questions());
-    field.addSubview(&scroll);
-    let delegate = ChatInputDelegate::new(marker, actions.retain(), input.clone(), placeholder);
-    input.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
-    (input, delegate)
-}
-
-fn trailing_control(
-    marker: MainThreadMarker,
-    availability: Availability,
-    palette: &ShellPalette,
-    actions: &ShellActions,
-) -> Retained<NSView> {
-    let tokens = palette.tokens;
-    if availability == Availability::Answering {
-        let stop = ShellButton::new(
-            marker,
-            STOP_ANSWER,
-            NSPoint::ZERO,
-            STOP_HEIGHT,
-            ButtonStyle {
-                fill: Some(tokens.surface_2.ns_color()),
-                border: Some(palette.line()),
-                text: tokens.text.ns_color(),
-                font: interface_font(12.0, 600.0),
-            },
-        );
-        stop.on_click(actions, sel!(stopAnswer:));
-        return stop.into_super().into_super().into_super();
-    }
-    let key = label(
-        marker,
-        SEND_KEY,
-        &mono_font(11.5, 400.0),
-        &tokens.dim.ns_color(),
-        NSLineBreakMode::ByClipping,
-    );
-    key.setFrameSize(key.fittingSize());
-    key.into_super().into_super()
-}
-
-fn transcript(
-    marker: MainThreadMarker,
-    frame: NSRect,
-    chat: &ChatModel,
-    palette: &ShellPalette,
-    actions: &ShellActions,
-) -> Retained<NSScrollView> {
-    let width = frame.size.width;
+) -> Retained<FlippedView> {
+    let width = size.width;
     let bubble_max = ((width - 2.0 * CHAT_PADDING) * BUBBLE_SHARE).floor();
-    let document = FlippedView::new(marker, NSRect::new(NSPoint::ZERO, frame.size));
+    let document = FlippedView::new(marker, NSRect::new(NSPoint::ZERO, size));
     let mut top = CHAT_PADDING;
     for (position, entry) in chat.entries.iter().enumerate() {
         let view = chat_entry_view(marker, entry, position, bubble_max, palette, actions);
@@ -312,18 +217,7 @@ fn transcript(
         top += size.height + ENTRY_GAP;
     }
     let content_height = top - ENTRY_GAP + CHAT_PADDING;
-    document.setFrameSize(NSSize::new(width, content_height.max(frame.size.height)));
+    document.setFrameSize(NSSize::new(width, content_height.max(size.height)));
     document.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
-    let scroll = NSScrollView::initWithFrame(NSScrollView::alloc(marker), frame);
-    scroll.setDrawsBackground(false);
-    scroll.setHasVerticalScroller(true);
-    scroll.setAutohidesScrollers(true);
-    scroll.setAutoresizingMask(
-        NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
-    );
-    scroll.setDocumentView(Some(&document));
-    if content_height > frame.size.height {
-        document.scrollPoint(NSPoint::new(0.0, content_height - frame.size.height));
-    }
-    scroll
+    document
 }
