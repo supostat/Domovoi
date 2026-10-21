@@ -99,6 +99,7 @@ struct EndToEnd {
     model: Option<(CatalogEntry, PathBuf)>,
     snapshots: Vec<PathBuf>,
     disk: Option<(PathBuf, DiskProbe)>,
+    chat: ChatModel,
 }
 
 impl EndToEnd {
@@ -112,6 +113,7 @@ impl EndToEnd {
             model: None,
             snapshots: Vec::new(),
             disk: None,
+            chat: ChatModel::default(),
         })
     }
 
@@ -407,15 +409,15 @@ impl EndToEnd {
             max_tokens_per_step: max_tokens_per_step.unwrap_or(defaults.max_tokens_per_step),
             ..defaults
         };
-        let mut chat = ChatModel::default();
         let asked = Question {
             text: question.to_owned(),
-            history: chat.past_turns(),
+            history: self.chat.past_turns(),
             focus: FocusContext::default(),
         };
-        chat.ask(question);
-        let answer = self
-            .session()
+        self.chat.ask(question);
+        let session = self.session.as_ref().expect(SESSION_BETWEEN_STEPS);
+        let chat = &mut self.chat;
+        let answer = session
             .ask(
                 &mut client,
                 &entry,
@@ -427,7 +429,7 @@ impl EndToEnd {
                 },
             )
             .map_err(|error| error.to_string())?;
-        chat.record_answer(&answer);
+        self.chat.record_answer(&answer);
         let tools: Vec<&str> = answer.steps.iter().map(|step| step.tool.name()).collect();
         Ok(json!({
             "step": "ask_assistant",
@@ -436,7 +438,8 @@ impl EndToEnd {
             "answer_characters": answer.text.chars().count(),
             "hypotheses": answer.hypotheses.len(),
             "actions": answer.actions.len(),
-            "chat_entries": chat.entries.len(),
+            "history_turns": asked.history.len(),
+            "chat_entries": self.chat.entries.len(),
         }))
     }
 

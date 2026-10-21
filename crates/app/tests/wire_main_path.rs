@@ -12,6 +12,7 @@ const TEST_CATALOG: &str = "../../assets/test/catalog.json";
 const TINY_MODEL: &str = "../../assets/test/tiny-random.gguf";
 const ENTRY: &str = "test.tiny-random";
 const QUESTION: &str = "Что занимает больше всего места?";
+const FOLLOW_UP: &str = "А что внутри самой большой папки?";
 const VALIDATOR_ATTRIBUTE: &str = "com.domovoi.download-validator";
 const XATTR: &str = "/usr/bin/xattr";
 const CHFLAGS: &str = "/usr/bin/chflags";
@@ -223,6 +224,11 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
                 "question": QUESTION,
                 "max_tokens_per_step": RANDOM_MODEL_TOKENS_PER_STEP,
             },
+            {
+                "step": "ask_assistant",
+                "question": FOLLOW_UP,
+                "max_tokens_per_step": RANDOM_MODEL_TOKENS_PER_STEP,
+            },
             {"step": "snapshots", "directory": snapshots, "scale": 1},
         ],
     });
@@ -383,13 +389,32 @@ fn assert_model_and_answer(report: &Value, server: &HfServer) {
             .any(|request| request.status == PARTIAL_STATUS && request.if_range.as_deref() == Some(CDN_ETAG)),
         "the download resumed with Range and If-Range: {requests:?}"
     );
-    let answer = step(report, "ask_assistant");
-    assert!(answer["service_pid"].as_i64().is_some_and(|pid| pid > 0), "{answer:#}");
-    assert!(
-        answer["tools"].as_array().is_some_and(|tools| !tools.is_empty()),
-        "the first step calls a tool: {answer:#}"
+    let answers = steps(report, "ask_assistant");
+    assert_eq!(answers.len(), 2, "{report:#}");
+    let (first, follow_up) = (answers[0], answers[1]);
+    for answer in [first, follow_up] {
+        assert!(answer["service_pid"].as_i64().is_some_and(|pid| pid > 0), "{answer:#}");
+        assert!(
+            answer["tools"].as_array().is_some_and(|tools| !tools.is_empty()),
+            "the first step calls a tool: {answer:#}"
+        );
+        assert!(
+            answer["answer_characters"]
+                .as_u64()
+                .is_some_and(|characters| characters > 0),
+            "{answer:#}"
+        );
+    }
+    assert_eq!(first["history_turns"], 0, "{first:#}");
+    assert!(first["chat_entries"].as_u64().is_some_and(|entries| entries >= 3));
+    assert_eq!(
+        follow_up["history_turns"], 1,
+        "the follow-up sees the first turn: {follow_up:#}"
     );
-    assert!(answer["chat_entries"].as_u64().is_some_and(|entries| entries >= 3));
+    assert!(
+        follow_up["chat_entries"].as_u64() > first["chat_entries"].as_u64(),
+        "one chat carries both turns: {follow_up:#}"
+    );
 }
 
 fn assert_snapshots(report: &Value) {
