@@ -23,6 +23,7 @@ use crate::reach::Reach;
 use crate::timestamp::Timestamp;
 
 const DEPENDENCY_STORE_NAMES: [&str; 2] = ["node_modules", ".pnpm"];
+const USERS_FOLDER: &str = "Users";
 const DEVELOPMENT_DIRECTORY_NAMES: [&str; 9] = [
     "node_modules",
     "zig-cache",
@@ -184,6 +185,15 @@ impl Index {
 
     pub fn hidden_folders(&self) -> u64 {
         self.hidden_folders
+    }
+
+    pub fn other_user_homes(&self) -> u64 {
+        self.child_named(self.root(), OsStr::new(USERS_FOLDER))
+            .map_or(0, |users| {
+                self.children(users)
+                    .filter(|home| self.node(*home).reach == Reach::OtherUser)
+                    .count() as u64
+            })
     }
 
     pub fn directory_count(&self) -> u64 {

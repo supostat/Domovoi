@@ -328,7 +328,7 @@ fn hover(checks: &mut Checks, marker: MainThreadMarker) {
             size_text: SIZE_TEXT.to_owned(),
             path: Some(LONG_PATH.to_owned()),
             source: strings::SOURCE_SCAN,
-            note: Some(strings::SNAPSHOTS_RELEASE),
+            note: Some(strings::SNAPSHOTS_RELEASE.to_owned()),
         },
         &palette(),
     );

@@ -80,7 +80,17 @@ pub const OUTSIDE_TOTAL: &str = "вне суммы";
 pub const SOURCE_MACOS_ESTIMATE: &str = "оценка macOS";
 pub const DATA_VOLUME: &str = "Данные";
 pub const PURGEABLE: &str = "Purgeable";
-pub const SYSTEM_DATA: &str = "Системные данные";
+pub const UNACCOUNTED: &str = "Не удалось найти";
+pub const UNACCOUNTED_HINT: &str =
+    "Разница между занятым местом тома и тем, что увидел скан: служебные данные APFS и закрытые папки.";
+pub const OTHER_USER_HOMES: PluralForms = PluralForms {
+    one: "домашняя папка другого пользователя",
+    few: "домашние папки других пользователей",
+    many: "домашних папок других пользователей",
+};
+pub const OTHER_USER_HOMES_HINT: &str = "их размер виден только администратору";
+pub const PURGEABLE_TIME_MACHINE: &str = "Локальные бэкапы Time Machine. macOS удалит их сама, когда место понадобится";
+pub const PURGEABLE_PLAIN: &str = "Место, которое macOS освободит сама, когда оно понадобится";
 pub const CHECK_FOR_UPDATES: &str = "Проверить обновления…";
 pub const HIDE_APP: &str = "Скрыть DOMOVOI";
 pub const QUIT_APP: &str = "Завершить DOMOVOI";

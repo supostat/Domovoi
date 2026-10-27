@@ -1,15 +1,20 @@
 use std::ffi::c_void;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::ptr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use objc2::rc::Retained;
+use objc2::runtime::AnyObject;
 use objc2_core_foundation::{CFArray, CFDate, CFRetained, CFString, CFType};
 use objc2_core_services::{
     MDItem, MDQuery, MDQueryOptionFlags, kMDItemCFBundleIdentifier, kMDItemLastUsedDate, kMDItemPath,
     kMDQueryScopeComputer,
 };
-use objc2_foundation::{NSArray, NSNumber, NSString, NSURL, NSURLVolumeAvailableCapacityForImportantUsageKey};
+use objc2_foundation::{
+    NSArray, NSData, NSDictionary, NSNumber, NSPropertyListReadOptions, NSPropertyListSerialization, NSString, NSURL,
+    NSURLVolumeAvailableCapacityForImportantUsageKey,
+};
 use objc2_uniform_type_identifiers::{
     UTType, UTTypeApplicationBundle, UTTypeArchive, UTTypeAudiovisualContent, UTTypeCompositeContent, UTTypeData,
     UTTypeDirectory, UTTypeDiskImage, UTTypeImage, UTTypePDF, UTTypeSourceCode, UTTypeText,
@@ -156,4 +161,17 @@ pub(crate) fn application_path(bundle_id: &str) -> Option<PathBuf> {
     let workspace = objc2_app_kit::NSWorkspace::sharedWorkspace();
     let url: Retained<NSURL> = workspace.URLForApplicationWithBundleIdentifier(&NSString::from_str(bundle_id))?;
     url.path().map(|path| PathBuf::from(path.to_string()))
+}
+
+pub(crate) fn property_list_dictionary(path: &Path) -> Option<Retained<NSDictionary<AnyObject, AnyObject>>> {
+    let data = NSData::dataWithContentsOfFile(&NSString::from_str(path.to_str()?))?;
+    let plist = unsafe {
+        NSPropertyListSerialization::propertyListWithData_options_format_error(
+            &data,
+            NSPropertyListReadOptions::empty(),
+            ptr::null_mut(),
+        )
+    }
+    .ok()?;
+    plist.downcast::<NSDictionary<AnyObject, AnyObject>>().ok()
 }

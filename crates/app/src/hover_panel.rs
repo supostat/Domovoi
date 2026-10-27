@@ -132,7 +132,7 @@ impl HoverPanel {
             (&self.size, tip.size_text.as_str(), tokens.text),
             (&self.path, path, tokens.dim),
             (&self.source, tip.source, tokens.dim),
-            (&self.note, tip.note.unwrap_or_default(), tokens.mute),
+            (&self.note, tip.note.as_deref().unwrap_or_default(), tokens.mute),
         ];
         self.note.setPreferredMaxLayoutWidth(WIDTH - 2.0 * PADDING);
         FactRows {

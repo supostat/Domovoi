@@ -8,6 +8,7 @@ use domovoi_apfs_sys::{Snapshot, container_capacity, mounted_volumes, snapshots,
 use crate::ffi::important_available_capacity;
 use crate::index::Index;
 use crate::measured::{Measured, Source};
+use crate::time_machine::TimeMachineSettings;
 
 const SYSTEM_ROOT: &str = "/";
 const DEVICE_PREFIX: &str = "/dev/";
@@ -29,7 +30,9 @@ pub struct HiddenSpace {
     pub purgeable: Measured<u64>,
     pub hidden_folders: u64,
     pub snapshots: Vec<Snapshot>,
-    pub overhead: i64,
+    pub unaccounted: i64,
+    pub other_user_homes: u64,
+    pub time_machine: TimeMachineSettings,
 }
 
 impl HiddenSpace {
@@ -39,6 +42,8 @@ impl HiddenSpace {
         purgeable: Measured<u64>,
         hidden_folders: u64,
         snapshots: Vec<Snapshot>,
+        other_user_homes: u64,
+        time_machine: TimeMachineSettings,
     ) -> Self {
         let total = signed(data_used) - signed(visible);
         Self {
@@ -46,7 +51,9 @@ impl HiddenSpace {
             purgeable,
             hidden_folders,
             snapshots,
-            overhead: total - signed(purgeable.value),
+            unaccounted: total - signed(purgeable.value),
+            other_user_homes,
+            time_machine,
         }
     }
 
@@ -96,13 +103,15 @@ impl Volumes {
         })
     }
 
-    pub fn hidden(&self, index: &Index) -> HiddenSpace {
+    pub fn hidden(&self, index: &Index, time_machine: TimeMachineSettings) -> HiddenSpace {
         HiddenSpace::new(
             self.data_used.value,
             index.node(index.root()).allocated,
             self.purgeable,
             index.hidden_folders(),
             self.snapshots.clone(),
+            index.other_user_homes(),
+            time_machine,
         )
     }
 }

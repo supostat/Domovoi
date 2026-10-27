@@ -140,6 +140,14 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
         "the access steps offer dragging the icon into the list"
     );
     assert!(strings::ACCESS_DRAG_HINT.contains("перетащить"));
+    data.hidden_folders = 0;
+    data.other_user_homes = 2;
+    assert_eq!(
+        data.hidden_notice().map(|notice| spoken(&notice)).as_deref(),
+        Some("2 домашние папки других пользователей: их размер виден только администратору")
+    );
+    assert!(strings::PURGEABLE_TIME_MACHINE.contains("Time Machine"));
+    assert!(!strings::UNACCOUNTED_HINT.contains('!'));
     assert_eq!(
         strings::SNAPSHOTS_RELEASE,
         "macOS удалит снапшоты сама, когда место понадобится"

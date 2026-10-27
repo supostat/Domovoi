@@ -1,11 +1,11 @@
 use std::io;
 use std::path::Path;
 
-use domovoi_index::{Category, HiddenSpace, Index, Measured, Reach, Volumes};
+use domovoi_index::{Category, HiddenSpace, Index, Measured, Reach, TIME_MACHINE_PLIST, TimeMachineSettings, Volumes};
 use domovoi_render::{DiagramOutline, NodeOrigin};
 
 use crate::expansion::Expansion;
-use crate::strings::{DATA_VOLUME, DIAGRAM, MACOS, OTHER_VOLUMES, PURGEABLE, SYSTEM_DATA};
+use crate::strings::{DATA_VOLUME, DIAGRAM, MACOS, OTHER_VOLUMES, PURGEABLE, UNACCOUNTED};
 use crate::volume_name::volume_name;
 
 pub(crate) const SYSTEM_DATA_ROOT: &str = "/System/Volumes/Data";
@@ -15,6 +15,7 @@ const SYSTEM_ROOT: &str = "/";
 pub struct DiskOverview {
     pub name: String,
     pub volumes: Volumes,
+    pub time_machine: TimeMachineSettings,
 }
 
 impl DiskOverview {
@@ -27,6 +28,7 @@ impl DiskOverview {
         Ok(Self {
             name: volume_name(named)?,
             volumes: Volumes::measure(data_root)?,
+            time_machine: TimeMachineSettings::read(Path::new(TIME_MACHINE_PLIST)),
         })
     }
 
@@ -35,7 +37,7 @@ impl DiskOverview {
             Some(index) => {
                 let data = DiagramOutline::indexed(index, index.root(), &|node, _| expansion.expands(node));
                 let mut children = data.children;
-                children.extend(hidden_outline(&self.volumes.hidden(index)));
+                children.extend(hidden_outline(&self.hidden(index)));
                 children
             }
             None => vec![measured(DATA_VOLUME, Category::Home, self.volumes.data_used)],
@@ -50,6 +52,10 @@ impl DiskOverview {
             origin: NodeOrigin::Measured(self.volumes.container_size.source),
             children,
         }
+    }
+
+    pub fn hidden(&self, index: &Index) -> HiddenSpace {
+        self.volumes.hidden(index, self.time_machine)
     }
 
     pub fn disk_total_bytes(&self) -> u64 {
@@ -76,16 +82,16 @@ pub fn in_cloud_bytes(index: &Index) -> u64 {
 
 fn hidden_outline(hidden: &HiddenSpace) -> Option<DiagramOutline> {
     let total = u64::try_from(hidden.total.value).ok().filter(|total| *total > 0)?;
-    let overhead = u64::try_from(hidden.overhead).unwrap_or(0);
+    let unaccounted = u64::try_from(hidden.unaccounted).unwrap_or(0);
     let purgeable = hidden.purgeable.value.min(total);
-    let children = if overhead > 0 && purgeable > 0 {
+    let children = if unaccounted > 0 && purgeable > 0 {
         vec![
             measured(PURGEABLE, Category::Hidden, hidden.purgeable),
             measured(
-                SYSTEM_DATA,
+                UNACCOUNTED,
                 Category::Hidden,
                 Measured {
-                    value: overhead,
+                    value: unaccounted,
                     source: hidden.total.source,
                 },
             ),

@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use domovoi_index::TimeMachineSettings;
 use domovoi_render::{DiagramTree, ROOT};
 use serde::Deserialize;
 
@@ -28,6 +29,10 @@ pub struct ShellFixture {
     pub hidden_folders: u64,
     #[serde(default)]
     pub snapshots_present: bool,
+    #[serde(default)]
+    pub other_user_homes: u64,
+    #[serde(default)]
+    pub time_machine_backups: bool,
     pub scan: ScanStatus,
     pub tree: OutlineFixture,
     pub care: CareModels,
@@ -69,6 +74,11 @@ impl ShellFixture {
             ),
             hidden_folders: self.hidden_folders,
             snapshots_present: self.snapshots_present,
+            other_user_homes: self.other_user_homes,
+            time_machine: TimeMachineSettings {
+                auto_backup: Some(self.time_machine_backups),
+                mobile_backups: None,
+            },
         })
     }
 }

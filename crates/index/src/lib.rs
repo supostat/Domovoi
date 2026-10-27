@@ -34,6 +34,7 @@ mod reclaimable;
 mod safety_level;
 mod spliced_directory;
 mod stale_delta;
+mod time_machine;
 mod timestamp;
 mod volumes;
 
@@ -65,5 +66,6 @@ pub use reclaimable::{Reclaimable, measure_reclaimable};
 pub use safety_level::{SafetyLevel, SafetyLevels};
 pub use spliced_directory::SplicedDirectory;
 pub use stale_delta::StaleDelta;
+pub use time_machine::{TIME_MACHINE_PLIST, TimeMachineSettings};
 pub use timestamp::Timestamp;
 pub use volumes::{HiddenSpace, Volumes};

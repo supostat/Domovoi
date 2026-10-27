@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use domovoi_index::{Category, Index};
+use domovoi_index::{Category, Index, TimeMachineSettings};
 use domovoi_render::{DiagramTree, NodeOrigin, ROOT};
 use domovoi_theme::{format_count, format_size};
 
@@ -18,7 +18,8 @@ use crate::section::Section;
 use crate::sidebar_entry::SidebarEntry;
 use crate::strings::{
     ASSISTANT, ASSISTANT_BADGE, DIAGRAM, DISK_GROUP, DUPLICATES, FREE, HIDDEN_BY_MACOS, HIDDEN_FOLDERS,
-    HIDDEN_FOLDERS_HINT, MODEL, OF, ORDER_GROUP, RECOMMENDATIONS, SETTINGS_GROUP,
+    HIDDEN_FOLDERS_HINT, MODEL, OF, ORDER_GROUP, OTHER_USER_HOMES, OTHER_USER_HOMES_HINT, RECOMMENDATIONS,
+    SETTINGS_GROUP,
 };
 
 #[derive(Clone, Debug)]
@@ -36,6 +37,8 @@ pub struct ShellData {
     pub rescan_allowed: bool,
     pub hidden_folders: u64,
     pub snapshots_present: bool,
+    pub other_user_homes: u64,
+    pub time_machine: TimeMachineSettings,
 }
 
 impl ShellData {
@@ -62,6 +65,8 @@ impl ShellData {
             rescan_allowed: false,
             hidden_folders: index.map_or(0, Index::hidden_folders),
             snapshots_present: !overview.volumes.snapshots.is_empty(),
+            other_user_homes: index.map_or(0, Index::other_user_homes),
+            time_machine: overview.time_machine,
         }
     }
 
@@ -86,12 +91,20 @@ impl ShellData {
     }
 
     pub fn hidden_notice(&self) -> Option<String> {
-        (self.hidden_folders > 0).then(|| {
-            format!(
+        let mut parts = Vec::new();
+        if self.hidden_folders > 0 {
+            parts.push(format!(
                 "{HIDDEN_BY_MACOS} {}. {HIDDEN_FOLDERS_HINT}",
                 format_count(self.hidden_folders, &HIDDEN_FOLDERS)
-            )
-        })
+            ));
+        }
+        if self.other_user_homes > 0 {
+            parts.push(format!(
+                "{}: {OTHER_USER_HOMES_HINT}",
+                format_count(self.other_user_homes, &OTHER_USER_HOMES)
+            ));
+        }
+        (!parts.is_empty()).then(|| parts.join(". "))
     }
 
     pub fn free_short(&self) -> String {

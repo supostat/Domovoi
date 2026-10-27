@@ -73,7 +73,7 @@ impl PropertyLabels {
             (&*self.created, fact(|facts| facts.created.as_deref()), tokens.dim),
             (&*self.modified, fact(|facts| facts.modified.as_deref()), tokens.dim),
             (&*self.inside, fact(|facts| facts.inside.as_deref()), tokens.text),
-            (&*self.note, tip.note.unwrap_or_default(), tokens.mute),
+            (&*self.note, tip.note.as_deref().unwrap_or_default(), tokens.mute),
         ];
         FactRows {
             width,
