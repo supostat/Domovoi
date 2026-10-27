@@ -49,7 +49,7 @@ impl DownloadJob {
                 if !partial.exists() {
                     return DownloadOutcome::Cancelled;
                 }
-                match self.store.move_to_trash(&partial) {
+                match self.store.delete_own_file(&partial) {
                     Ok(()) => DownloadOutcome::Cancelled,
                     Err(error) => DownloadOutcome::Failed(error),
                 }

@@ -1,15 +1,10 @@
-use std::io;
 use std::path::PathBuf;
 
-use domovoi_index::{Index, NodeId};
-use objc2_app_kit::NSWorkspace;
+use domovoi_index::{Index, NodeId, Reclaimable};
 
+use crate::delete_refusal::DeleteRefusal;
+use crate::delete_subject::DeleteSubject;
 use crate::denylist::Denylist;
-use crate::trash_failure::TrashFailure;
-use crate::trash_journal::{TrashJournal, file_url};
-use crate::trash_subject::TrashSubject;
-
-const TRASH: &str = ".Trash";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TrayItem {
@@ -17,12 +12,6 @@ pub struct TrayItem {
     pub path: PathBuf,
     pub physical: PathBuf,
     pub rule_id: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TrashOutcome {
-    pub path: PathBuf,
-    pub result: Result<PathBuf, TrashFailure>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -53,45 +42,31 @@ impl Tray {
         &self.items
     }
 
-    pub fn move_to_trash(
+    pub fn take_for_delete(
         &mut self,
         index: &Index,
         denylist: &Denylist,
-        journal: &mut TrashJournal,
-    ) -> io::Result<Vec<TrashOutcome>> {
-        let mut outcomes = Vec::with_capacity(self.items.len());
-        for item in std::mem::take(&mut self.items) {
+        sizes: &[Reclaimable],
+    ) -> (Vec<DeleteSubject>, Vec<DeleteRefusal>) {
+        assert_eq!(sizes.len(), self.items.len(), "every item of the tray is measured");
+        let mut subjects = Vec::with_capacity(self.items.len());
+        let mut refusals = Vec::new();
+        for (item, size) in std::mem::take(&mut self.items).into_iter().zip(sizes) {
             if let Some(reason) = denylist.verdict(index, item.node) {
-                outcomes.push(TrashOutcome {
+                refusals.push(DeleteRefusal {
                     path: item.path,
-                    result: Err(TrashFailure::Denied(reason)),
+                    reason,
                 });
                 continue;
             }
-            let node = index.node(item.node);
-            let result = journal.trash(&TrashSubject {
-                original: item.path.clone(),
-                original_physical: item.physical.clone(),
-                location: item.physical,
-                link_id: node.link_id,
-                alloc_size: node.alloc_size,
-                flags: node.flags,
-                clone_id: node.clone_id,
-                rule_id: item.rule_id,
-            })?;
-            outcomes.push(TrashOutcome {
+            subjects.push(DeleteSubject {
                 path: item.path,
-                result,
+                physical: item.physical,
+                link_id: index.node(item.node).link_id,
+                measured_bytes: size.bytes,
+                rule_id: item.rule_id,
             });
         }
-        Ok(outcomes)
+        (subjects, refusals)
     }
-}
-
-pub fn open_trash() -> io::Result<bool> {
-    let home =
-        std::env::home_dir().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "home directory is unknown"))?;
-    let url =
-        file_url(&home.join(TRASH)).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path is not UTF-8"))?;
-    Ok(NSWorkspace::sharedWorkspace().openURL(&url))
 }

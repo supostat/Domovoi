@@ -1,7 +1,7 @@
 use std::io;
 
 use domovoi_index::{Index, NodeId, Reclaimable};
-use domovoi_rules::{Denylist, TrashJournal, TrashOutcome, Tray};
+use domovoi_rules::{DeleteRefusal, DeleteSubject, Denylist, Tray};
 
 use crate::duplicate_copy::DuplicateCopy;
 
@@ -49,22 +49,26 @@ impl DuplicateGroup {
         })
     }
 
-    pub fn move_copies_to_trash(
+    pub fn take_copies_for_delete(
         &self,
         index: &Index,
         selected: &[NodeId],
         denylist: &Denylist,
-        journal: &mut TrashJournal,
-    ) -> io::Result<Vec<TrashOutcome>> {
+    ) -> io::Result<(Vec<DeleteSubject>, Vec<DeleteRefusal>)> {
         let mut tray = Tray::default();
         for node in selected {
             assert!(
                 self.copies.iter().any(|copy| copy.node == *node),
-                "only copies of the group go to the Trash"
+                "only copies of the group are deleted"
             );
             tray.add(index, *node, None);
         }
-        tray.move_to_trash(index, denylist, journal)
+        let sizes = tray
+            .items()
+            .iter()
+            .map(|item| index.reclaimable(item.node))
+            .collect::<io::Result<Vec<Reclaimable>>>()?;
+        Ok(tray.take_for_delete(index, denylist, &sizes))
     }
 }
 

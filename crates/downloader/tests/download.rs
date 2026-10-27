@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
-use domovoi_apfs_sys::current_user_id;
 use domovoi_downloader::{
     Catalog, CatalogEntry, DownloadHandle, DownloadOutcome, DownloadProgress, Downloader, InstallError, ModelSource,
     ModelStore, Sha256Hasher,
@@ -229,31 +228,24 @@ fn missing_space_is_refused_before_any_request() {
 }
 
 #[test]
-fn a_cancelled_download_moves_its_partial_file_to_the_trash() {
+fn a_cancelled_download_deletes_its_partial_file() {
     let entry = tiny_entry();
     let server = HfServer::start(throttled(honest_behaviour(&entry)));
     let volume = ImageVolume::create(VolumeFormat::Apfs, Visibility::Hidden).expect("the image attaches");
-    let store = ModelStore::open(&volume.mount_point().join("models")).expect("the model store opens");
+    let models = volume.mount_point().join("models");
+    let store = ModelStore::open(&models).expect("the model store opens");
     let (handle, updates) = start(&server, &store, &entry);
     wait_for_progress(&updates, PAUSE_AFTER);
     handle.cancel();
     assert!(matches!(handle.wait(), DownloadOutcome::Cancelled));
     assert!(!store.partial_path(&entry).exists());
-    let trash = volume
-        .mount_point()
-        .join(".Trashes")
-        .join(current_user_id().to_string());
-    let trashed: Vec<String> = fs::read_dir(&trash)
-        .expect("the volume has a Trash for the user")
-        .map(|item| {
-            item.expect("a trashed item reads")
-                .file_name()
-                .to_string_lossy()
-                .into_owned()
-        })
+    let left: Vec<String> = fs::read_dir(&models)
+        .expect("the model store lists")
+        .map(|item| item.expect("an item reads").file_name().to_string_lossy().into_owned())
         .collect();
+    assert!(left.is_empty(), "the partial file is deleted, not kept: {left:?}");
     assert!(
-        trashed.iter().any(|name| name.starts_with("tiny-random.gguf.partial")),
-        "{trashed:?}"
+        !volume.mount_point().join(".Trashes").exists(),
+        "nothing goes to the Trash of the volume"
     );
 }

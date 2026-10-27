@@ -10,7 +10,7 @@ use domovoi_dups::{
     PendingReplacement, TEMPORARY_PREFIX, find_duplicates,
 };
 use domovoi_index::{Enrichment, Index, IndexRoot, NodeId, Reclaimable};
-use domovoi_rules::{CaseRule, Denylist, TrashJournal};
+use domovoi_rules::{CaseRule, Denylist};
 use domovoi_scanner::{ScanOptions, scan};
 use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat};
 
@@ -37,7 +37,6 @@ struct Fixture {
     index: Index,
     denylist: Denylist,
     cloud_folders: CloudFolders,
-    trash_journal: TrashJournal,
     clone_journal: CloneJournal,
     _workspace: TempTree,
 }
@@ -51,7 +50,6 @@ impl Fixture {
             index: index_of(volume.mount_point()),
             denylist: Denylist::new(CaseRule::Insensitive).expect("denylist is prepared"),
             cloud_folders: CloudFolders::new(Vec::new()),
-            trash_journal: TrashJournal::open(&workspace.path().join("trash-journal")).expect("journal opens"),
             clone_journal: CloneJournal::open(&workspace.path().join("clone-journal")).expect("journal opens"),
             _workspace: workspace,
             volume,
@@ -189,7 +187,7 @@ fn sparse_copies_are_replaced(fixture: &mut Fixture) {
     fixture
         .prepare("sparse")
         .expect("sparse pair is replaceable")
-        .execute(&mut fixture.trash_journal, &mut fixture.clone_journal)
+        .execute(&mut fixture.clone_journal)
         .expect("sparse copy is replaced");
     let copy = fixture.mount().join("sparse/copy");
     assert_eq!(fs::metadata(&copy).expect("metadata").len(), SPARSE_SIZE);
@@ -201,7 +199,7 @@ fn sparse_copies_are_replaced(fixture: &mut Fixture) {
     );
 }
 
-fn a_replaced_copy_shares_blocks_and_its_old_body_comes_back(fixture: &mut Fixture) {
+fn a_replaced_copy_shares_blocks_and_its_old_body_is_gone(fixture: &mut Fixture) {
     let directory = fixture.mount().join("success");
     let copy = directory.join("copy");
     let original = directory.join("original");
@@ -209,15 +207,14 @@ fn a_replaced_copy_shares_blocks_and_its_old_body_comes_back(fixture: &mut Fixtu
     let plan = fixture.prepare("success").expect("independent pair is replaceable");
     assert!(!plan.low_space);
     let replaced = plan
-        .execute(&mut fixture.trash_journal, &mut fixture.clone_journal)
+        .execute(&mut fixture.clone_journal)
         .expect("copy is replaced with a clone");
 
-    assert!(
-        replaced.trashed.starts_with(fixture.mount().join(".Trashes")),
-        "{}",
-        replaced.trashed.display()
+    assert_eq!(
+        replaced.freed_bytes,
+        fixture.index.node(fixture.node("success/copy")).alloc_size
     );
-    assert_named_like_copy(&replaced.trashed);
+    assert_no_temporaries(&directory);
     assert_eq!(private_size(&copy).expect("private size"), 0);
     assert_eq!(
         stream_identity(&copy).expect("copy stream").clone_id,
@@ -238,32 +235,24 @@ fn a_replaced_copy_shares_blocks_and_its_old_body_comes_back(fixture: &mut Fixtu
         directory_modified
     );
     assert!(fixture.clone_journal.pending().is_empty());
-    let last = fixture.trash_journal.entries().len() - 1;
     assert_eq!(
-        fixture.trash_journal.entries()[last].original,
-        fixture.index.path(fixture.node("success/copy")).to_string_lossy()
+        fs::read_dir(&directory).expect("directory lists").count(),
+        2,
+        "only the original and the clone remain"
     );
-    assert_eq!(
-        Path::new(&fixture.trash_journal.entries()[last].trashed),
-        replaced.trashed
-    );
-    let restored = fixture.trash_journal.restore(last).expect("old body comes back");
-    assert_eq!(restored, directory.join("copy 2"));
-    assert_eq!(fs::read(&restored).expect("old body is read"), content(5));
 }
 
-fn assert_named_like_copy(trashed: &Path) {
-    let name = trashed
-        .file_name()
-        .and_then(|name| name.to_str())
-        .expect("a trashed item has a UTF-8 name");
-    let numbered = name
-        .strip_prefix("copy ")
-        .is_some_and(|number| !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()));
-    assert!(
-        !name.starts_with(TEMPORARY_PREFIX) && (name == "copy" || numbered),
-        "the old body lies in the Trash as {name}"
-    );
+fn assert_no_temporaries(directory: &Path) {
+    let temporaries: Vec<PathBuf> = fs::read_dir(directory)
+        .expect("directory lists")
+        .map(|entry| entry.expect("entry reads").path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with(TEMPORARY_PREFIX))
+        })
+        .collect();
+    assert!(temporaries.is_empty(), "no temporary is left behind: {temporaries:?}");
 }
 
 fn pending(copy: &Path, temporary: &Path, link_id: u64) -> PendingReplacement {
@@ -273,12 +262,10 @@ fn pending(copy: &Path, temporary: &Path, link_id: u64) -> PendingReplacement {
         temporary: temporary.to_string_lossy().into_owned(),
         link_id,
         alloc_size: FILE_SIZE as u64,
-        flags: 0,
-        clone_id: 0,
     }
 }
 
-fn stranded_temporaries_are_swept_into_the_trash(fixture: &mut Fixture) {
+fn stranded_temporaries_are_swept_away(fixture: &mut Fixture) {
     let directory = fixture.mount().join("stranded");
     fs::create_dir(&directory).expect("directory is created");
     fs::write(directory.join("original"), content(6)).expect("original is written");
@@ -296,23 +283,14 @@ fn stranded_temporaries_are_swept_into_the_trash(fixture: &mut Fixture) {
         .clone_journal
         .begin(pending(&copy, &old_body, link_id(&old_body).expect("link id")))
         .expect("old body is journaled");
-    let journaled_before = fixture.trash_journal.entries().len();
 
-    let outcomes = fixture
-        .clone_journal
-        .sweep(&mut fixture.trash_journal)
-        .expect("sweep runs");
+    let report = fixture.clone_journal.sweep().expect("sweep runs");
 
-    assert_eq!(outcomes.len(), 2);
-    assert!(outcomes.iter().all(|outcome| outcome.result.is_ok()), "{outcomes:?}");
+    assert_eq!(report.deleted.len(), 2, "{report:?}");
+    assert!(report.failed.is_empty(), "{report:?}");
     assert!(!stray_clone.exists() && !old_body.exists());
     assert!(fixture.clone_journal.pending().is_empty());
-    assert_eq!(fixture.trash_journal.entries().len(), journaled_before + 1);
-    assert_eq!(
-        PathBuf::from(&fixture.trash_journal.entries()[journaled_before].original_physical),
-        copy
-    );
-    assert_named_like_copy(Path::new(&fixture.trash_journal.entries()[journaled_before].trashed));
+    assert_no_temporaries(&directory);
 }
 
 #[test]
@@ -321,6 +299,6 @@ fn clone_replacement_checks_preconditions_swaps_atomically_and_stays_reversible(
     unsafe_pairs_are_refused(&fixture);
     existing_clones_have_no_gain(&fixture);
     sparse_copies_are_replaced(&mut fixture);
-    a_replaced_copy_shares_blocks_and_its_old_body_comes_back(&mut fixture);
-    stranded_temporaries_are_swept_into_the_trash(&mut fixture);
+    a_replaced_copy_shares_blocks_and_its_old_body_is_gone(&mut fixture);
+    stranded_temporaries_are_swept_away(&mut fixture);
 }

@@ -4,8 +4,10 @@ use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
+use domovoi_apfs_sys::link_id;
 use domovoi_index::ModelEvent;
-use domovoi_rules::trash_item;
+use domovoi_rules::{DeleteSubject, delete};
+use domovoi_scanner::CancelToken;
 use objc2_foundation::{NSFileManager, NSSearchPathDirectory, NSSearchPathDomainMask};
 
 use crate::backup_exclusion::exclude_from_backup;
@@ -162,7 +164,7 @@ impl ModelStore {
     }
 
     pub fn remove(&self, path: &Path) -> Result<ModelEvent, InstallError> {
-        self.move_to_trash(path)?;
+        self.delete_own_file(path)?;
         Ok(ModelEvent::Removed {
             path: path.to_path_buf(),
         })
@@ -174,15 +176,25 @@ impl ModelStore {
         Ok(ModelEvent::Downloaded { path: target })
     }
 
-    pub(crate) fn move_to_trash(&self, path: &Path) -> Result<(), InstallError> {
+    pub(crate) fn delete_own_file(&self, path: &Path) -> Result<(), InstallError> {
         if path.parent() != Some(self.directory.as_path()) {
             return Err(InstallError::Io(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("{} is not a file of the model store", path.display()),
             )));
         }
-        trash_item(path)?.map_err(InstallError::Trash)?;
-        Ok(())
+        let subject = DeleteSubject {
+            path: path.to_path_buf(),
+            physical: path.to_path_buf(),
+            link_id: link_id(path)?,
+            measured_bytes: 0,
+            rule_id: None,
+        };
+        let report = delete(vec![subject], &CancelToken::default(), &|_| {});
+        match report.failed.into_iter().next() {
+            Some((_, failure)) => Err(InstallError::Delete(failure)),
+            None => Ok(()),
+        }
     }
 }
 

@@ -5,7 +5,8 @@ use std::mem;
 use std::path::{Path, PathBuf};
 
 use domovoi_apfs_sys::{link_id, write_atomically};
-use domovoi_rules::{TrashJournal, TrashOutcome, trash_item};
+use domovoi_rules::{DeleteFailure, DeleteReport, DeleteSubject, delete};
+use domovoi_scanner::CancelToken;
 use rkyv::rancor;
 
 use crate::pending_replacement::PendingReplacement;
@@ -51,15 +52,15 @@ impl CloneJournal {
         self.save()
     }
 
-    pub(crate) fn settle(&mut self, temporary: &Path, trash_journal: &mut TrashJournal) -> io::Result<()> {
+    pub(crate) fn settle(&mut self, temporary: &Path) -> io::Result<()> {
         let position = self
             .pending
             .iter()
             .position(|replacement| Path::new(&replacement.temporary) == temporary)
             .expect("a replacement is journaled before it starts");
-        let settled = match sweep_one(&self.pending[position], trash_journal)? {
+        let settled = match temporary_subject(&self.pending[position])? {
             None => true,
-            Some(outcome) => outcome.result.is_ok(),
+            Some(subject) => !needs_another_try(&delete_temporaries(vec![subject]), temporary),
         };
         if settled {
             self.pending.remove(position);
@@ -68,17 +69,16 @@ impl CloneJournal {
         Ok(())
     }
 
-    pub fn sweep(&mut self, trash_journal: &mut TrashJournal) -> io::Result<Vec<TrashOutcome>> {
-        let mut outcomes = Vec::new();
+    pub fn sweep(&mut self) -> io::Result<DeleteReport> {
+        let mut subjects = Vec::new();
         let mut remaining = Vec::new();
         let mut first_error = None;
+        let mut swept = Vec::new();
         for replacement in mem::take(&mut self.pending) {
-            match sweep_one(&replacement, trash_journal) {
-                Ok(Some(outcome)) => {
-                    if outcome.result.is_err() {
-                        remaining.push(replacement);
-                    }
-                    outcomes.push(outcome);
+            match temporary_subject(&replacement) {
+                Ok(Some(subject)) => {
+                    subjects.push(subject);
+                    swept.push(replacement);
                 }
                 Ok(None) => {}
                 Err(error) => {
@@ -87,11 +87,17 @@ impl CloneJournal {
                 }
             }
         }
+        let report = delete_temporaries(subjects);
+        remaining.extend(
+            swept
+                .into_iter()
+                .filter(|replacement| needs_another_try(&report, Path::new(&replacement.temporary))),
+        );
         self.pending = remaining;
         self.save()?;
         match first_error {
             Some(error) => Err(error),
-            None => Ok(outcomes),
+            None => Ok(report),
         }
     }
 
@@ -101,20 +107,24 @@ impl CloneJournal {
     }
 }
 
-fn sweep_one(replacement: &PendingReplacement, trash_journal: &mut TrashJournal) -> io::Result<Option<TrashOutcome>> {
-    let temporary = Path::new(&replacement.temporary);
-    let current = match link_id(temporary) {
-        Ok(current) => current,
-        Err(error) if error.raw_os_error() == Some(libc::ENOENT) => return Ok(None),
-        Err(error) => return Err(error),
-    };
-    let result = if current == replacement.link_id {
-        trash_journal.trash(&replacement.old_body())?
-    } else {
-        trash_item(temporary)?
-    };
-    Ok(Some(TrashOutcome {
-        path: temporary.to_path_buf(),
-        result,
-    }))
+fn temporary_subject(replacement: &PendingReplacement) -> io::Result<Option<DeleteSubject>> {
+    match link_id(Path::new(&replacement.temporary)) {
+        Ok(current) => Ok(Some(DeleteSubject {
+            link_id: current,
+            ..replacement.old_body()
+        })),
+        Err(error) if error.raw_os_error() == Some(libc::ENOENT) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn delete_temporaries(subjects: Vec<DeleteSubject>) -> DeleteReport {
+    delete(subjects, &CancelToken::default(), &|_| {})
+}
+
+fn needs_another_try(report: &DeleteReport, temporary: &Path) -> bool {
+    report
+        .failed
+        .iter()
+        .any(|(subject, failure)| subject.physical == temporary && *failure != DeleteFailure::Missing)
 }

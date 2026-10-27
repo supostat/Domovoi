@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io;
 
-use domovoi_rules::TrashFailure;
+use domovoi_rules::DeleteFailure;
 
 use crate::sha256_digest::Sha256Digest;
 
@@ -27,7 +27,7 @@ pub enum InstallError {
     AccessDenied,
     Network(String),
     Io(io::Error),
-    Trash(TrashFailure),
+    Delete(DeleteFailure),
 }
 
 impl From<io::Error> for InstallError {
@@ -62,7 +62,7 @@ impl fmt::Display for InstallError {
             Self::AccessDenied => formatter.write_str("the source keeps refusing fresh download links"),
             Self::Network(description) => write!(formatter, "the transfer failed: {description}"),
             Self::Io(error) => write!(formatter, "the model file cannot be written: {error}"),
-            Self::Trash(failure) => write!(formatter, "the file cannot be moved to the Trash: {failure:?}"),
+            Self::Delete(failure) => write!(formatter, "the file cannot be deleted: {failure:?}"),
         }
     }
 }

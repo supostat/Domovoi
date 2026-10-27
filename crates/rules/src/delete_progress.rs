@@ -1,6 +1,6 @@
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct PurgeProgress {
+pub struct DeleteProgress {
     pub done: usize,
     pub total: usize,
-    pub entries_done: usize,
+    pub subjects_done: usize,
 }

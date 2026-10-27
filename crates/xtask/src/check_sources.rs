@@ -55,7 +55,7 @@ const TEST_MODULE: &str = "#[cfg(test)]";
 const TEST_DIRECTORY: &str = "tests";
 const TEST_SUPPORT_CRATE: &str = "testkit";
 const THIS_CHECK: &str = "xtask/src/check_sources.rs";
-const PURGE_MODULE: &str = "rules/src/trash_purge.rs";
+const DELETE_MODULE: &str = "rules/src/delete_run.rs";
 const MCP_SOCKET_MODULE: &str = "agent/src/private_socket.rs";
 
 pub(crate) fn run() -> io::Result<Vec<Finding>> {
@@ -85,7 +85,7 @@ fn removal_findings(path: &Path, content: &str) -> Vec<Finding> {
     let in_tests = path
         .components()
         .any(|component| component.as_os_str() == TEST_DIRECTORY);
-    let removes_own_files = [THIS_CHECK, PURGE_MODULE, MCP_SOCKET_MODULE]
+    let removes_own_files = [THIS_CHECK, DELETE_MODULE, MCP_SOCKET_MODULE]
         .iter()
         .any(|module| path.ends_with(module));
     if in_tests || removes_own_files {
@@ -101,7 +101,7 @@ fn removal_findings(path: &Path, content: &str) -> Vec<Finding> {
                 path: path.to_path_buf(),
                 line: index + 1,
                 reason: format!(
-                    "{call} outside tests, the purge module and the MCP socket: files leave only through the Trash"
+                    "{call} outside tests, the delete run and the MCP socket: files are deleted only by the delete run"
                 ),
             });
         }
@@ -131,10 +131,10 @@ mod tests {
     const REMOVAL: &str = "    manager.removeItemAtURL_error(&url)?;\n";
 
     #[test]
-    fn check_sources_lets_only_the_purge_module_remove_files() {
-        assert!(removal_findings(Path::new("crates/rules/src/trash_purge.rs"), REMOVAL).is_empty());
-        let elsewhere = removal_findings(Path::new("crates/rules/src/trash_journal.rs"), REMOVAL);
-        assert_eq!(elsewhere.len(), 1, "a removal outside the purge module is a finding");
+    fn check_sources_lets_only_the_delete_run_remove_files() {
+        assert!(removal_findings(Path::new("crates/rules/src/delete_run.rs"), REMOVAL).is_empty());
+        let elsewhere = removal_findings(Path::new("crates/rules/src/tray.rs"), REMOVAL);
+        assert_eq!(elsewhere.len(), 1, "a removal outside the delete run is a finding");
         assert_eq!(elsewhere[0].line, 1);
     }
 
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn check_sources_keeps_tests_free_to_clean_up() {
-        assert!(removal_findings(Path::new("crates/rules/tests/trash_purge.rs"), "fs::remove_file(path);").is_empty());
+        assert!(removal_findings(Path::new("crates/rules/tests/delete_run.rs"), "fs::remove_file(path);").is_empty());
         assert!(
             removal_findings(
                 Path::new("crates/app/src/session.rs"),

@@ -19,7 +19,8 @@ use domovoi_apfs_sys::{
     rename_swap, set_nocache, stream_identity, user_access, volume_capabilities,
 };
 use domovoi_index::{Index, NodeId};
-use domovoi_rules::{Denylist, TrashJournal};
+use domovoi_rules::{Denylist, delete};
+use domovoi_scanner::CancelToken;
 use objc2_app_kit::NSWorkspace;
 use objc2_foundation::{NSFileCoordinator, NSFileCoordinatorWritingOptions, NSString, NSURL, NSUUID};
 
@@ -138,8 +139,6 @@ impl ClonePlan {
             temporary: temporary.to_string_lossy().into_owned(),
             link_id: link_id(&copy_path)?,
             alloc_size: index.node(copy).alloc_size,
-            flags: copy_metadata.st_flags(),
-            clone_id: copy_stream.clone_id,
         };
         Ok(Self {
             low_space: capacity.available.saturating_mul(LOW_SPACE_DIVISOR) < capacity.size,
@@ -155,11 +154,7 @@ impl ClonePlan {
         })
     }
 
-    pub fn execute(
-        self,
-        trash_journal: &mut TrashJournal,
-        clone_journal: &mut CloneJournal,
-    ) -> Result<CloneReplaced, CloneReplaceError> {
+    pub fn execute(self, clone_journal: &mut CloneJournal) -> Result<CloneReplaced, CloneReplaceError> {
         let temporary = PathBuf::from(&self.pending.temporary);
         let directory = File::open(parent_of(&self.copy)?)?;
         let original_directory = File::open(parent_of(&self.original)?)?;
@@ -175,21 +170,21 @@ impl ClonePlan {
         .and_then(|()| self.prepare_clone(&temporary))
         .and_then(|()| self.swap_coordinated(&directory, temporary_name));
         if let Err(error) = replaced {
-            clone_journal.settle(&temporary, trash_journal)?;
+            clone_journal.settle(&temporary)?;
             return Err(error);
         }
-        let trashed = match trash_journal.trash(&self.pending.old_body())? {
-            Ok(trashed) => trashed,
-            Err(failure) => {
-                return Err(CloneReplaceError::OldBodyNotTrashed {
-                    location: temporary,
-                    failure,
-                });
-            }
-        };
+        let report = delete(vec![self.pending.old_body()], &CancelToken::default(), &|_| {});
+        if let Some((subject, failure)) = report.failed.into_iter().next() {
+            return Err(CloneReplaceError::OldBodyNotDeleted {
+                location: subject.physical,
+                failure,
+            });
+        }
         directory.set_modified(self.directory_modified)?;
-        clone_journal.settle(&temporary, trash_journal)?;
-        Ok(CloneReplaced { trashed })
+        clone_journal.settle(&temporary)?;
+        Ok(CloneReplaced {
+            freed_bytes: report.freed_bytes,
+        })
     }
 
     fn prepare_clone(&self, temporary: &Path) -> Result<(), CloneReplaceError> {

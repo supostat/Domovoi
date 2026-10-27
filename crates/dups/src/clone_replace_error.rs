@@ -1,14 +1,14 @@
 use std::io;
 use std::path::PathBuf;
 
-use domovoi_rules::TrashFailure;
+use domovoi_rules::DeleteFailure;
 
 use crate::clone_refusal::CloneRefusal;
 
 #[derive(Debug)]
 pub enum CloneReplaceError {
     Refused(CloneRefusal),
-    OldBodyNotTrashed { location: PathBuf, failure: TrashFailure },
+    OldBodyNotDeleted { location: PathBuf, failure: DeleteFailure },
     Io(io::Error),
 }
 
