@@ -439,7 +439,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   <div class="grid-3">
     <div class="principle"><span class="k">Честные числа</span><h4>Показываем только то, что измерили</h4><p>Размер на диске, а не логический. Hard links считаются один раз. APFS-клоны помечены. Скрытое место (purgeable, снапшоты) показано отдельно и не смешано с файлами.</p></div>
     <div class="principle"><span class="k">Правила решают</span><h4>Модель объясняет, правила действуют</h4><p>Что безопасно удалять, решает детерминированный движок правил. Модель классифицирует незнакомое и отвечает на вопросы. Её выводы всегда помечены как гипотеза.</p></div>
-    <div class="principle"><span class="k">Ничего без спроса</span><h4>Только в Корзину и только по подтверждению</h4><p>Удаление идёт через Корзину Finder. Системные пути, SIP и активные приложения закрыты denylist. Перед действием всё собирается в Корзину Домового.</p></div>
+    <div class="principle"><span class="k">Ничего без спроса</span><h4>Только по подтверждению и только собранное</h4><p>Удаление необратимо и идёт собственным движком после подтверждения. Системные пути, SIP и активные приложения закрыты denylist. Перед действием всё собирается в Корзину Домового.</p></div>
     <div class="principle"><span class="k">Ничего наружу</span><h4>Модель видит только метаданные</h4><p>Путь, размер, даты, тип, последнее открытие по Spotlight. Содержимое файлов и URL скачивания не читаются. Процесс инференса не имеет доступа к сети.</p></div>
     <div class="principle"><span class="k">Приложение без модели</span><h4>Полностью работает и без AI</h4><p>Скан, диаграмма, правила, дубликаты и очистка доступны сразу. Модель качается отдельно, по желанию, и видна на диаграмме как занятое место.</p></div>
     <div class="principle"><span class="k">Своё место</span><h4>Модель тоже лежит на диске</h4><p>Приложение для очистки, которое качает гигабайты, обязано это показать. Модель отмечена воском на диаграмме и удаляется в один клик.</p></div>
@@ -536,7 +536,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   <h3>Кнопки и переключатели</h3>
   <div class="board">
     <div class="row">
-      <button class="btn primary">Переместить в Корзину</button>
+      <button class="btn primary">Удалить</button>
       <button class="btn">Показать в Finder</button>
       <button class="btn ghost">Отмена</button>
       <button class="btn" disabled>Сканирование…</button>
@@ -696,7 +696,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
         <div class="side" id="side-dup"></div>
         <div class="pane">
           <div class="pane-head"><div><h5>3 группы · освободится 4,3 ГБ</h5><small>проверено 18 406 кандидатов · 2 мин 14 с</small></div>
-            <div class="seg-ctl" role="group" aria-label="Действие"><button aria-pressed="true">В Корзину</button><button aria-pressed="false">Заменить клоном</button></div></div>
+            <div class="seg-ctl" role="group" aria-label="Действие"><button aria-pressed="true">Удалить</button><button aria-pressed="false">Заменить клоном</button></div></div>
           <div style="display:grid;gap:12px">
             <div class="dup">
               <div class="dup-h"><b>IMG_4471.MOV</b><span>3 копии · 2,1 ГБ каждая · освободит 4,2 ГБ</span></div>
@@ -715,7 +715,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
               <div class="dup-r"><input type="checkbox" checked aria-label="Удалить копию"><code>~/Downloads/thesis-final-v3.pdf</code><span class="mono">15 МБ</span></div>
             </div>
           </div>
-          <div class="note" style="margin-top:16px">По умолчанию копии уходят в Корзину. «Заменить клоном» — явное действие для группы: доступно, когда копия одна на своём иноде, принадлежит вам, не открыта и не лежит в пакете или облачной папке.</div>
+          <div class="note" style="margin-top:16px">По умолчанию копии удаляются окончательно. «Заменить клоном» — явное действие для группы: доступно, когда копия одна на своём иноде, принадлежит вам, не открыта и не лежит в пакете или облачной папке.</div>
         </div>
       </div>
     </div></div>
@@ -744,14 +744,14 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">08</span><h4>Корзина Домового</h4><p>Последний шаг перед действием. Всё собрано в одном месте, всё возвращается из Корзины Finder.</p></div>
+    <div class="screen-cap"><span class="n">08</span><h4>Корзина Домового</h4><p>Последний шаг перед действием. Четыре состояния: список с итогом, подтверждение, удаление с прогрессом «Удаляю: N из M» и кнопкой «Остановить», итог «Удалено: N объектов, освобождено X» со списком «Не удалено» и причинами.</p></div>
     <div class="mock"><div class="win narrow">
       <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Корзина Домового</div></div>
       <div class="pane">
         <div id="tray"></div>
-        <div class="tray-total"><span style="color:var(--mute)">Будет перемещено в Корзину</span><b id="tray-sum"></b></div>
-        <p style="color:var(--dim);font-size:13px;margin-top:10px">Файлы можно вернуть из Корзины Finder, пока она не очищена. Место освободится после очистки Корзины.</p>
-        <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost">Отмена</button><button class="btn primary">Переместить в Корзину</button></div>
+        <div class="tray-total"><span style="color:var(--mute)">Будет удалено</span><b id="tray-sum"></b></div>
+        <p style="color:var(--dim);font-size:13px;margin-top:10px">Удаление необратимо: файлы не попадают в Корзину. Перед стартом Домовой спросит ещё раз.</p>
+        <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost">Отмена</button><button class="btn primary">Удалить</button></div>
       </div>
     </div></div>
   </div>
@@ -770,7 +770,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
     <tr><td>гипотеза</td><td class="say">Похоже на остаток удалённого приложения</td><td class="no">Это остаток удалённого приложения</td></tr>
     <tr><td>нет доступа</td><td class="say">macOS скрыла 3 папки. Дайте полный доступ к диску, чтобы учесть их</td><td class="no">Ошибка доступа EPERM</td></tr>
     <tr><td>скрытое</td><td class="say">macOS удалит снапшоты сама, когда место понадобится</td><td class="no">Неизвестное системное пространство</td></tr>
-    <tr><td>после очистки</td><td class="say">Перемещено в Корзину: 80,8 ГБ</td><td class="no">Готово! Ваш Mac теперь летает</td></tr>
+    <tr><td>после удаления</td><td class="say">Удалено: 12 объектов, освобождено 80,8 ГБ</td><td class="no">Готово! Ваш Mac теперь летает</td></tr>
     <tr><td>модель</td><td class="say">Модель занимает 5,0 ГБ. Удалить можно здесь же</td><td class="no">Скачиваем AI…</td></tr>
   </table></div>
 </section>
@@ -788,7 +788,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
       <rect class="a-box" x="30" y="64" width="260" height="62" rx="8"/><text class="a-t" x="46" y="90">Интерфейс</text><text class="a-s" x="46" y="110">AppKit через objc2</text>
       <rect class="a-box" x="310" y="64" width="260" height="62" rx="8"/><text class="a-t" x="326" y="90">Диаграмма</text><text class="a-s" x="326" y="110">Metal · SDF-сегменты · атлас глифов</text>
       <rect class="a-box" x="30" y="168" width="260" height="62" rx="8"/><text class="a-t" x="46" y="194">Индекс скана</text><text class="a-s" x="46" y="214">дерево · кэш на диске · дельты</text>
-      <rect class="a-box" x="310" y="168" width="260" height="62" rx="8"/><text class="a-t" x="326" y="194">Движок правил</text><text class="a-s" x="326" y="214">безопасность · denylist · Корзина</text>
+      <rect class="a-box" x="310" y="168" width="260" height="62" rx="8"/><text class="a-t" x="326" y="194">Движок правил</text><text class="a-s" x="326" y="214">безопасность · denylist · удаление</text>
       <rect class="a-box" x="30" y="272" width="260" height="62" rx="8"/><text class="a-t" x="46" y="298">Загрузчик моделей</text><text class="a-s" x="46" y="318">HTTP Range · SHA-256 · каталог</text>
       <rect class="a-box" x="310" y="272" width="260" height="62" rx="8"/><text class="a-t" x="326" y="298">Агентный цикл</text><text class="a-s" x="326" y="318">tools → запросы к индексу</text>
       <rect class="a-box" x="30" y="356" width="260" height="46" rx="8"/><text class="a-s" x="46" y="384">~/Library/Application Support/Domovoi/models</text>
@@ -804,7 +804,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
       <text class="a-s" x="650" y="314">FSEvents · дельты</text>
       <text class="a-s" x="650" y="336">Spotlight · kMDItemLastUsedDate</text>
       <text class="a-s" x="650" y="358">APFS · purgeable, снапшоты</text>
-      <text class="a-s" x="650" y="380">NSFileManager · trashItem</text>
+      <text class="a-s" x="650" y="380">NSFileManager · removeItem</text>
       <text class="a-s" x="650" y="402">clonefile · клоны</text>
 
       <path class="a-ln" d="M160 126V168" marker-end="url(#ar)" marker-start="url(#ar)"/>
@@ -824,7 +824,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   <div class="dec">
     <div><b>Сканер</b><span>Только системный том, getattrlistbulk, размер на диске, дедупликация hard links, кэш скана и FSEvents.</span></div>
     <div><b>Дубликаты</b><span>Отдельная опция и отдельный проход: размер → частичный хэш → BLAKE3. Клоны APFS распознаются.</span></div>
-    <div><b>Рекомендации</b><span>Решают детерминированные правила. Модель объясняет, классифицирует и отвечает на вопросы. Удаление только в Корзину, с denylist.</span></div>
+    <div><b>Рекомендации</b><span>Решают детерминированные правила. Модель объясняет, классифицирует и отвечает на вопросы. Удаление необратимо, только после подтверждения, с denylist.</span></div>
     <div><b>Данные для модели</b><span>Только метаданные. Без содержимого файлов и без kMDItemWhereFroms.</span></div>
     <div><b>Рантайм</b><span>llama.cpp на запиненном коммите, свои биндинги через bindgen, Metal-бэкенд; предкомпилированные metallib лежат в бандле сервиса.</span></div>
     <div><b>Инференс</b><span>XPC-сервис в бандле через libxpc, без сети. Выгрузка по таймауту из настроек.</span></div>
@@ -837,7 +837,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   <h3>Решено при планировании</h3>
   <div class="dec">
     <div><b>Визуализация</b><span>Оба режима с переключателем, по умолчанию sunburst (раздел V).</span></div>
-    <div><b>Действие над дубликатом</b><span>По умолчанию в Корзину; замена клоном APFS — явное действие для группы (экран 06).</span></div>
+    <div><b>Действие над дубликатом</b><span>По умолчанию удаление; замена клоном APFS — явное действие для группы (экран 06).</span></div>
     <div><b>Состав каталога</b><span>Семейство ChatML, Apache-2.0: Qwen3.5-4B, T-lite-it-2.1, Qwen3-14B (экран 07).</span></div>
   </div>
 </section>

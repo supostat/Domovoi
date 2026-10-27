@@ -11,7 +11,7 @@ struct StaleStatement {
     why: &'static str,
 }
 
-const STALE_STATEMENTS: [StaleStatement; 4] = [
+const STALE_STATEMENTS: [StaleStatement; 6] = [
     StaleStatement {
         relative_path: "design/domovoi-design-book.html",
         text: "Решение открыто",
@@ -31,6 +31,16 @@ const STALE_STATEMENTS: [StaleStatement; 4] = [
         relative_path: "docs/DOMOVOI.md",
         text: "metallib встроена",
         why: "precompiled metallib files ship inside the service bundle",
+    },
+    StaleStatement {
+        relative_path: "docs/DOMOVOI.md",
+        text: "только в Корзину Finder",
+        why: "collected items are deleted permanently by the delete run, the Finder Trash is not used",
+    },
+    StaleStatement {
+        relative_path: "docs/DOMOVOI.md",
+        text: "trashItem",
+        why: "deletion goes through NSFileManager removeItem, not trashItem",
     },
 ];
 
@@ -116,7 +126,7 @@ fn occurrences(path: &Path, content: &str, statement: &StaleStatement) -> Vec<Fi
 mod tests {
     use std::path::Path;
 
-    use super::removal_findings;
+    use super::{STALE_STATEMENTS, occurrences, removal_findings};
 
     const REMOVAL: &str = "    manager.removeItemAtURL_error(&url)?;\n";
 
@@ -135,6 +145,28 @@ mod tests {
         assert_eq!(
             removal_findings(Path::new("crates/agent/src/claude_code.rs"), cleanup).len(),
             2
+        );
+    }
+
+    #[test]
+    fn check_sources_catches_the_finder_trash_statements() {
+        let stale = STALE_STATEMENTS
+            .iter()
+            .filter(|statement| statement.text == "только в Корзину Finder" || statement.text == "trashItem")
+            .collect::<Vec<_>>();
+        assert_eq!(stale.len(), 2);
+        let document = "Удаление только в Корзину Finder.\nТолько `NSFileManager trashItem`.\nУдаление необратимо.\n";
+        for statement in stale {
+            let findings = occurrences(Path::new("docs/DOMOVOI.md"), document, statement);
+            assert_eq!(findings.len(), 1, "«{}» is a finding", statement.text);
+        }
+        assert!(
+            occurrences(
+                Path::new("docs/DOMOVOI.md"),
+                "Удаление необратимо.\n",
+                &STALE_STATEMENTS[4]
+            )
+            .is_empty()
         );
     }
 
