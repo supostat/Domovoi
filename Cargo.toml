@@ -99,6 +99,9 @@ todo = "deny"
 unimplemented = "deny"
 print_stderr = "allow"
 
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
