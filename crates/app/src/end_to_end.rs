@@ -2,7 +2,7 @@ use std::fs::{self, File};
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
-use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::mpsc::RecvTimeoutError;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -13,11 +13,11 @@ use domovoi_apfs_sys::SnapshotClass;
 use domovoi_downloader::{
     Catalog, CatalogEntry, DownloadOutcome, Downloader, ModelSource, ModelStore, Sha256Hasher, is_excluded_from_backup,
 };
-use domovoi_index::{Index, ModelEvent, NodeId, Reclaimable};
+use domovoi_index::{ModelEvent, NodeId, Reclaimable};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::Timeouts;
 use domovoi_render::{NodeOrigin, SunburstLayout};
-use domovoi_scanner::{CancelToken, ScanProgress, VolumeEvent};
+use domovoi_scanner::{CancelToken, VolumeEvent};
 use objc2::MainThreadMarker;
 use objc2_foundation::NSTimer;
 use serde_json::{Value, json};
@@ -64,7 +64,6 @@ use crate::tray_model::TrayModel;
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const EVENT_POLL: Duration = Duration::from_millis(50);
 const SCAN_POLL: Duration = Duration::from_millis(50);
-const PROGRESS_BACKLOG: usize = 65_536;
 const SESSION_BETWEEN_STEPS: &str = "the session is home between steps";
 const DIAGRAM_SIDE: f32 = 440.0;
 const CSV_LINE_END: &str = "\r\n";
@@ -211,24 +210,13 @@ impl EndToEnd {
 
     fn scan(&mut self) -> Result<Value, String> {
         let started = Instant::now();
-        let (sender, receiver) = mpsc::sync_channel(PROGRESS_BACKLOG);
-        let listener = thread::spawn(move || receiver.iter().collect::<Vec<ScanProgress>>());
-        let scanned = self
-            .session_mut()
-            .scan(Some(sender), CancelToken::default())
-            .map_err(|error| error.to_string());
-        let events = listener.join().expect("the progress listener finishes");
-        scanned?;
+        self.session_mut()
+            .scan(None, CancelToken::default())
+            .map_err(|error| error.to_string())?;
         self.scan_elapsed = Some(started.elapsed());
         let index = self.session().index().expect("a finished scan installs an index");
         let root = index.node(index.root());
-        Ok(json!({
-            "step": "scan",
-            "files": root.files,
-            "bytes": root.allocated,
-            "nodes": index.len(),
-            "share_events": share_events(&events),
-        }))
+        Ok(json!({ "step": "scan", "files": root.files, "bytes": root.allocated, "nodes": index.len() }))
     }
 
     fn hidden_space(&self) -> Result<Value, String> {
@@ -279,16 +267,20 @@ impl EndToEnd {
                 &RcBlock::new(|_: NonNull<NSTimer>| {}),
             )
         };
+        let expected = DiskOverview::measure(&self.root)
+            .map_err(|error| error.to_string())?
+            .volumes
+            .data_used
+            .value;
         let session = self.session.take().expect(SESSION_BETWEEN_STEPS);
-        let expected_directories = session.index().map(Index::directory_count);
-        let mut job = ScanJob::start(session, false, timer);
+        let mut job = ScanJob::start(session, false, expected, timer);
         while !job.is_finished() {
             job.absorb_progress();
             thread::sleep(SCAN_POLL);
         }
         job.absorb_progress();
         let files = job.status.files;
-        let share = job.status.sweep;
+        let sweep = job.status.sweep;
         self.scan_elapsed = Some(job.started.elapsed());
         let (session, outcome) = job.finish();
         self.session = Some(session);
@@ -298,8 +290,7 @@ impl EndToEnd {
             "step": "rescan",
             "found": index.find(path).is_some(),
             "files": files,
-            "expected_directories": expected_directories,
-            "share": share,
+            "sweep": sweep,
             "last_event_id": self.session().last_event_id(),
         }))
     }
@@ -671,28 +662,6 @@ impl EndToEnd {
             )
         })
     }
-}
-
-fn share_events(events: &[ScanProgress]) -> Value {
-    let walking: Vec<f32> = events
-        .iter()
-        .filter_map(|event| match event {
-            ScanProgress::Walking { share, .. } => Some(*share),
-            ScanProgress::Walked { .. } => None,
-        })
-        .collect();
-    let walked = events.iter().find_map(|event| match event {
-        ScanProgress::Walked { share, .. } => Some(*share),
-        ScanProgress::Walking { .. } => None,
-    });
-    let drops = walking.windows(2).filter(|pair| pair[1] < pair[0]).count();
-    json!({
-        "count": walking.len(),
-        "max": walking.iter().copied().fold(0.0_f32, f32::max),
-        "last": walking.last(),
-        "drops": drops,
-        "walked": walked,
-    })
 }
 
 fn step_name(step: &ScenarioStep) -> &'static str {

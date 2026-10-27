@@ -154,6 +154,8 @@ cargo clippy -p domovoi-scanner -p domovoi-app --all-targets -- -D warnings
 ```
 - Typecheck-критерий фазы (exit 0).
 
+> Отменено после приёмки: доля каталогов не связана с байтами, а углы диаграммы байтовые, поэтому сектор шёл вразнобой со счётчиком в центре. Сектор и полоса в Dock снова считаются по байтам к занятому месту тома; `ProgressShare`, `expected_directories` и `Index::directory_count` удалены.
+
 ### Phase 2: scan-share — доля прогресса по каталогам
 
 <!-- deps: [scan-watchdog] — order-only: обе фазы правят Walk::list, последовательность исключает конфликт. -->

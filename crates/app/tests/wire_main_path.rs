@@ -39,7 +39,6 @@ const ARCHIVE_BLOB_BYTES: usize = 8 * MEGABYTE;
 const MUSIC: &str = "Music";
 const NESTED_MUSIC: &str = "Music ▸ Music";
 const ANGLE_TOLERANCE: f64 = 1e-3;
-const SHARE_TOLERANCE: f64 = 1e-4;
 
 fn manifest_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
@@ -460,33 +459,11 @@ fn assert_interface_techniques(report: &Value, csv: &Path) {
 }
 
 fn assert_scanner_techniques(report: &Value) {
-    let share = &step(report, "scan")["share_events"];
-    assert!(
-        share["count"].as_u64().is_some_and(|count| count > 1),
-        "the first scan reports its share more than once: {share}"
-    );
-    assert_eq!(share["drops"], 0, "the share never falls back: {share}");
-    let last = share["last"].as_f64().expect("the last share is reported");
-    assert!(
-        last > 0.0 && last <= 1.0 + SHARE_TOLERANCE,
-        "a folder the walk cannot open completes its share without an event, so the last sample stays within the whole: {share}"
-    );
-    assert_eq!(
-        share["walked"].as_f64(),
-        Some(1.0),
-        "the end of the walk reports the whole: {share}"
-    );
     let rescan = step(report, "rescan");
-    assert!(
-        rescan["expected_directories"]
-            .as_u64()
-            .is_some_and(|directories| directories > 0),
-        "the rescan knows the folder count of the previous index: {rescan}"
-    );
     assert_eq!(
-        rescan["share"].as_f64(),
+        rescan["sweep"].as_f64(),
         Some(1.0),
-        "the rescan ends complete: {rescan}"
+        "the rescan ends with the whole sector: {rescan}"
     );
     let hidden = step(report, "hidden_space");
     assert_eq!(hidden["discrepancy"], false, "{hidden:#}");

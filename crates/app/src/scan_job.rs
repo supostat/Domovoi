@@ -20,11 +20,17 @@ pub(crate) struct ScanJob {
     cancel: CancelToken,
     timer: Retained<NSTimer>,
     pub status: ScanStatus,
+    pub expected_bytes: u64,
     pub started: Instant,
 }
 
 impl ScanJob {
-    pub(crate) fn start(mut session: Session, full_first_scan: bool, timer: Retained<NSTimer>) -> Self {
+    pub(crate) fn start(
+        mut session: Session,
+        full_first_scan: bool,
+        expected_bytes: u64,
+        timer: Retained<NSTimer>,
+    ) -> Self {
         let (sender, progress) = mpsc::sync_channel(PROGRESS_BACKLOG);
         let cancel = CancelToken::default();
         let status = ScanStatus {
@@ -49,6 +55,7 @@ impl ScanJob {
             cancel,
             timer,
             status,
+            expected_bytes,
             started: Instant::now(),
         }
     }
@@ -57,25 +64,24 @@ impl ScanJob {
         let mut changed = false;
         while let Ok(progress) = self.progress.try_recv() {
             match progress {
-                ScanProgress::Walking {
-                    files,
-                    bytes,
-                    current,
-                    share,
-                } => {
+                ScanProgress::Walking { files, bytes, current } => {
                     self.status.files = files;
                     self.status.bytes = bytes;
                     self.status.current = current.display().to_string();
-                    self.status.sweep = share;
                 }
-                ScanProgress::Walked { files, bytes, .. } => {
+                ScanProgress::Walked { files, bytes } => {
                     self.status.files = files;
                     self.status.bytes = bytes;
                     self.status.stage = ScanStage::Indexing;
-                    self.status.sweep = 1.0;
                 }
             }
             changed = true;
+        }
+        if changed {
+            self.status.sweep = match self.status.stage {
+                ScanStage::Walking => (self.status.bytes as f64 / self.expected_bytes.max(1) as f64).min(1.0) as f32,
+                ScanStage::Indexing => 1.0,
+            };
         }
         changed
     }
