@@ -1,7 +1,9 @@
 use std::path::Path;
+use std::time::Duration;
 
 use domovoi_app::{
-    DeleteOutcome, DeleteStatus, MeasureProgress, RecommendationsModel, Screen, ShellFixture, TrayModel, strings,
+    DeleteOutcome, DeleteStatus, MeasureProgress, RecommendationsModel, Screen, ShellFixture, TrayModel,
+    scan_finished_line, strings,
 };
 use domovoi_rules::{ConfigOverrides, rule_table};
 
@@ -119,6 +121,14 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
     assert_eq!(
         data.hidden_notice().map(|notice| spoken(&notice)).as_deref(),
         Some("macOS скрыла 3 папки. Дайте полный доступ к диску, чтобы учесть их")
+    );
+    assert_eq!(
+        spoken(&scan_finished_line(Duration::from_secs(130))),
+        "Скан завершён за 2 мин 10 с"
+    );
+    assert_eq!(
+        spoken(&scan_finished_line(Duration::from_secs(48))),
+        "Скан завершён за 48 с"
     );
     assert_eq!(
         strings::SNAPSHOTS_RELEASE,

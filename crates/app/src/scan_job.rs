@@ -1,5 +1,6 @@
 use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
+use std::time::Instant;
 
 use domovoi_scanner::{CancelToken, ScanProgress};
 use objc2::rc::Retained;
@@ -20,6 +21,7 @@ pub(crate) struct ScanJob {
     timer: Retained<NSTimer>,
     pub status: ScanStatus,
     pub expected_bytes: u64,
+    pub started: Instant,
 }
 
 impl ScanJob {
@@ -54,6 +56,7 @@ impl ScanJob {
             timer,
             status,
             expected_bytes,
+            started: Instant::now(),
         }
     }
 

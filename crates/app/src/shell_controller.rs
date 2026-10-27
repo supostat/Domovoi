@@ -49,6 +49,7 @@ use crate::delete_run::DeleteRun;
 use crate::delete_status::DeleteStatus;
 use crate::diagram_preference::{remember_mode, remember_small_groups, remembered_mode, remembered_small_groups};
 use crate::disk_overview::{DiskOverview, SYSTEM_DATA_ROOT};
+use crate::dock_progress::DockProgress;
 use crate::duplicate_job::DuplicateJob;
 use crate::duplicate_key::DuplicateKey;
 use crate::duplicate_summary::DuplicateSummary;
@@ -65,11 +66,13 @@ use crate::main_screen::MainScreen;
 use crate::model_screen::ModelScreen;
 use crate::navigation::Navigation;
 use crate::node_facts::NodeFacts;
+use crate::notification_center::ScanNotifier;
 use crate::preview_source::PreviewSource;
 use crate::preview_targets::PreviewTargets;
 use crate::properties_panel::PropertiesPanel;
 use crate::recommendations_screen::RecommendationsScreen;
 use crate::scan_job::ScanJob;
+use crate::scan_notice::scan_finished_line;
 use crate::scanning_screen::{ScanningScreen, center_lines};
 use crate::screen_key::ScreenKey;
 use crate::screen_views::ScreenViews;
@@ -116,6 +119,8 @@ pub(crate) struct ShellController {
     hover: HoverPanel,
     properties: PropertiesPanel,
     preview: Retained<PreviewSource>,
+    dock: RefCell<DockProgress>,
+    notifier: Option<ScanNotifier>,
     paths: SessionPaths,
     state: RefCell<ShellState>,
 }
@@ -150,6 +155,8 @@ impl ShellController {
             hover: HoverPanel::new(marker),
             properties: PropertiesPanel::new(marker),
             preview: PreviewSource::new(marker),
+            dock: RefCell::new(DockProgress::new(marker)),
+            notifier: ScanNotifier::in_bundle(),
             paths,
             state: RefCell::new(ShellState::new(remembered_mode(), remembered_small_groups(), assistant)),
         });
@@ -205,6 +212,7 @@ impl ShellController {
     }
 
     pub(crate) fn application_will_terminate(&self) {
+        self.dock.borrow_mut().clear();
         self.state.borrow_mut().assistant.shutdown();
         let mut state = self.state.borrow_mut();
         if let Some(job) = &state.scan {
@@ -270,6 +278,10 @@ impl ShellController {
             return self.show_access(access);
         }
         let timer = self.repeating(SCAN_TICK, ShellController::scan_tick);
+        if let Some(notifier) = &self.notifier {
+            notifier.request_authorization();
+        }
+        self.dock.borrow_mut().show(0.0);
         {
             let mut state = self.state.borrow_mut();
             state.watch = None;
@@ -298,15 +310,24 @@ impl ShellController {
                     diagram.set_sweep(status.sweep);
                     diagram.center = Some(center_lines(&status));
                 });
+                self.dock.borrow_mut().show(status.sweep);
             }
             if job.is_finished() { scan.take() } else { None }
         };
         if let Some(job) = finished {
             let status = job.status.clone();
+            let elapsed = job.started.elapsed();
             let (session, outcome) = job.finish();
+            self.dock.borrow_mut().clear();
             self.state.borrow_mut().last_scan = Some(status);
             match outcome {
-                Ok(()) | Err(SessionError::Scan(ScanError::Cancelled)) => self.install(session),
+                Ok(()) => {
+                    if let Some(notifier) = &self.notifier {
+                        notifier.scan_finished(self.marker, &scan_finished_line(elapsed));
+                    }
+                    self.install(session);
+                }
+                Err(SessionError::Scan(ScanError::Cancelled)) => self.install(session),
                 Err(error) => {
                     self.state.borrow_mut().session = Some(session);
                     self.fail(&error.to_string());

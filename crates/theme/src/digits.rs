@@ -1,4 +1,4 @@
-pub(crate) const NO_BREAK_SPACE: char = '\u{A0}';
+pub const NO_BREAK_SPACE: char = '\u{A0}';
 
 pub fn group_thousands(value: u64) -> String {
     let digits = value.to_string();

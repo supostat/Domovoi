@@ -21,7 +21,7 @@ mod size;
 pub use age::{DateSource, format_age};
 pub use appearance::palette_for;
 pub use count::format_count;
-pub use digits::group_thousands;
+pub use digits::{NO_BREAK_SPACE, group_thousands};
 pub use generated::{FONT_STACKS, FontStacks, Palette, RADII, Radii};
 pub use iso_date::format_iso_utc;
 pub use memory::format_memory;
