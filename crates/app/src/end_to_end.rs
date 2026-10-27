@@ -15,7 +15,7 @@ use domovoi_downloader::{
 use domovoi_index::{ModelEvent, NodeId, Reclaimable};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::Timeouts;
-use domovoi_render::NodeOrigin;
+use domovoi_render::{NodeOrigin, SunburstLayout};
 use domovoi_scanner::{CancelToken, VolumeEvent};
 use objc2::MainThreadMarker;
 use objc2_foundation::NSTimer;
@@ -28,6 +28,7 @@ use crate::assistant_settings::AssistantSettings;
 use crate::cache_opening::CacheOpening;
 use crate::care_models::CareModels;
 use crate::chat_model::ChatModel;
+use crate::csv_export::csv_lines;
 use crate::delete_job::DeleteJob;
 use crate::delete_outcome::DeleteOutcome;
 use crate::disk_overview::DiskOverview;
@@ -38,10 +39,12 @@ use crate::event_effect::EventEffect;
 use crate::event_queue::{EventQueue, HEAVY_DELTA_NODES};
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
+use crate::preview_targets::PreviewTargets;
 use crate::question::Question;
 use crate::recommendations_model::RecommendationsModel;
 use crate::safety_badge::SafetyBadge;
 use crate::scan_job::ScanJob;
+use crate::scan_notice::scan_finished_line;
 use crate::scan_stage::ScanStage;
 use crate::scan_status::ScanStatus;
 use crate::scenario::Scenario;
@@ -60,6 +63,8 @@ const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const EVENT_POLL: Duration = Duration::from_millis(50);
 const SCAN_POLL: Duration = Duration::from_millis(50);
 const SESSION_BETWEEN_STEPS: &str = "the session is home between steps";
+const DIAGRAM_SIDE: f32 = 440.0;
+const CSV_LINE_END: &str = "\r\n";
 
 pub fn run_end_to_end(marker: MainThreadMarker, scenario: &Path, report: &Path) -> Result<(), String> {
     let scenario = Scenario::read(scenario)?;
@@ -101,6 +106,7 @@ struct EndToEnd {
     snapshots: Vec<PathBuf>,
     disk: Option<(PathBuf, DiskProbe)>,
     chat: ChatModel,
+    scan_elapsed: Option<Duration>,
 }
 
 impl EndToEnd {
@@ -115,15 +121,18 @@ impl EndToEnd {
             snapshots: Vec::new(),
             disk: None,
             chat: ChatModel::default(),
+            scan_elapsed: None,
         })
     }
 
     fn perform(&mut self, marker: MainThreadMarker, step: &ScenarioStep) -> Result<Value, String> {
         match step {
             ScenarioStep::Scan => {
+                let started = Instant::now();
                 self.session_mut()
                     .scan(None, CancelToken::default())
                     .map_err(|error| error.to_string())?;
+                self.scan_elapsed = Some(started.elapsed());
                 let index = self.session().index().expect("a finished scan installs an index");
                 let root = index.node(index.root());
                 Ok(json!({ "step": "scan", "files": root.files, "bytes": root.allocated, "nodes": index.len() }))
@@ -190,6 +199,17 @@ impl EndToEnd {
                 self.snapshots.extend(written.iter().cloned());
                 Ok(json!({ "step": "snapshots", "files": written }))
             }
+            ScenarioStep::ScanNotice => {
+                let elapsed = self.scan_elapsed.ok_or("a scan notice follows a scan")?;
+                Ok(json!({
+                    "step": "scan_notice",
+                    "line": scan_finished_line(elapsed),
+                    "seconds": elapsed.as_secs(),
+                }))
+            }
+            ScenarioStep::SmallGroups { path } => self.small_groups(path),
+            ScenarioStep::PreviewTargets { path } => self.preview_targets(path),
+            ScenarioStep::ExportCsv { path } => self.export_csv(path),
         }
     }
 
@@ -218,6 +238,7 @@ impl EndToEnd {
         }
         job.absorb_progress();
         let files = job.status.files;
+        self.scan_elapsed = Some(job.started.elapsed());
         let (session, outcome) = job.finish();
         self.session = Some(session);
         outcome.map_err(|error| error.to_string())?;
@@ -500,6 +521,48 @@ impl EndToEnd {
         Ok(report)
     }
 
+    fn small_groups(&mut self, path: &Path) -> Result<Value, String> {
+        let (data, focus) = self.live_disk(path)?;
+        let layout = SunburstLayout::compute(
+            &data.tree,
+            focus,
+            DIAGRAM_SIDE,
+            1.0,
+            &domovoi_render::SmallGroups::default(),
+        );
+        let groups = layout.groups().filter(|group| group.ring == 0).count();
+        Ok(json!({
+            "step": "small_groups",
+            "groups": groups,
+            "ring_sum": layout.ring_angle_sum(0),
+            "segments": layout.segments.iter().filter(|segment| segment.ring == 0).count(),
+        }))
+    }
+
+    fn preview_targets(&mut self, path: &Path) -> Result<Value, String> {
+        let (data, focus) = self.live_disk(path)?;
+        let rows = data.level_rows(focus);
+        let nodes: Vec<usize> = rows.iter().map(|row| row.node).collect();
+        let index = self.session().index().expect("preview targets follow a scan");
+        let targets = PreviewTargets::from_level(&data.tree, index, &nodes);
+        let names: Vec<&str> = rows.iter().map(|row| row.name.as_str()).collect();
+        Ok(json!({ "step": "preview_targets", "rows": names, "targets": targets.paths.len() }))
+    }
+
+    fn export_csv(&self, path: &Path) -> Result<Value, String> {
+        let index = self.session().index().expect("an export follows a scan");
+        let lines = csv_lines(index, index.root());
+        fs::write(path, &lines).map_err(|error| format!("{}: {error}", path.display()))?;
+        let rows = lines.split(CSV_LINE_END).filter(|row| !row.is_empty()).count() - 1;
+        let mut nodes = 0_usize;
+        let mut pending = vec![index.root()];
+        while let Some(id) = pending.pop() {
+            nodes += 1;
+            pending.extend(index.children(id));
+        }
+        Ok(json!({ "step": "export_csv", "path": path, "rows": rows, "nodes": nodes }))
+    }
+
     fn live_disk(&mut self, path: &Path) -> Result<(ShellData, usize), String> {
         let node = self
             .session()
@@ -573,5 +636,9 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::ScrollDiskList { .. } => "scroll_disk_list",
         ScenarioStep::UpdateDiskScreen => "update_disk_screen",
         ScenarioStep::Snapshots { .. } => "snapshots",
+        ScenarioStep::ScanNotice => "scan_notice",
+        ScenarioStep::SmallGroups { .. } => "small_groups",
+        ScenarioStep::PreviewTargets { .. } => "preview_targets",
+        ScenarioStep::ExportCsv { .. } => "export_csv",
     }
 }

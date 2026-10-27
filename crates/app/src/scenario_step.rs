@@ -47,4 +47,14 @@ pub enum ScenarioStep {
         directory: PathBuf,
         scale: f64,
     },
+    ScanNotice,
+    SmallGroups {
+        path: PathBuf,
+    },
+    PreviewTargets {
+        path: PathBuf,
+    },
+    ExportCsv {
+        path: PathBuf,
+    },
 }

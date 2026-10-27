@@ -1,3 +1,4 @@
+use std::f64::consts::TAU;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -32,6 +33,12 @@ const OFFSET_TOLERANCE: f64 = 0.5;
 const PARTIAL_STATUS: u16 = 206;
 const REDIRECT_STATUS: u16 = 302;
 const RANDOM_MODEL_TOKENS_PER_STEP: u32 = 32_768;
+const ARCHIVE: &str = "Archive";
+const ARCHIVE_PARTS: usize = 100;
+const ARCHIVE_BLOB_BYTES: usize = 8 * MEGABYTE;
+const MUSIC: &str = "Music";
+const NESTED_MUSIC: &str = "Music ▸ Music";
+const ANGLE_TOLERANCE: f64 = 1e-3;
 
 fn manifest_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
@@ -102,6 +109,15 @@ fn populate(root: &Path) {
     }
     write(&root.join("Locked/secret.txt"), b"closed");
     run(CHMOD, &["000"], &root.join("Locked"));
+    write(&root.join(ARCHIVE).join("blob.bin"), &noise(ARCHIVE_BLOB_BYTES, 6));
+    for number in 0..ARCHIVE_PARTS {
+        write(
+            &root.join(ARCHIVE).join(format!("part-{number:03}.txt")),
+            format!("part {number}\n").as_bytes(),
+        );
+    }
+    write(&root.join(MUSIC).join(MUSIC).join("song.mp3"), &noise(MEGABYTE, 7));
+    write(&root.join(MUSIC).join("Podcasts/talk.mp3"), &noise(MEGABYTE / 2, 8));
 }
 
 fn tiny_entry() -> CatalogEntry {
@@ -179,6 +195,9 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     let next_to_deleted = mount_point.join("Projects/engine/after-delete.txt");
     let notes = mount_point.join(NOTES);
     let fresh_note = notes.join("fresh-note.txt");
+    let archive = mount_point.join(ARCHIVE);
+    let music = mount_point.join(MUSIC);
+    let csv = state.path().join("index.csv");
     let scenario = json!({
         "root": mount_point,
         "state": state.path().join("session"),
@@ -204,6 +223,10 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
             {"step": "create_file", "path": fresh_note, "bytes": FRESH_FILE_BYTES},
             {"step": "await_change", "path": fresh_note, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
             {"step": "update_disk_screen"},
+            {"step": "scan_notice"},
+            {"step": "small_groups", "path": archive},
+            {"step": "preview_targets", "path": music},
+            {"step": "export_csv", "path": csv},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
             {
@@ -246,6 +269,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     );
     assert_index_and_care(&report, &mount_point);
     assert_disk_update(&report);
+    assert_interface_techniques(&report, &csv);
     assert_model_and_answer(&report, &server);
     assert_snapshots(&report);
 }
@@ -389,6 +413,41 @@ fn assert_disk_update(report: &Value) {
     assert!(
         (kept - offset).abs() < OFFSET_TOLERANCE,
         "the list stays where it was ({offset} → {kept} pt): {updated}"
+    );
+}
+
+fn assert_interface_techniques(report: &Value, csv: &Path) {
+    let notice = step(report, "scan_notice");
+    let line = notice["line"].as_str().expect("the notice carries a line");
+    assert!(line.starts_with("Скан завершён за"), "{notice}");
+    assert!(!line.contains('!'), "the notice keeps the voice: {line}");
+    let groups = step(report, "small_groups");
+    assert_eq!(
+        groups["groups"], 1,
+        "the tiny parts of the archive fold into one group: {groups}"
+    );
+    assert_eq!(groups["segments"], 2, "the blob and the group: {groups}");
+    let ring_sum = groups["ring_sum"].as_f64().expect("the ring sum is reported");
+    assert!((ring_sum - TAU).abs() < ANGLE_TOLERANCE, "the ring closes: {groups}");
+    let preview = step(report, "preview_targets");
+    let rows: Vec<&str> = preview["rows"]
+        .as_array()
+        .expect("the level rows are listed")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert!(rows.contains(&NESTED_MUSIC), "{rows:?}");
+    assert_eq!(preview["targets"].as_u64(), Some(rows.len() as u64), "{preview}");
+    assert!(rows.len() > 1, "{rows:?}");
+    let export = step(report, "export_csv");
+    assert_eq!(export["rows"], export["nodes"], "one row per node: {export}");
+    let text = fs::read_to_string(csv).expect("the export is on disk");
+    let lines = text.split("\r\n").filter(|row| !row.is_empty()).count();
+    assert_eq!(lines as u64 - 1, export["rows"].as_u64().expect("rows"), "{export}");
+    assert!(
+        text.starts_with("path,bytes,category,modified\r\n"),
+        "{}",
+        &text[..64.min(text.len())]
     );
 }
 
