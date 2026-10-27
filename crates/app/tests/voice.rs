@@ -130,6 +130,11 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
         spoken(&scan_finished_line(Duration::from_secs(48))),
         "Скан завершён за 48 с"
     );
+    assert!(
+        strings::ACCESS_STEPS[1].concat().contains("перетащите иконку"),
+        "the access steps offer dragging the icon into the list"
+    );
+    assert!(strings::ACCESS_DRAG_HINT.contains("перетащить"));
     assert_eq!(
         strings::SNAPSHOTS_RELEASE,
         "macOS удалит снапшоты сама, когда место понадобится"

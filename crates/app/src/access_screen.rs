@@ -7,6 +7,7 @@ use objc2_foundation::{
 };
 
 use crate::access_state::AccessState;
+use crate::app_icon_drag::AppIconView;
 use crate::button_style::ButtonStyle;
 use crate::field_ornament::{FieldOrnament, OrnamentInk};
 use crate::fill_view::{FillStyle, FillView};
@@ -17,7 +18,8 @@ use crate::shell_button::ShellButton;
 use crate::shell_layout::{NARROW_WINDOW, from_top};
 use crate::shell_palette::ShellPalette;
 use crate::strings::{
-    ACCESS_BODY, ACCESS_STEPS, ACCESS_TITLE, OPEN_SETTINGS, RELAUNCH, RELAUNCH_HINT, SCAN_WITHOUT_ACCESS,
+    ACCESS_BODY, ACCESS_DRAG_HINT, ACCESS_STEPS, ACCESS_TITLE, OPEN_SETTINGS, RELAUNCH, RELAUNCH_HINT,
+    SCAN_WITHOUT_ACCESS,
 };
 use crate::ui_font::{interface_font, mono_font};
 
@@ -27,6 +29,8 @@ const STEP_GAP: f64 = 12.0;
 const STEP_SPACING: f64 = 10.0;
 const CODE_SCALE: f64 = 0.88;
 const BUTTON_HEIGHT: f64 = 34.0;
+const ICON_SIDE: f64 = 56.0;
+const ICON_GAP: f64 = 14.0;
 
 #[derive(Debug)]
 pub struct AccessScreen {
@@ -91,6 +95,7 @@ impl AccessScreen {
         top += 20.0;
         top = add_steps(marker, &root, top, width, palette);
         top += 14.0;
+        top = add_drag_icon(marker, &root, top, width, palette);
         if access == AccessState::GrantedAfterLaunch {
             top += add_paragraph(
                 &root,
@@ -179,6 +184,40 @@ fn add_steps(marker: MainThreadMarker, root: &FillView, mut top: f64, width: f64
         top += height.max(BADGE) + STEP_SPACING;
     }
     top
+}
+
+fn add_drag_icon(marker: MainThreadMarker, root: &FillView, top: f64, width: f64, palette: &ShellPalette) -> f64 {
+    let Some(icon) = AppIconView::in_bundle(
+        marker,
+        from_top(NARROW_WINDOW, MARGIN, top, NSSize::new(ICON_SIDE, ICON_SIDE)),
+    ) else {
+        return top;
+    };
+    let text_left = MARGIN + ICON_SIDE + ICON_GAP;
+    let text_width = width - ICON_SIDE - ICON_GAP;
+    let hint = label(
+        marker,
+        ACCESS_DRAG_HINT,
+        &interface_font(13.0, 400.0),
+        &palette.tokens.mute.ns_color(),
+        NSLineBreakMode::ByWordWrapping,
+    );
+    hint.setPreferredMaxLayoutWidth(text_width);
+    let height = hint.fittingSize().height;
+    place(
+        &hint,
+        from_top(
+            NARROW_WINDOW,
+            text_left,
+            top + (ICON_SIDE - height).max(0.0) / 2.0,
+            NSSize::new(text_width, height),
+        )
+        .origin,
+        text_width,
+    );
+    root.addSubview(&icon);
+    root.addSubview(&hint);
+    top + ICON_SIDE.max(height) + ICON_GAP
 }
 
 fn step_text(parts: &[&str; 3], palette: &ShellPalette) -> Retained<NSAttributedString> {

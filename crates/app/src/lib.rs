@@ -6,6 +6,7 @@ mod ai_models;
 mod answer_item;
 mod answer_target;
 mod app_delegate;
+mod app_icon_drag;
 mod application_name;
 mod applied_batch;
 mod apply_job;
