@@ -56,7 +56,7 @@ pub fn unresponsive_body(path: &str) -> String {
 }
 pub const FULL_FIRST_SCAN: &str = "После обновления macOS первый скан полный.";
 pub const FILES_MILLIONS: &str = "млн файлов";
-pub const TRAY: &str = "Корзина Домового";
+pub const TRAY: &str = "К удалению";
 pub const SHOW_IN_FINDER: &str = "Показать в Finder";
 pub const OPEN_IN_TERMINAL: &str = "Открыть в Terminal";
 pub const PROPERTIES: &str = "Свойства";
@@ -120,7 +120,7 @@ pub const LEVEL_CHECK_YOURSELF: &str = "Проверьте сами";
 pub const SPLIT_SAFE: &str = "безопасно";
 pub const SPLIT_RECOVERABLE: &str = "восстановимо";
 pub const SPLIT_CHECK_YOURSELF: &str = "проверьте";
-pub const TO_TRAY: &str = "В Корзину Домового";
+pub const TO_TRAY: &str = "Отметить к удалению";
 pub const RULE_PROVENANCE: &str = "правило";
 pub const MODEL_HYPOTHESIS: &str = "гипотеза модели";
 pub const HELD_PREFIX: &str = "Останется занято:";
@@ -144,7 +144,7 @@ pub const DENY_PARENT_NOT_WRITABLE: &str = "нет прав на папку";
 pub const DENY_PROTECTED_DATA: &str = "данные под защитой";
 pub const DENY_RUNNING_APPLICATION: &str = "приложение запущено";
 pub const DENY_OWN_APPLICATION: &str = "это сам Домовой";
-pub const DENY_TRASH: &str = "уже в Корзине";
+pub const DENY_TRASH: &str = "уже в Корзине macOS";
 pub const NO_RECOMMENDATIONS: &str = "Правилам здесь нечего предложить. Диск выглядит аккуратно.";
 
 pub const FIND_DUPLICATES: &str = "Искать дубликаты";
@@ -200,7 +200,8 @@ pub const REFUSED_CHANGED: &str = "содержимое изменилось";
 pub const REFUSED_UNREADABLE: &str = "файл не читается";
 
 pub const WILL_DELETE: &str = "Будет удалено";
-pub const TRAY_NOTE: &str = "Удаление необратимо: файлы не попадают в Корзину. Перед стартом Домовой спросит ещё раз.";
+pub const TRAY_NOTE: &str =
+    "Удаление необратимо: файлы не попадают в Корзину macOS. Перед стартом Домовой спросит ещё раз.";
 pub const CANCEL: &str = "Отмена";
 pub const DELETE: &str = "Удалить";
 pub const DELETE_CONFIRM: &str = "Удалить";
@@ -229,7 +230,7 @@ pub const OBJECTS: PluralForms = PluralForms {
     many: "объектов",
 };
 pub const TRAY_EMPTY: &str =
-    "Корзина Домового пуста. Отметьте рекомендации или копии дубликатов, и они соберутся здесь.";
+    "Пока ничего не отмечено к удалению. Отметьте рекомендации или копии дубликатов, и они соберутся здесь.";
 pub const DELETE_NO_PERMISSION: &str = "нет прав";
 pub const DELETE_READ_ONLY: &str = "том только для чтения";
 pub const DELETE_MISSING: &str = "файла уже нет";
@@ -252,7 +253,6 @@ pub const ASSISTANT_OFF: &str =
 pub const ASSISTANT_NO_MODEL: &str =
     "Модель ещё не скачана. Домовой отвечает локально, поэтому сначала нужна модель из каталога.";
 pub const GO_TO_MODEL: &str = "Перейти к Модели";
-pub const ADD_TO_TRAY: &str = "Добавить в Корзину";
 pub const NODES: PluralForms = PluralForms {
     one: "узел",
     few: "узла",

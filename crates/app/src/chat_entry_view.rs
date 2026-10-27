@@ -15,7 +15,7 @@ use crate::provenance_tag::provenance_tag;
 use crate::shell_actions::ShellActions;
 use crate::shell_button::ShellButton;
 use crate::shell_palette::ShellPalette;
-use crate::strings::{ADD_TO_TRAY, NODES};
+use crate::strings::{NODES, TO_TRAY};
 use crate::ui_font::{interface_font, mono_font};
 
 const BUBBLE_PADDING: NSSize = NSSize::new(14.0, 11.0);
@@ -154,7 +154,7 @@ fn answer_parts(
     if total > 0 {
         let button = ShellButton::new(
             marker,
-            &format!("{ADD_TO_TRAY} · {}", format_size(total)),
+            &format!("{TO_TRAY} · {}", format_size(total)),
             NSPoint::ZERO,
             ACTION_HEIGHT,
             ButtonStyle {

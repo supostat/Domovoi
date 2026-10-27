@@ -147,6 +147,21 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
         Some("2 домашние папки других пользователей: их размер виден только администратору")
     );
     assert!(strings::PURGEABLE_TIME_MACHINE.contains("Time Machine"));
+    assert_eq!(strings::TRAY, "К удалению");
+    assert_eq!(strings::TO_TRAY, "Отметить к удалению");
+    assert_eq!(
+        strings::TRAY_EMPTY,
+        "Пока ничего не отмечено к удалению. Отметьте рекомендации или копии дубликатов, и они соберутся здесь."
+    );
+    assert_eq!(
+        strings::TRAY_NOTE,
+        "Удаление необратимо: файлы не попадают в Корзину macOS. Перед стартом Домовой спросит ещё раз."
+    );
+    assert_eq!(
+        strings::DENY_TRASH,
+        "уже в Корзине macOS",
+        "the refusal names the macOS Trash, not the collection list"
+    );
     assert_eq!(
         strings::TMUTIL_COPIED,
         "Команда tmutil скопирована. Вставьте её в Terminal, чтобы удалить локальные снапшоты"

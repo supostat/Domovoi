@@ -294,7 +294,7 @@ svg text{pointer-events:none}
 .dup-r input{accent-color:var(--wax)}
 .keep{font:600 10.5px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
 
-/* корзина */
+/* к удалению */
 .tray-row{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px;align-items:center}
 .tray-row i{width:10px;height:10px;border-radius:3px}
 .tray-row span{font:500 12.5px var(--f-mono);color:var(--mute);font-variant-numeric:tabular-nums}
@@ -439,7 +439,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   <div class="grid-3">
     <div class="principle"><span class="k">Честные числа</span><h4>Показываем только то, что измерили</h4><p>Размер на диске, а не логический. Hard links считаются один раз. APFS-клоны помечены. Скрытое место (purgeable, снапшоты) показано отдельно и не смешано с файлами.</p></div>
     <div class="principle"><span class="k">Правила решают</span><h4>Модель объясняет, правила действуют</h4><p>Что безопасно удалять, решает детерминированный движок правил. Модель классифицирует незнакомое и отвечает на вопросы. Её выводы всегда помечены как гипотеза.</p></div>
-    <div class="principle"><span class="k">Ничего без спроса</span><h4>Только по подтверждению и только собранное</h4><p>Удаление необратимо и идёт собственным движком после подтверждения. Системные пути, SIP и активные приложения закрыты denylist. Перед действием всё собирается в Корзину Домового.</p></div>
+    <div class="principle"><span class="k">Ничего без спроса</span><h4>Только по подтверждению и только собранное</h4><p>Удаление необратимо и идёт собственным движком после подтверждения. Системные пути, SIP и активные приложения закрыты denylist. Перед действием всё собирается в список «К удалению».</p></div>
     <div class="principle"><span class="k">Ничего наружу</span><h4>Модель видит только метаданные</h4><p>Путь, размер, даты, тип, последнее открытие по Spotlight. Содержимое файлов и URL скачивания не читаются. Процесс инференса не имеет доступа к сети.</p></div>
     <div class="principle"><span class="k">Приложение без модели</span><h4>Полностью работает и без AI</h4><p>Скан, диаграмма, правила, дубликаты и очистка доступны сразу. Модель качается отдельно, по желанию, и видна на диаграмме как занятое место.</p></div>
     <div class="principle"><span class="k">Своё место</span><h4>Модель тоже лежит на диске</h4><p>Приложение для очистки, которое качает гигабайты, обязано это показать. Модель отмечена воском на диаграмме и удаляется в один клик.</p></div>
@@ -487,7 +487,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
     <tr><td>скан</td><td class="say">Сектор прироста по мере обхода дерева</td><td>фактическая</td></tr>
     <tr><td>зум уровня</td><td class="say">Радиальная интерполяция углов и радиусов на GPU</td><td>220 мс</td></tr>
     <tr><td>наведение</td><td class="say">Приглушение остальных сегментов до 45%</td><td>120 мс</td></tr>
-    <tr><td>в корзину</td><td class="say">Сегмент сжимается к центру, остальные перераспределяются</td><td>320 мс</td></tr>
+    <tr><td>к удалению</td><td class="say">Сегмент сжимается к центру, остальные перераспределяются</td><td>320 мс</td></tr>
     <tr><td>очистка готова</td><td class="say">Вышивка «зашивается» слева направо, один раз</td><td>1 400 мс</td></tr>
   </table></div>
 </section>
@@ -624,7 +624,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">03</span><h4>Главное окно</h4><p>Диаграмма, список уровня и Корзина Домового. Сегменты кликабельны, мелкие объекты каталога собраны в один сегмент. Меню узла: Finder, Terminal, Свойства; вложенная папка с именем родителя подписана «Music ▸ Music». «Скрытое» делится на Purgeable (локальные бэкапы Time Machine, если они включены) и «Не удалось найти» со счётчиком домашних папок других пользователей; при снапшотах меню строки предлагает скопировать команду tmutil.</p></div>
+    <div class="screen-cap"><span class="n">03</span><h4>Главное окно</h4><p>Диаграмма, список уровня и список «К удалению». Сегменты кликабельны, мелкие объекты каталога собраны в один сегмент. Меню узла: Finder, Terminal, Свойства; вложенная папка с именем родителя подписана «Music ▸ Music». «Скрытое» делится на Purgeable (локальные бэкапы Time Machine, если они включены) и «Не удалось найти» со счётчиком домашних папок других пользователей; при снапшотах меню строки предлагает скопировать команду tmutil.</p></div>
     <div class="mock"><div class="win">
       <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Macintosh HD</div></div>
       <div class="win-body">
@@ -647,7 +647,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
       <div class="win-body fixed">
         <div class="side" id="side-recs"></div>
         <div class="pane">
-          <div class="pane-head"><div><h5 id="recs-total"></h5><small id="recs-split"></small></div><button class="btn primary" id="recs-btn">В Корзину Домового</button></div>
+          <div class="pane-head"><div><h5 id="recs-total"></h5><small id="recs-split"></small></div><button class="btn primary" id="recs-btn">Отметить к удалению</button></div>
           <div style="display:grid;gap:10px" id="recs"></div>
         </div>
       </div>
@@ -673,7 +673,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
                 <li><code>zig-cache</code> в facet — <b>3,4 ГБ</b></li>
               </ul>
               <p style="margin-top:8px;color:var(--mute)">Docker (48 ГБ) я не трогаю: внутри образы и тома. Их лучше чистить средствами самого Docker.</p>
-              <div class="row" style="margin-top:12px"><button class="btn sm primary">Добавить в Корзину · 80,8 ГБ</button></div>
+              <div class="row" style="margin-top:12px"><button class="btn sm primary">Отметить к удалению · 80,8 ГБ</button></div>
             </div>
             <div class="msg me">А что за com.tinyapp.helper?</div>
             <div class="tool"><b>inspect_node</b> path: "~/Library/Application Support/com.tinyapp.helper"</div>
@@ -744,13 +744,13 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">08</span><h4>Корзина Домового</h4><p>Последний шаг перед действием. Четыре состояния: список с итогом, подтверждение, удаление с прогрессом «Удаляю: N из M» и кнопкой «Остановить», итог «Удалено: N объектов, освобождено X» со списком «Не удалено» и причинами.</p></div>
+    <div class="screen-cap"><span class="n">08</span><h4>К удалению</h4><p>Последний шаг перед действием. Четыре состояния: список с итогом, подтверждение, удаление с прогрессом «Удаляю: N из M» и кнопкой «Остановить», итог «Удалено: N объектов, освобождено X» со списком «Не удалено» и причинами.</p></div>
     <div class="mock"><div class="win narrow">
-      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Корзина Домового</div></div>
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">К удалению</div></div>
       <div class="pane">
         <div id="tray"></div>
         <div class="tray-total"><span style="color:var(--mute)">Будет удалено</span><b id="tray-sum"></b></div>
-        <p style="color:var(--dim);font-size:13px;margin-top:10px">Удаление необратимо: файлы не попадают в Корзину. Перед стартом Домовой спросит ещё раз.</p>
+        <p style="color:var(--dim);font-size:13px;margin-top:10px">Удаление необратимо: файлы не попадают в Корзину macOS. Перед стартом Домовой спросит ещё раз.</p>
         <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost">Отмена</button><button class="btn primary">Удалить</button></div>
       </div>
     </div></div>
@@ -1124,7 +1124,7 @@ const tot={safe:0,recover:0,check:0};RULES.forEach(r=>tot[r.s]+=r.size);
 const all=tot.safe+tot.recover+tot.check;
 $('#recs-total').textContent='Можно освободить '+fmt(all);
 $('#recs-split').textContent=`безопасно ${fmt(tot.safe)} · восстановимо ${fmt(tot.recover)} · проверьте ${fmt(tot.check)}`;
-$('#recs-btn').textContent='В Корзину Домового · '+fmt(tot.safe);
+$('#recs-btn').textContent='Отметить к удалению · '+fmt(tot.safe);
 
 const tray=$('#tray');RULES.filter(r=>r.s==='safe').forEach(r=>{const d=document.createElement('div');d.className='tray-row';
   d.innerHTML=`<i style="background:${catColor(r.cat)}"></i><span style="color:var(--text);font-family:var(--f-ui);font-size:13.5px">${r.t}</span><span>${fmt(r.size)}</span>`;tray.appendChild(d);});

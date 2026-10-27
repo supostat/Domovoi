@@ -11,7 +11,7 @@ struct StaleStatement {
     why: &'static str,
 }
 
-const STALE_STATEMENTS: [StaleStatement; 6] = [
+const STALE_STATEMENTS: [StaleStatement; 17] = [
     StaleStatement {
         relative_path: "design/domovoi-design-book.html",
         text: "Решение открыто",
@@ -41,6 +41,61 @@ const STALE_STATEMENTS: [StaleStatement; 6] = [
         relative_path: "docs/DOMOVOI.md",
         text: "trashItem",
         why: "deletion goes through NSFileManager removeItem, not trashItem",
+    },
+    StaleStatement {
+        relative_path: "docs/DOMOVOI.md",
+        text: "Корзина Домового",
+        why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "docs/DOMOVOI.md",
+        text: "Корзину Домового",
+        why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "docs/DOMOVOI.md",
+        text: "Корзине Домового",
+        why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "docs/DOMOVOI.md",
+        text: "Корзины Домового",
+        why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "docs/DOMOVOI.md",
+        text: "в корзину",
+        why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "design/domovoi-design-book.html",
+        text: "Корзина Домового",
+        why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "design/domovoi-design-book.html",
+        text: "Корзину Домового",
+        why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "design/domovoi-design-book.html",
+        text: "в корзину",
+        why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "README.md",
+        text: "Корзина Домового",
+        why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "crates/eval/tasks.json",
+        text: "Добавить в Корзину",
+        why: "deletion is permanent and the action is «Отметить к удалению», the judge must not expect the Trash",
+    },
+    StaleStatement {
+        relative_path: "crates/eval/tasks.json",
+        text: "можно вернуть, пока Корзина",
+        why: "deletion is permanent and the action is «Отметить к удалению», the judge must not expect the Trash",
     },
 ];
 
@@ -168,6 +223,31 @@ mod tests {
             )
             .is_empty()
         );
+    }
+
+    #[test]
+    fn check_sources_catches_the_old_tray_name() {
+        let old_names = STALE_STATEMENTS
+            .iter()
+            .filter(|statement| statement.relative_path == "docs/DOMOVOI.md" && statement.text.ends_with(" Домового"))
+            .collect::<Vec<_>>();
+        assert_eq!(old_names.len(), 4, "every case of the old name is a stale statement");
+        let document = "Корзина Домового — список.\nСобрано в Корзине Домового.\nВсё в «Корзину Домового».\nСтроки Корзины Домового.\n";
+        for statement in &old_names {
+            let findings = occurrences(Path::new("docs/DOMOVOI.md"), document, statement);
+            assert_eq!(findings.len(), 1, "«{}» is a finding", statement.text);
+        }
+        let renamed = "**К удалению** — список сбора. Удаление необратимо: файлы не попадают в Корзину macOS.\n";
+        for statement in STALE_STATEMENTS
+            .iter()
+            .filter(|statement| statement.relative_path == "docs/DOMOVOI.md")
+        {
+            assert!(
+                occurrences(Path::new("docs/DOMOVOI.md"), renamed, statement).is_empty(),
+                "«{}» does not match the new name",
+                statement.text
+            );
+        }
     }
 
     #[test]
