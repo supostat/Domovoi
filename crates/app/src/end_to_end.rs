@@ -12,7 +12,7 @@ use domovoi_agent::{AgentLimits, FocusContext};
 use domovoi_downloader::{
     Catalog, CatalogEntry, DownloadOutcome, Downloader, ModelSource, ModelStore, Sha256Hasher, is_excluded_from_backup,
 };
-use domovoi_index::{ModelEvent, NodeId};
+use domovoi_index::{ModelEvent, NodeId, Reclaimable};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::Timeouts;
 use domovoi_render::NodeOrigin;
@@ -28,6 +28,8 @@ use crate::assistant_settings::AssistantSettings;
 use crate::cache_opening::CacheOpening;
 use crate::care_models::CareModels;
 use crate::chat_model::ChatModel;
+use crate::delete_job::DeleteJob;
+use crate::delete_outcome::DeleteOutcome;
 use crate::disk_overview::DiskOverview;
 use crate::disk_probe::DiskProbe;
 use crate::duplicate_summary::DuplicateSummary;
@@ -36,7 +38,6 @@ use crate::event_effect::EventEffect;
 use crate::event_queue::{EventQueue, HEAVY_DELTA_NODES};
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
-use crate::purge_job::PurgeJob;
 use crate::question::Question;
 use crate::recommendations_model::RecommendationsModel;
 use crate::safety_badge::SafetyBadge;
@@ -157,18 +158,7 @@ impl EndToEnd {
                 let blocked: Vec<&str> = model.cards.iter().filter_map(|card| card.blocked.as_deref()).collect();
                 Ok(json!({ "step": "recommendations", "cards": rules, "blocked": blocked, "total": model.total() }))
             }
-            ScenarioStep::TrashRecommendations { level } => self.trash_recommendations(*level),
-            ScenarioStep::RestoreLast => {
-                let last = self
-                    .session()
-                    .trash_journal()
-                    .entries()
-                    .len()
-                    .checked_sub(1)
-                    .ok_or("the trash journal is empty")?;
-                let restored = self.session_mut().restore(last).map_err(|error| format!("{error:?}"))?;
-                Ok(json!({ "step": "restore_last", "restored": restored }))
-            }
+            ScenarioStep::DeleteRecommendations { level } => self.delete_recommendations(*level),
             ScenarioStep::FindDuplicates => {
                 let started = Instant::now();
                 self.session_mut()
@@ -183,7 +173,6 @@ impl EndToEnd {
                 Ok(json!({ "step": "find_duplicates", "groups": groups }))
             }
             ScenarioStep::ReplaceWithClone => self.replace_with_clone(),
-            ScenarioStep::PurgeTrash => self.purge_trash(),
             ScenarioStep::DownloadModel {
                 catalog,
                 entry,
@@ -206,33 +195,6 @@ impl EndToEnd {
 
     fn session(&self) -> &Session {
         self.session.as_ref().expect(SESSION_BETWEEN_STEPS)
-    }
-
-    fn purge_trash(&mut self) -> Result<Value, String> {
-        let entries = self.session_mut().take_for_purge().map_err(|error| error.to_string())?;
-        let trashed: Vec<PathBuf> = entries.iter().map(|entry| PathBuf::from(&entry.trashed)).collect();
-        let job = PurgeJob::start(entries);
-        while !job.is_finished() {
-            thread::sleep(SCAN_POLL);
-        }
-        let report = job.finish();
-        let failed: Vec<String> = report
-            .failed
-            .iter()
-            .map(|(entry, error)| format!("{}: {error}", entry.trashed))
-            .collect();
-        let (purged, skipped) = (report.purged.len(), report.skipped.len());
-        self.session_mut()
-            .return_untouched(report.untouched)
-            .map_err(|error| error.to_string())?;
-        Ok(json!({
-            "step": "purge_trash",
-            "purged": purged,
-            "skipped": skipped,
-            "failed": failed,
-            "journal_left": self.session().trash_journal().entries().len(),
-            "paths_left": trashed.iter().filter(|path| path.symlink_metadata().is_ok()).count(),
-        }))
     }
 
     fn rescan(&mut self, path: &Path) -> Result<Value, String> {
@@ -299,7 +261,7 @@ impl EndToEnd {
         Ok(model)
     }
 
-    fn trash_recommendations(&mut self, level: SafetyBadge) -> Result<Value, String> {
+    fn delete_recommendations(&mut self, level: SafetyBadge) -> Result<Value, String> {
         let targets: Vec<_> = self
             .recommendations()
             .cards
@@ -310,31 +272,31 @@ impl EndToEnd {
         for target in &targets {
             self.session_mut().add_to_tray(target.node, target.rule_id.as_deref());
         }
-        let (measured, measured_files) = self.measured_tray()?;
-        let moved = measured.total();
-        let outcomes = self
-            .session_mut()
-            .move_tray_to_trash()
+        let (measured, measured_files, sizes) = self.measured_tray()?;
+        let expected = measured.total();
+        let (subjects, refusals) = self.session_mut().take_tray_for_delete(&sizes);
+        let taken: Vec<PathBuf> = subjects.iter().map(|subject| subject.physical.clone()).collect();
+        let job = DeleteJob::start(subjects);
+        while !job.is_finished() {
+            thread::sleep(SCAN_POLL);
+        }
+        let report = job.finish();
+        let outcome = DeleteOutcome::from_report(&report, &refusals);
+        self.session_mut()
+            .settle_delete(&report)
             .map_err(|error| error.to_string())?;
-        let model = measured.with_outcome(&outcomes, self.session().trash_journal());
-        let trashed: Vec<String> = self
-            .session()
-            .trash_journal()
-            .entries()
-            .iter()
-            .map(|entry| entry.trashed.clone())
-            .collect();
         Ok(json!({
-            "step": "trash_recommendations",
-            "moved": moved,
+            "step": "delete_recommendations",
+            "expected": expected,
             "measured_files": measured_files,
-            "estimated": model.outcome.as_ref().is_some_and(|outcome| outcome.estimated),
-            "failures": model.outcome.map(|outcome| outcome.failures).unwrap_or_default(),
-            "trashed": trashed,
+            "deleted": outcome.objects,
+            "freed": outcome.freed,
+            "failures": outcome.failures,
+            "paths_left": taken.iter().filter(|path| path.symlink_metadata().is_ok()).count(),
         }))
     }
 
-    fn measured_tray(&self) -> Result<(TrayModel, u64), String> {
+    fn measured_tray(&self) -> Result<(TrayModel, u64, Vec<Reclaimable>), String> {
         let items: Vec<PathBuf> = self
             .session()
             .tray()
@@ -347,8 +309,8 @@ impl EndToEnd {
             .map_err(|error| error.to_string())?;
         let session = self.session();
         let index = session.index().expect("the tray belongs to a scanned volume");
-        let model = TrayModel::measured(index, session.tray(), session.trash_journal(), &measured.sizes);
-        Ok((model, measured.walked.files))
+        let model = TrayModel::measured(index, session.tray(), &measured.sizes);
+        Ok((model, measured.walked.files, measured.sizes))
     }
 
     fn replace_with_clone(&mut self) -> Result<Value, String> {
@@ -364,7 +326,7 @@ impl EndToEnd {
             .session_mut()
             .replace_with_clone(keep, copy)
             .map_err(|error| format!("{error:?}"))?;
-        Ok(json!({ "step": "replace_with_clone", "trashed": replaced.trashed }))
+        Ok(json!({ "step": "replace_with_clone", "freed": replaced.freed_bytes }))
     }
 
     fn download_model(&mut self, catalog: &Path, entry: &str, mirror: &str, models: &Path) -> Result<Value, String> {
@@ -552,7 +514,7 @@ impl EndToEnd {
             None => DuplicatesModel::idle(),
         };
         let index = self.session().index().expect("live data follows a scan");
-        let (tray, _) = self.measured_tray()?;
+        let (tray, _, _) = self.measured_tray()?;
         let expansion = Expansion::around(index, focus, NODE_BUDGET);
         let root = index.node(index.root());
         let scan = ScanStatus {
@@ -595,11 +557,9 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::CreateFile { .. } => "create_file",
         ScenarioStep::AwaitChange { .. } => "await_change",
         ScenarioStep::Recommendations => "recommendations",
-        ScenarioStep::TrashRecommendations { .. } => "trash_recommendations",
-        ScenarioStep::RestoreLast => "restore_last",
+        ScenarioStep::DeleteRecommendations { .. } => "delete_recommendations",
         ScenarioStep::FindDuplicates => "find_duplicates",
         ScenarioStep::ReplaceWithClone => "replace_with_clone",
-        ScenarioStep::PurgeTrash => "purge_trash",
         ScenarioStep::DownloadModel { .. } => "download_model",
         ScenarioStep::AskAssistant { .. } => "ask_assistant",
         ScenarioStep::ScrollDiskList { .. } => "scroll_disk_list",

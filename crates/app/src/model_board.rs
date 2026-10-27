@@ -11,7 +11,7 @@ use crate::model_screen_model::ModelScreenModel;
 use crate::shell_actions::ShellActions;
 use crate::shell_button::ShellButton;
 use crate::shell_palette::ShellPalette;
-use crate::strings::{CHANGE, CHOOSE_FILE, DOWNLOAD_SOURCE, ORPHANS, TO_TRASH, UNLOAD_AFTER_IDLE, UNLOAD_EXPLANATION};
+use crate::strings::{CHANGE, CHOOSE_FILE, DELETE, DOWNLOAD_SOURCE, ORPHANS, UNLOAD_AFTER_IDLE, UNLOAD_EXPLANATION};
 use crate::ui_font::{interface_font, mono_font};
 
 const PADDING: f64 = 16.0;
@@ -159,18 +159,18 @@ fn orphan_rows(
                 &tokens.dim.ns_color(),
                 NSLineBreakMode::ByClipping,
             );
-            let trash = ShellButton::new(
+            let delete = ShellButton::new(
                 marker,
-                TO_TRASH,
+                DELETE,
                 NSPoint::ZERO,
                 BUTTON_HEIGHT,
                 ButtonKind::Ghost.small_style(palette),
             );
-            trash.setTag(isize::try_from(position).expect("orphans fit in isize"));
-            trash.on_click(actions, sel!(trashOrphan:));
+            delete.setTag(isize::try_from(position).expect("orphans fit in isize"));
+            delete.on_click(actions, sel!(deleteOrphan:));
             [
                 pinned(path.into_super().into_super()),
-                row_cell(marker, &[&detail, &trash.into_super().into_super().into_super()]),
+                row_cell(marker, &[&detail, &delete.into_super().into_super().into_super()]),
             ]
         })
         .collect()

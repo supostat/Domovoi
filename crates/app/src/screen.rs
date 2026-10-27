@@ -31,7 +31,7 @@ impl Screen {
         Self::Model(ModelVariant::Off),
         Self::Tray(TrayVariant::Measured),
         Self::Tray(TrayVariant::Measuring),
-        Self::Tray(TrayVariant::Purging),
+        Self::Tray(TrayVariant::Deleting),
     ];
 
     pub fn number(self) -> &'static str {
@@ -55,7 +55,7 @@ impl Screen {
             Self::Assistant(Availability::NoModel) => Some("no-model"),
             Self::Assistant(Availability::Off) | Self::Model(ModelVariant::Off) => Some("off"),
             Self::Tray(TrayVariant::Measuring) => Some("measuring"),
-            Self::Tray(TrayVariant::Purging) => Some("purging"),
+            Self::Tray(TrayVariant::Deleting) => Some("deleting"),
             Self::Access
             | Self::Scanning
             | Self::Main

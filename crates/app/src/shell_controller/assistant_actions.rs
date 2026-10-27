@@ -389,9 +389,9 @@ impl ShellController {
         }
     }
 
-    pub(super) fn trash_orphan(&self, position: usize) {
-        let trashed = self.state.borrow_mut().assistant.library.trash_orphan(position);
-        if let Err(error) = trashed {
+    pub(super) fn delete_orphan(&self, position: usize) {
+        let deleted = self.state.borrow_mut().assistant.library.delete_orphan(position);
+        if let Err(error) = deleted {
             self.inform(install_error_text(&error));
         }
         self.show_assistant_change(false);

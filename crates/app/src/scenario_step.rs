@@ -23,13 +23,11 @@ pub enum ScenarioStep {
         heavy_nodes: Option<usize>,
     },
     Recommendations,
-    TrashRecommendations {
+    DeleteRecommendations {
         level: SafetyBadge,
     },
-    RestoreLast,
     FindDuplicates,
     ReplaceWithClone,
-    PurgeTrash,
     DownloadModel {
         catalog: PathBuf,
         entry: String,

@@ -1,8 +1,8 @@
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2::runtime::Sel;
-use objc2_app_kit::{NSAccessibility, NSColor, NSFont, NSLineBreakMode, NSTextField, NSView};
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_app_kit::{NSColor, NSFont, NSLineBreakMode, NSView};
+use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 use crate::button_style::ButtonStyle;
 use crate::fill_view::FillView;
@@ -11,15 +11,11 @@ use crate::shell_actions::ShellActions;
 use crate::shell_button::ShellButton;
 use crate::shell_layout::NARROW_WINDOW;
 use crate::shell_palette::ShellPalette;
-use crate::tracked_caps::tracked_caps;
 use crate::ui_font::interface_font;
 
 pub(crate) const MARGIN: f64 = 28.0;
 const BUTTON_HEIGHT: f64 = 34.0;
 const BUTTON_GAP: f64 = 10.0;
-const CAPS_SIZE: f64 = 10.5;
-const CAPS_TRACKING: f64 = 0.1;
-const CAPS_BUTTON_HEIGHT: f64 = 26.0;
 
 pub(crate) struct TrayColumn<'a> {
     pub(crate) marker: MainThreadMarker,
@@ -43,61 +39,6 @@ impl TrayColumn<'_> {
         let height = field.fittingSize().height;
         self.add(field.into_super().into_super(), MARGIN, NSSize::new(self.width, height));
         self.top += height;
-    }
-
-    pub(crate) fn caps(&mut self, text: &str) {
-        let field = self.caps_field(text);
-        let size = field.fittingSize();
-        self.add(field.into_super().into_super(), MARGIN, size);
-        self.top += size.height;
-    }
-
-    pub(crate) fn caps_with_button(&mut self, text: &str, title: &str, selector: Sel) {
-        let tokens = self.palette.tokens;
-        let field = self.caps_field(text);
-        let button = ShellButton::new(
-            self.marker,
-            title,
-            NSPoint::ZERO,
-            CAPS_BUTTON_HEIGHT,
-            ButtonStyle {
-                fill: None,
-                border: Some(self.palette.line()),
-                text: tokens.text.ns_color(),
-                font: interface_font(12.0, 600.0),
-            },
-        );
-        button.on_click(self.actions, selector);
-        let caps_size = field.fittingSize();
-        let button_size = button.frame().size;
-        let line = caps_size.height.max(button_size.height);
-        self.placed.push((
-            field.into_super().into_super(),
-            MARGIN,
-            self.top + (line - caps_size.height) / 2.0,
-            caps_size,
-        ));
-        self.placed.push((
-            button.into_super().into_super().into_super(),
-            MARGIN + self.width - button_size.width,
-            self.top + (line - button_size.height) / 2.0,
-            button_size,
-        ));
-        self.top += line;
-    }
-
-    fn caps_field(&self, text: &str) -> Retained<NSTextField> {
-        let color = self.palette.tokens.dim.ns_color();
-        let field = label(
-            self.marker,
-            "",
-            &interface_font(CAPS_SIZE, 600.0),
-            &color,
-            NSLineBreakMode::ByClipping,
-        );
-        field.setAttributedStringValue(&tracked_caps(text, CAPS_SIZE, CAPS_TRACKING, &color));
-        field.setAccessibilityLabel(Some(&NSString::from_str(text)));
-        field
     }
 
     pub(crate) fn buttons(&mut self, buttons: &[(&str, Sel, bool)]) -> Retained<ShellButton> {

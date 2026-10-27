@@ -15,12 +15,12 @@ use domovoi_dups::{
 };
 use domovoi_index::{
     CacheError, CacheHeader, ChangedPath, DeltaApplied, DirectoryListing, Enrichment, Index, IndexRoot, ModelEvent,
-    NodeId, open_cache, write_cache,
+    NodeId, Reclaimable, open_cache, write_cache,
 };
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_rules::{
-    CaseRule, ConfigOverrides, Denylist, JournalEntry, Recommendations, RestoreError, RuleSet, TrashJournal,
-    TrashOutcome, Tray, running_bundle_ids,
+    CaseRule, ConfigOverrides, DeleteRefusal, DeleteReport, DeleteSubject, Denylist, Recommendations, RuleSet, Tray,
+    running_bundle_ids,
 };
 use domovoi_scanner::{
     CancelToken, ScanError, ScanOptions, ScanProgress, Since, VolumeEvent, VolumeEventStream, current_event_id, scan,
@@ -49,7 +49,6 @@ pub struct Session {
     recommendations: Option<Recommendations>,
     duplicates: Option<Duplicates>,
     tray: Tray,
-    trash_journal: TrashJournal,
     clone_journal: CloneJournal,
     last_event_id: u64,
     workers: NonZeroUsize,
@@ -58,9 +57,8 @@ pub struct Session {
 impl Session {
     pub fn open(root: &Path, paths: &SessionPaths, app_version: &str) -> io::Result<Self> {
         paths.create_directories()?;
-        let mut trash_journal = TrashJournal::open(&paths.trash_journal)?;
         let mut clone_journal = CloneJournal::open(&paths.clone_journal)?;
-        clone_journal.sweep(&mut trash_journal)?;
+        clone_journal.sweep()?;
         Ok(Self {
             root: root.to_path_buf(),
             paths: paths.clone(),
@@ -73,7 +71,6 @@ impl Session {
             recommendations: None,
             duplicates: None,
             tray: Tray::default(),
-            trash_journal,
             clone_journal,
             last_event_id: 0,
             workers: thread::available_parallelism()?,
@@ -106,10 +103,6 @@ impl Session {
 
     pub fn tray(&self) -> &Tray {
         &self.tray
-    }
-
-    pub fn trash_journal(&self) -> &TrashJournal {
-        &self.trash_journal
     }
 
     pub fn last_event_id(&self) -> u64 {
@@ -334,37 +327,22 @@ impl Session {
         self.tray.remove(node);
     }
 
-    pub fn move_tray_to_trash(&mut self) -> Result<Vec<TrashOutcome>, SessionError> {
+    pub fn take_tray_for_delete(&mut self, sizes: &[Reclaimable]) -> (Vec<DeleteSubject>, Vec<DeleteRefusal>) {
         let index = self
             .index
             .as_ref()
             .expect("the tray collects nodes of a scanned volume");
-        let outcomes = self
-            .tray
-            .move_to_trash(index, &self.denylist, &mut self.trash_journal)
-            .map_err(SessionError::Io)?;
-        let moved: Vec<PathBuf> = outcomes
+        self.tray.take_for_delete(index, &self.denylist, sizes)
+    }
+
+    pub fn settle_delete(&mut self, report: &DeleteReport) -> Result<(), SessionError> {
+        let gone: Vec<PathBuf> = report
+            .deleted
             .iter()
-            .filter(|outcome| outcome.result.is_ok())
-            .map(|outcome| outcome.path.clone())
+            .chain(&report.interrupted)
+            .map(|subject| subject.path.clone())
             .collect();
-        self.rescan_paths(&moved)?;
-        Ok(outcomes)
-    }
-
-    pub fn take_for_purge(&mut self) -> io::Result<Vec<JournalEntry>> {
-        self.trash_journal.take_for_purge()
-    }
-
-    pub fn return_untouched(&mut self, untouched: Vec<JournalEntry>) -> io::Result<()> {
-        self.trash_journal.return_untouched(untouched)
-    }
-
-    pub fn restore(&mut self, position: usize) -> Result<PathBuf, RestoreError> {
-        let restored = self.trash_journal.restore(position)?;
-        self.rescan_paths(std::slice::from_ref(&restored))
-            .map_err(|error| RestoreError::Io(io::Error::other(error.to_string())))?;
-        Ok(restored)
+        self.rescan_paths(&gone)
     }
 
     pub fn clone_plan(&self, keep: NodeId, copy: NodeId) -> Result<ClonePlan, CloneReplaceError> {
@@ -375,9 +353,7 @@ impl Session {
     pub fn replace_with_clone(&mut self, keep: NodeId, copy: NodeId) -> Result<CloneReplaced, CloneReplaceError> {
         let index = self.index.as_ref().expect("clones replace copies of a scanned volume");
         let copy_path = index.path(copy);
-        let replaced = self
-            .clone_plan(keep, copy)?
-            .execute(&mut self.trash_journal, &mut self.clone_journal)?;
+        let replaced = self.clone_plan(keep, copy)?.execute(&mut self.clone_journal)?;
         self.rescan_paths(&[copy_path])
             .map_err(|error| CloneReplaceError::Io(io::Error::other(error.to_string())))?;
         Ok(replaced)

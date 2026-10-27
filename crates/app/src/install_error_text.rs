@@ -13,6 +13,6 @@ pub(crate) fn install_error_text(error: &InstallError) -> &'static str {
         InstallError::SizeMismatch { .. } => INSTALL_SIZE_MISMATCH,
         InstallError::UnexpectedStatus(_) | InstallError::AccessDenied => INSTALL_REFUSED,
         InstallError::Network(_) => INSTALL_NETWORK,
-        InstallError::Io(_) | InstallError::Trash(_) => INSTALL_DISK,
+        InstallError::Io(_) | InstallError::Delete(_) => INSTALL_DISK,
     }
 }

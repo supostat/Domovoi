@@ -2,5 +2,5 @@
 pub enum TrayVariant {
     Measured,
     Measuring,
-    Purging,
+    Deleting,
 }

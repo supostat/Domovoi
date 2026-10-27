@@ -4,10 +4,11 @@ use std::process::Command;
 use std::time::SystemTime;
 
 use domovoi_app::{
-    DuplicatesModel, Provenance, RecommendationsModel, SafetyBadge, Session, SessionPaths, TrayMeasureJob, TrayModel,
-    strings,
+    DeleteOutcome, DuplicatesModel, Provenance, RecommendationsModel, SafetyBadge, Session, SessionPaths,
+    TrayMeasureJob, TrayModel, strings,
 };
 use domovoi_index::Reclaimable;
+use domovoi_rules::delete;
 use domovoi_scanner::CancelToken;
 use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat};
 
@@ -40,9 +41,9 @@ fn populate(root: &Path) {
     assert!(cloned.success(), "the clone is made");
 }
 
-fn estimated_then_measured_tray(session: &Session, title: &str) -> (TrayModel, TrayModel) {
+fn estimated_then_measured_tray(session: &Session, title: &str) -> (TrayModel, TrayModel, Vec<Reclaimable>) {
     let index = session.index().expect("the index stays");
-    let estimated = TrayModel::estimated(index, session.tray(), session.trash_journal());
+    let estimated = TrayModel::estimated(index, session.tray());
     assert_eq!(estimated.rows.len(), 1);
     assert_eq!(estimated.rows[0].title, title);
     assert!(estimated.total() >= BUILD_OUTPUT as u64);
@@ -64,10 +65,10 @@ fn estimated_then_measured_tray(session: &Session, title: &str) -> (TrayModel, T
         .map(|item| index.reclaimable(item.node).expect("the index measures the item"))
         .collect();
     assert_eq!(exact, indexed);
-    let measured = TrayModel::measured(index, session.tray(), session.trash_journal(), &exact);
+    let measured = TrayModel::measured(index, session.tray(), &exact);
     assert!(measured.measuring.is_none());
     assert_eq!(measured.rows[0].title, title);
-    (estimated, measured)
+    (estimated, measured, exact)
 }
 
 #[test]
@@ -131,22 +132,32 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
     for target in &targets {
         session.add_to_tray(target.node, target.rule_id.as_deref());
     }
-    let (estimated, measured) = estimated_then_measured_tray(&session, &card.title);
-    let moved = measured.total();
-    let outcomes = session.move_tray_to_trash().expect("the tray moves to the Trash");
-    assert!(outcomes.iter().all(|outcome| outcome.result.is_ok()), "{outcomes:?}");
-    assert!(!mount_point.join("Projects/demo/target").exists());
-    let unmeasured = estimated.with_outcome(&outcomes, session.trash_journal());
-    assert_eq!(unmeasured.outcome.as_ref().map(|outcome| outcome.estimated), Some(true));
-    let after = measured.with_outcome(&outcomes, session.trash_journal());
-    assert_eq!(after.outcome.as_ref().map(|outcome| outcome.moved), Some(moved));
-    assert_eq!(after.outcome.as_ref().map(|outcome| outcome.estimated), Some(false));
-    assert_eq!(after.journal.len(), 1);
-    assert_eq!(after.journal[0].title, card.title);
+    let (estimated, measured, sizes) = estimated_then_measured_tray(&session, &card.title);
+    let expected = measured.total();
+    let (subjects, refusals) = session.take_tray_for_delete(&sizes);
+    assert!(refusals.is_empty(), "{refusals:?}");
+    assert!(session.tray().items().is_empty(), "taking empties the tray");
+    let report = delete(subjects.clone(), &CancelToken::default(), &|_| {});
+    assert_eq!(report.deleted, subjects);
+    assert_eq!(report.freed_bytes, expected);
     session
-        .restore(after.journal[0].position)
-        .expect("the build output comes back");
-    assert!(mount_point.join("Projects/demo/target/debug/demo").exists());
+        .settle_delete(&report)
+        .expect("the index forgets the deleted paths");
+    assert!(!mount_point.join("Projects/demo/target").exists());
+    assert!(
+        session
+            .index()
+            .expect("the index stays")
+            .find(&mount_point.join("Projects/demo/target"))
+            .is_none(),
+        "the deleted folder leaves the index"
+    );
+    let outcome = DeleteOutcome::from_report(&report, &refusals);
+    assert_eq!(outcome.objects, subjects.len());
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+    let after = measured.with_deleted(outcome);
+    assert_eq!(after.deleted.as_ref().map(|outcome| outcome.freed), Some(expected));
+    assert!(estimated.measuring.is_some() && after.measuring.is_none());
 
     session
         .replace_with_clone(keep, copy)

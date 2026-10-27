@@ -122,10 +122,10 @@ pub const CANDIDATES: PluralForms = PluralForms {
 };
 pub const MINUTES_SHORT: &str = "мин";
 pub const SECONDS_SHORT: &str = "с";
-pub const ACTION_TRASH: &str = "В Корзину";
+pub const ACTION_DELETE: &str = "Удалить";
 pub const ACTION_CLONE: &str = "Заменить клоном";
 pub const CLONE_EXPLANATION: &str = "Имена остаются, место общее. Изменение любой копии снова занимает место.";
-pub const DUPLICATES_NOTE: &str = "По умолчанию копии уходят в Корзину. «Заменить клоном» — явное действие для группы: доступно, когда копия одна на своём иноде, принадлежит вам, не открыта и не лежит в пакете или облачной папке.";
+pub const DUPLICATES_NOTE: &str = "По умолчанию копии удаляются окончательно. «Заменить клоном» — явное действие для группы: доступно, когда копия одна на своём иноде, принадлежит вам, не открыта и не лежит в пакете или облачной папке.";
 pub const OTHER_USERS_FILES: &str = "Открытые файлы других пользователей не видны — закройте их сами.";
 pub const KEEP: &str = "оставить";
 pub const APFS_CLONE: &str = "клон APFS";
@@ -158,12 +158,12 @@ pub const REFUSED_ALREADY_CLONES: &str = "уже клоны";
 pub const REFUSED_CHANGED: &str = "содержимое изменилось";
 pub const REFUSED_UNREADABLE: &str = "файл не читается";
 
-pub const WILL_MOVE: &str = "Будет перемещено в Корзину";
-pub const TRAY_NOTE: &str =
-    "Файлы можно вернуть из Корзины Finder, пока она не очищена. Место освободится после очистки Корзины.";
+pub const WILL_DELETE: &str = "Будет удалено";
+pub const TRAY_NOTE: &str = "Удаление необратимо: файлы не попадают в Корзину. Перед стартом Домовой спросит ещё раз.";
 pub const CANCEL: &str = "Отмена";
-pub const MOVE_TO_TRASH: &str = "Переместить в Корзину";
-pub const MOVED_TO_TRASH: &str = "Перемещено в Корзину:";
+pub const DELETE: &str = "Удалить";
+pub const DELETE_CONFIRM: &str = "Удалить";
+pub const DELETE_CONFIRM_HINT: &str = "Вернуть их будет нельзя.";
 pub const ESTIMATE_MARK: &str = "≈";
 pub const REFINING_SIZE: &str = "Уточняю размер:";
 pub const UPDATING_INDEX: &str = "Обновляю индекс…";
@@ -172,41 +172,30 @@ pub const FILES: PluralForms = PluralForms {
     few: "файла",
     many: "файлов",
 };
-pub const FREED_AFTER_EMPTYING: &str = "Место освободится после очистки Корзины.";
-pub const OPEN_TRASH: &str = "Открыть Корзину";
 pub const CLOSE: &str = "Закрыть";
-pub const RECENTLY_MOVED: &str = "Недавно перемещённые";
-pub const RESTORE: &str = "Вернуть";
-pub const NOT_MOVED: &str = "Не перемещено:";
-pub const PURGE: &str = "Удалить окончательно";
-pub const PURGE_CONFIRM: &str = "Удалить окончательно перенесённое Домовым?";
-pub const PURGE_CONFIRM_HINT: &str = "Вернуть его будет нельзя.";
-pub const PURGE_ACCEPT: &str = "Удалить";
-pub const PURGING: &str = "Удаляю:";
-pub const PURGED: &str = "Удалено окончательно:";
-pub const NOT_PURGED: &str = "Не удалено:";
-pub const PURGE_ITEMS: PluralForms = PluralForms {
+pub const DELETING: &str = "Удаляю:";
+pub const DELETED: &str = "Удалено:";
+pub const FREED: &str = "освобождено";
+pub const NOT_DELETED: &str = "Не удалено:";
+pub const DELETE_UNITS: PluralForms = PluralForms {
     one: "элемента",
     few: "элементов",
     many: "элементов",
 };
-pub const PURGED_OBJECTS: PluralForms = PluralForms {
+pub const OBJECTS: PluralForms = PluralForms {
     one: "объект",
     few: "объекта",
     many: "объектов",
 };
 pub const TRAY_EMPTY: &str =
     "Корзина Домового пуста. Отметьте рекомендации или копии дубликатов, и они соберутся здесь.";
-pub const TRASH_NO_PERMISSION: &str = "нет прав";
-pub const TRASH_READ_ONLY: &str = "том только для чтения";
-pub const TRASH_MISSING: &str = "файла уже нет";
-pub const TRASH_NO_TRASH: &str = "у тома нет Корзины";
-pub const TRASH_OUT_OF_SPACE: &str = "не хватило места";
-pub const TRASH_OTHER: &str = "macOS отказала";
-pub const RESTORE_NOT_IN_TRASH: &str = "Файла уже нет в Корзине";
-pub const RESTORE_REPLACED: &str = "В Корзине на его месте уже другой файл";
-pub const RESTORE_PARENT_MISSING: &str = "Исходной папки больше нет";
-pub const RESTORE_FAILED: &str = "Не удалось вернуть";
+pub const DELETE_NO_PERMISSION: &str = "нет прав";
+pub const DELETE_READ_ONLY: &str = "том только для чтения";
+pub const DELETE_MISSING: &str = "файла уже нет";
+pub const DELETE_REPLACED: &str = "на его месте уже другой файл";
+pub const DELETE_OTHER: &str = "macOS отказала";
+pub const STOPPED_MIDWAY: &str = "остановлено на середине";
+pub const NOT_STARTED: &str = "не начато";
 pub const CLONED: &str = "Заменено клоном:";
 pub const NOT_CLONED: &str = "Не заменено:";
 
@@ -309,7 +298,6 @@ pub const SOURCE_NOT_HTTPS: &str = "Зеркало должно начинать
 pub const ORPHANS: &str = "Лишние файлы в папке моделей";
 pub const ORPHAN_NOT_IN_CATALOG: &str = "нет в каталоге";
 pub const ORPHAN_DIGEST_MISMATCH: &str = "SHA-256 не совпадает";
-pub const TO_TRASH: &str = "В Корзину";
 pub const CATALOG_NOTE: &str = "Каталог — семейство ChatML, веса Apache-2.0:";
 pub const FILE_NOT_IN_CATALOG: &str = "Файл не совпадает ни с одной моделью каталога.";
 pub const INSTALL_SIZE_MISMATCH: &str = "размер файла не совпадает с каталогом";

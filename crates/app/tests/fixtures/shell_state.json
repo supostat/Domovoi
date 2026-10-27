@@ -562,26 +562,14 @@
     }
    ],
    "held_by_snapshots": 2400000000,
-   "held_by_clones": 1200000000,
-   "journal": [
-    {
-     "title": "Установщики в Загрузках",
-     "path": "~/Downloads/Slack-4.41.dmg",
-     "size": 612000000
-    },
-    {
-     "title": "Кэш Homebrew",
-     "path": "~/Library/Caches/Homebrew/downloads",
-     "size": 1300000000
-    }
-   ]
+   "held_by_clones": 1200000000
   }
  },
   "tray_measuring": {
     "files": 182340,
     "bytes": 41800000000
   },
-  "tray_purging": {
+  "tray_deleting": {
     "done": 1200,
     "total": 3400
   },

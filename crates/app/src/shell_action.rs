@@ -22,12 +22,9 @@ pub enum ShellAction {
     SelectDuplicateAction(bool),
     ToggleCopy(usize),
     ApplyDuplicates,
-    ConfirmTray,
+    DeleteTray,
+    StopDelete,
     CloseTray,
-    OpenTrash,
-    Restore(usize),
-    PurgeTrash,
-    StopPurge,
     AskAssistant,
     StopAnswer,
     AddAnswerToTray(usize),
@@ -43,7 +40,7 @@ pub enum ShellAction {
     SelectUnloadDelay(usize),
     ChangeSource,
     ChooseModelFile,
-    TrashOrphan(usize),
+    DeleteOrphan(usize),
 }
 
 impl ShellAction {
@@ -53,10 +50,8 @@ impl ShellAction {
             Self::Rescan
                 | Self::OpenTray
                 | Self::SendCardsToTray
-                | Self::ConfirmTray
+                | Self::DeleteTray
                 | Self::AddAnswerToTray(_)
-                | Self::Restore(_)
-                | Self::PurgeTrash
                 | Self::ToggleDuplicateSearch
                 | Self::ApplyDuplicates
                 | Self::AskAssistant

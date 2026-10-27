@@ -1,24 +1,24 @@
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
-use domovoi_rules::{JournalEntry, PurgeProgress, PurgeReport, purge};
+use domovoi_rules::{DeleteProgress, DeleteReport, DeleteSubject, delete};
 use domovoi_scanner::CancelToken;
 
 #[derive(Debug)]
-pub struct PurgeJob {
-    thread: Option<JoinHandle<PurgeReport>>,
-    latest: Arc<Mutex<PurgeProgress>>,
+pub struct DeleteJob {
+    thread: Option<JoinHandle<DeleteReport>>,
+    latest: Arc<Mutex<DeleteProgress>>,
     cancel: CancelToken,
 }
 
-impl PurgeJob {
-    pub fn start(entries: Vec<JournalEntry>) -> Self {
-        let latest = Arc::new(Mutex::new(PurgeProgress::default()));
+impl DeleteJob {
+    pub fn start(subjects: Vec<DeleteSubject>) -> Self {
+        let latest = Arc::new(Mutex::new(DeleteProgress::default()));
         let cancel = CancelToken::default();
         let thread = {
             let cancel = cancel.clone();
             let latest = Arc::clone(&latest);
-            thread::spawn(move || purge(entries, &cancel, &|step| keep_furthest(&latest, step)))
+            thread::spawn(move || delete(subjects, &cancel, &|step| keep_furthest(&latest, step)))
         };
         Self {
             thread: Some(thread),
@@ -27,7 +27,7 @@ impl PurgeJob {
         }
     }
 
-    pub fn progress(&self) -> PurgeProgress {
+    pub fn progress(&self) -> DeleteProgress {
         *self.latest.lock().expect("the progress is not poisoned")
     }
 
@@ -39,18 +39,18 @@ impl PurgeJob {
         self.cancel.cancel();
     }
 
-    pub fn finish(mut self) -> PurgeReport {
+    pub fn finish(mut self) -> DeleteReport {
         self.thread
             .take()
-            .expect("a purge finishes once")
+            .expect("a delete finishes once")
             .join()
-            .expect("the purging thread does not panic")
+            .expect("the deleting thread does not panic")
     }
 }
 
-fn keep_furthest(latest: &Mutex<PurgeProgress>, step: PurgeProgress) {
+fn keep_furthest(latest: &Mutex<DeleteProgress>, step: DeleteProgress) {
     let mut latest = latest.lock().expect("the progress is not poisoned");
-    if (step.done, step.entries_done) >= (latest.done, latest.entries_done) {
+    if (step.done, step.subjects_done) >= (latest.done, latest.subjects_done) {
         *latest = step;
     }
 }

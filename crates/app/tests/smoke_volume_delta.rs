@@ -7,9 +7,10 @@ use std::time::{Duration, Instant};
 
 use domovoi_app::{
     ApplyJob, EventEffect, EventQueue, EventRequest, HEAVY_DELTA_NODES, PendingDelta, Session, SessionError,
-    SessionPaths,
+    SessionPaths, TrayModel,
 };
 use domovoi_index::{DirectoryListing, Reclaimable};
+use domovoi_rules::delete;
 use domovoi_scanner::{CancelToken, ScanOptions, VolumeEvent};
 use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat, test_timeout};
 
@@ -100,15 +101,18 @@ fn batch_touching(events: &Receiver<VolumeEvent>, folder: &Path) -> Vec<VolumeEv
     batch
 }
 
-fn trash(session: &mut Session, path: &Path) {
-    let node = session
-        .index()
-        .expect("the volume is scanned")
-        .find(path)
-        .expect("the folder is indexed");
+fn delete_folder(session: &mut Session, path: &Path) {
+    let index = session.index().expect("the volume is scanned");
+    let node = index.find(path).expect("the folder is indexed");
     session.add_to_tray(node, None);
-    let outcomes = session.move_tray_to_trash().expect("the tray moves to the Trash");
-    assert!(outcomes.iter().all(|outcome| outcome.result.is_ok()), "{outcomes:?}");
+    let sizes = TrayModel::estimated_sizes(session.index().expect("the volume is scanned"), session.tray());
+    let (subjects, refusals) = session.take_tray_for_delete(&sizes);
+    assert!(refusals.is_empty(), "{refusals:?}");
+    let report = delete(subjects, &CancelToken::default(), &|_| {});
+    assert!(report.failed.is_empty(), "{report:?}");
+    session
+        .settle_delete(&report)
+        .expect("the index forgets the deleted folder");
 }
 
 fn indexed(session: &Session, path: &Path) -> bool {
@@ -177,7 +181,7 @@ fn volume_events_reach_the_index_through_background_reads() {
         panic!("the volume asked for a full rescan: {batch:?}");
     };
     let listings = read_in_another_thread(&pending);
-    trash(&mut session, &modules);
+    delete_folder(&mut session, &modules);
     assert!(matches!(
         session.apply_listings(&pending, listings),
         Err(SessionError::Stale(_))
@@ -213,7 +217,7 @@ fn the_event_queue_reads_in_the_background_and_retries_a_stale_delta() {
         EventEffect::Ignored
     );
     assert!(queue.is_reading(), "the read runs while the main thread goes on");
-    trash(&mut session, &modules);
+    delete_folder(&mut session, &modules);
     let deadline = Instant::now() + test_timeout();
     while !queue.is_idle() {
         assert!(Instant::now() < deadline, "the queue did not drain in time");

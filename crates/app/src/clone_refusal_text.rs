@@ -26,6 +26,6 @@ pub(crate) fn clone_refusal_text(error: &CloneReplaceError) -> &'static str {
             CloneRefusal::AlreadyClones => REFUSED_ALREADY_CLONES,
             CloneRefusal::ContentChanged => REFUSED_CHANGED,
         },
-        CloneReplaceError::OldBodyNotTrashed { .. } | CloneReplaceError::Io(_) => REFUSED_UNREADABLE,
+        CloneReplaceError::OldBodyNotDeleted { .. } | CloneReplaceError::Io(_) => REFUSED_UNREADABLE,
     }
 }

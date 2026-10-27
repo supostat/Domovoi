@@ -206,7 +206,7 @@ impl ModelLibrary {
         Ok(Some(event))
     }
 
-    pub fn trash_orphan(&mut self, position: usize) -> Result<(), InstallError> {
+    pub fn delete_orphan(&mut self, position: usize) -> Result<(), InstallError> {
         let Some(report) = self.report.as_mut() else {
             return Ok(());
         };

@@ -104,34 +104,19 @@ define_class!(
             self.dispatch(ShellAction::ApplyDuplicates);
         }
 
-        #[unsafe(method(confirmTray:))]
-        fn confirm_tray(&self, _sender: Option<&AnyObject>) {
-            self.dispatch(ShellAction::ConfirmTray);
+        #[unsafe(method(deleteTray:))]
+        fn delete_tray(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::DeleteTray);
+        }
+
+        #[unsafe(method(stopDelete:))]
+        fn stop_delete(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::StopDelete);
         }
 
         #[unsafe(method(closeTray:))]
         fn close_tray(&self, _sender: Option<&AnyObject>) {
             self.dispatch(ShellAction::CloseTray);
-        }
-
-        #[unsafe(method(openTrash:))]
-        fn open_trash(&self, _sender: Option<&AnyObject>) {
-            self.dispatch(ShellAction::OpenTrash);
-        }
-
-        #[unsafe(method(purgeTrash:))]
-        fn purge_trash(&self, _sender: Option<&AnyObject>) {
-            self.dispatch(ShellAction::PurgeTrash);
-        }
-
-        #[unsafe(method(stopPurge:))]
-        fn stop_purge(&self, _sender: Option<&AnyObject>) {
-            self.dispatch(ShellAction::StopPurge);
-        }
-
-        #[unsafe(method(restore:))]
-        fn restore(&self, sender: &AnyObject) {
-            self.dispatch(ShellAction::Restore(tag_of(sender)));
         }
 
         #[unsafe(method(askAssistant:))]
@@ -210,9 +195,9 @@ define_class!(
             self.dispatch(ShellAction::ChooseModelFile);
         }
 
-        #[unsafe(method(trashOrphan:))]
-        fn trash_orphan(&self, sender: &AnyObject) {
-            self.dispatch(ShellAction::TrashOrphan(tag_of(sender)));
+        #[unsafe(method(deleteOrphan:))]
+        fn delete_orphan(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::DeleteOrphan(tag_of(sender)));
         }
 
         #[unsafe(method(focusNode:))]

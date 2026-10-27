@@ -30,7 +30,7 @@ use crate::shell_data::ShellData;
 use crate::shell_layout::{PANE_PADDING, WINDOW, from_top};
 use crate::shell_palette::ShellPalette;
 use crate::strings::{
-    ACTION_CLONE, ACTION_TRASH, CLONE_EXPLANATION, DUPLICATES, DUPLICATES_IDLE, DUPLICATES_NOTE, FIND_DUPLICATES,
+    ACTION_CLONE, ACTION_DELETE, CLONE_EXPLANATION, DUPLICATES, DUPLICATES_IDLE, DUPLICATES_NOTE, FIND_DUPLICATES,
     NO_DUPLICATES, OF, OTHER_USERS_FILES, STOP, TO_TRAY,
 };
 use crate::toggle_switch::{SIZE as TOGGLE_SIZE, ToggleSwitch};
@@ -233,7 +233,7 @@ fn head_controls(
     let action = (!groups.is_empty()).then(|| {
         let switch = SegmentedSwitch::build(
             marker,
-            &[(ACTION_TRASH, true), (ACTION_CLONE, model.clone_available())],
+            &[(ACTION_DELETE, true), (ACTION_CLONE, model.clone_available())],
             if model.clone_mode { CLONE_SEGMENT } else { TRASH_SEGMENT },
             palette,
             (actions, sel!(selectDuplicateAction:)),

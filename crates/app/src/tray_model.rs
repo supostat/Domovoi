@@ -1,25 +1,17 @@
 use std::path::Path;
 
 use domovoi_index::{Index, Reclaimable};
-use domovoi_rules::{TrashFailure, TrashJournal, TrashOutcome, Tray};
+use domovoi_rules::Tray;
 use domovoi_theme::{format_count, group_thousands};
 use serde::Deserialize;
 
-use crate::deny_reason_text::deny_reason_text;
+use crate::delete_outcome::DeleteOutcome;
+use crate::delete_status::DeleteStatus;
 use crate::held_line::held_line;
-use crate::journal_row::JournalRow;
 use crate::measure_progress::MeasureProgress;
-use crate::purge_outcome::PurgeOutcome;
-use crate::purge_status::PurgeStatus;
-use crate::strings::{
-    FILES, OF, PURGE_ITEMS, PURGED, PURGED_OBJECTS, PURGING, REFINING_SIZE, TRASH_MISSING, TRASH_NO_PERMISSION,
-    TRASH_NO_TRASH, TRASH_OTHER, TRASH_OUT_OF_SPACE, TRASH_READ_ONLY, rule_title,
-};
+use crate::strings::{DELETE_UNITS, DELETING, FILES, OF, REFINING_SIZE, rule_title};
 use crate::tilde::tilde;
-use crate::tray_outcome::TrayOutcome;
 use crate::tray_row::TrayRow;
-
-pub(crate) const RECENT_LIMIT: usize = 5;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -34,19 +26,14 @@ pub struct TrayModel {
     #[serde(default)]
     pub measuring: Option<MeasureProgress>,
     #[serde(default)]
-    pub outcome: Option<TrayOutcome>,
+    pub deleting: Option<DeleteStatus>,
     #[serde(default)]
-    pub journal: Vec<JournalRow>,
-    #[serde(default)]
-    pub purging: Option<PurgeStatus>,
-    #[serde(default)]
-    pub purged: Option<PurgeOutcome>,
+    pub deleted: Option<DeleteOutcome>,
 }
 
 impl TrayModel {
-    pub fn estimated(index: &Index, tray: &Tray, journal: &TrashJournal) -> Self {
-        Self::measured(index, tray, journal, &Self::estimated_sizes(index, tray))
-            .with_progress(MeasureProgress::default())
+    pub fn estimated(index: &Index, tray: &Tray) -> Self {
+        Self::measured(index, tray, &Self::estimated_sizes(index, tray)).with_progress(MeasureProgress::default())
     }
 
     pub fn estimated_sizes(index: &Index, tray: &Tray) -> Vec<Reclaimable> {
@@ -56,7 +43,7 @@ impl TrayModel {
             .collect()
     }
 
-    pub fn measured(index: &Index, tray: &Tray, journal: &TrashJournal, sizes: &[Reclaimable]) -> Self {
+    pub fn measured(index: &Index, tray: &Tray, sizes: &[Reclaimable]) -> Self {
         let mut rows: Vec<(Option<String>, TrayRow)> = Vec::new();
         let mut held = Reclaimable::default();
         for (item, reclaimable) in tray.items().iter().zip(sizes.iter().copied()) {
@@ -88,10 +75,8 @@ impl TrayModel {
             held_by_clones: held.held_by_clones,
             held_by_hard_links: held.held_by_hard_links,
             measuring: None,
-            outcome: None,
-            journal: journal_rows(journal),
-            purging: None,
-            purged: None,
+            deleting: None,
+            deleted: None,
         }
     }
 
@@ -107,33 +92,28 @@ impl TrayModel {
     }
 
     #[must_use]
-    pub fn with_purge(mut self, status: PurgeStatus) -> Self {
-        self.purging = Some(status);
+    pub fn with_deleting(mut self, status: DeleteStatus) -> Self {
+        self.measuring = None;
+        self.deleting = Some(status);
         self
     }
 
-    #[must_use]
-    pub fn with_purged(mut self, outcome: PurgeOutcome, journal: &TrashJournal) -> Self {
-        self.purging = None;
-        self.purged = Some(outcome);
-        self.journal = journal_rows(journal);
-        self
-    }
-
-    pub fn purging_line(&self) -> Option<String> {
-        self.purging.map(|status| {
+    pub fn deleting_line(&self) -> Option<String> {
+        self.deleting.map(|status| {
             format!(
-                "{PURGING} {} {OF} {}",
+                "{DELETING} {} {OF} {}",
                 group_thousands(status.done as u64),
-                format_count(status.total as u64, &PURGE_ITEMS)
+                format_count(status.total as u64, &DELETE_UNITS)
             )
         })
     }
 
-    pub fn purged_line(&self) -> Option<String> {
-        self.purged
-            .as_ref()
-            .map(|outcome| format!("{PURGED} {}", format_count(outcome.removed as u64, &PURGED_OBJECTS)))
+    #[must_use]
+    pub fn with_deleted(mut self, outcome: DeleteOutcome) -> Self {
+        self.measuring = None;
+        self.deleting = None;
+        self.deleted = Some(outcome);
+        self
     }
 
     pub fn total(&self) -> u64 {
@@ -143,60 +123,9 @@ impl TrayModel {
     pub fn held_line(&self) -> Option<String> {
         held_line(self.held_by_snapshots, self.held_by_clones, self.held_by_hard_links)
     }
-
-    #[must_use]
-    pub fn with_outcome(mut self, outcomes: &[TrashOutcome], journal: &TrashJournal) -> Self {
-        let failures = outcomes
-            .iter()
-            .filter_map(|outcome| match &outcome.result {
-                Ok(_) => None,
-                Err(failure) => Some(format!("{} — {}", tilde(&outcome.path), failure_text(failure))),
-            })
-            .collect();
-        self.outcome = Some(TrayOutcome {
-            moved: self.total(),
-            estimated: self.measuring.is_some(),
-            failures,
-        });
-        self.measuring = None;
-        self.journal = journal_rows(journal);
-        self
-    }
-}
-
-fn journal_rows(journal: &TrashJournal) -> Vec<JournalRow> {
-    journal
-        .entries()
-        .iter()
-        .enumerate()
-        .rev()
-        .take(RECENT_LIMIT)
-        .map(|(position, entry)| JournalRow {
-            title: entry
-                .rule_id
-                .as_deref()
-                .and_then(rule_title)
-                .map_or_else(|| file_name(Path::new(&entry.original)), str::to_owned),
-            path: tilde(Path::new(&entry.original)),
-            size: entry.alloc_size,
-            position,
-        })
-        .collect()
 }
 
 fn file_name(path: &Path) -> String {
     path.file_name()
         .map_or_else(|| tilde(path), |name| name.to_string_lossy().into_owned())
-}
-
-fn failure_text(failure: &TrashFailure) -> &'static str {
-    match failure {
-        TrashFailure::Denied(reason) => deny_reason_text(reason),
-        TrashFailure::NoPermission => TRASH_NO_PERMISSION,
-        TrashFailure::ReadOnlyVolume => TRASH_READ_ONLY,
-        TrashFailure::Missing => TRASH_MISSING,
-        TrashFailure::NoTrashOnVolume => TRASH_NO_TRASH,
-        TrashFailure::OutOfSpace => TRASH_OUT_OF_SPACE,
-        TrashFailure::Other { .. } => TRASH_OTHER,
-    }
 }

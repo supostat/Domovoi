@@ -1,20 +1,18 @@
 use domovoi_app::{Section, ShellAction, ShellGate};
 use domovoi_render::DiagramMode;
 
-const SESSION_ACTIONS: [ShellAction; 10] = [
+const SESSION_ACTIONS: [ShellAction; 8] = [
     ShellAction::Rescan,
     ShellAction::SendCardsToTray,
     ShellAction::OpenTray,
-    ShellAction::ConfirmTray,
+    ShellAction::DeleteTray,
     ShellAction::AddAnswerToTray(0),
-    ShellAction::Restore(0),
-    ShellAction::PurgeTrash,
     ShellAction::ToggleDuplicateSearch,
     ShellAction::ApplyDuplicates,
     ShellAction::AskAssistant,
 ];
 
-const FREE_ACTIONS: [ShellAction; 14] = [
+const FREE_ACTIONS: [ShellAction; 13] = [
     ShellAction::Navigate(Section::Disk),
     ShellAction::Navigate(Section::Recommendations),
     ShellAction::Navigate(Section::Duplicates),
@@ -25,10 +23,9 @@ const FREE_ACTIONS: [ShellAction; 14] = [
     ShellAction::ToggleCopy(0),
     ShellAction::SelectDuplicateAction(true),
     ShellAction::CloseTray,
-    ShellAction::OpenTrash,
     ShellAction::StopAnswer,
     ShellAction::StopScan,
-    ShellAction::StopPurge,
+    ShellAction::StopDelete,
 ];
 
 const IDLE: ShellGate = ShellGate {
@@ -44,7 +41,7 @@ const BUSY: ShellGate = ShellGate {
 };
 
 #[test]
-fn the_rescan_tray_restore_duplicates_and_questions_wait_for_the_session() {
+fn the_rescan_tray_delete_duplicates_and_questions_wait_for_the_session() {
     for action in SESSION_ACTIONS {
         assert!(action.needs_session(), "{action:?} reads or changes the index");
     }

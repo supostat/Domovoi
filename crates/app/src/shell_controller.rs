@@ -8,12 +8,12 @@ use std::time::{Duration, Instant, SystemTime};
 use block2::RcBlock;
 use domovoi_downloader::{Catalog, ModelStore};
 use domovoi_dups::SearchError;
+use domovoi_index::Reclaimable;
 use domovoi_render::{
     DiagramChange, DiagramGraphics, DiagramObserver, DiagramRenderer, DiagramState, DiagramView, GlyphAtlas, NodeOrigin,
 };
-use domovoi_rules::{RestoreError, open_trash};
 use domovoi_scanner::ScanError;
-use domovoi_theme::{Palette, format_size, reduce_motion};
+use domovoi_theme::{Palette, format_count, format_size, reduce_motion};
 use objc2::rc::{Retained, autoreleasepool};
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
@@ -38,6 +38,10 @@ use crate::care_models::CareModels;
 #[cfg(feature = "claude-code")]
 use crate::claude_search::installed_claude_code;
 use crate::clone_refusal_text::clone_refusal_text;
+use crate::delete_job::DeleteJob;
+use crate::delete_outcome::DeleteOutcome;
+use crate::delete_run::DeleteRun;
+use crate::delete_status::DeleteStatus;
 use crate::diagram_preference::{remember_mode, remembered_mode};
 use crate::disk_overview::{DiskOverview, SYSTEM_DATA_ROOT};
 use crate::duplicate_job::DuplicateJob;
@@ -54,10 +58,6 @@ use crate::hover_panel::HoverPanel;
 use crate::main_screen::MainScreen;
 use crate::model_screen::ModelScreen;
 use crate::navigation::Navigation;
-use crate::purge_job::PurgeJob;
-use crate::purge_outcome::PurgeOutcome;
-use crate::purge_run::PurgeRun;
-use crate::purge_status::PurgeStatus;
 use crate::recommendations_screen::RecommendationsScreen;
 use crate::scan_job::ScanJob;
 use crate::scanning_screen::{ScanningScreen, center_lines};
@@ -76,9 +76,8 @@ use crate::shell_root_view::ShellRootView;
 use crate::shell_state::ShellState;
 use crate::stage::Stage;
 use crate::strings::{
-    APP_NAME, CANCEL, CLONED, DIAGRAM, FAILURE_CLOSE, FAILURE_TITLE, FDA_SETTINGS_URL, NOT_CLONED, PURGE_ACCEPT,
-    PURGE_CONFIRM, PURGE_CONFIRM_HINT, RESTORE_FAILED, RESTORE_NOT_IN_TRASH, RESTORE_PARENT_MISSING, RESTORE_REPLACED,
-    UPDATING_INDEX,
+    APP_NAME, CANCEL, CLONED, DELETE, DELETE_CONFIRM, DELETE_CONFIRM_HINT, DIAGRAM, FAILURE_CLOSE, FAILURE_TITLE,
+    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, UPDATING_INDEX,
 };
 use crate::tilde::tilde;
 use crate::tray_measurement::TrayMeasurement;
@@ -90,7 +89,7 @@ const SCAN_TICK: f64 = 1.0 / 30.0;
 const SEARCH_TICK: f64 = 1.0 / 10.0;
 const EVENTS_TICK: f64 = 0.5;
 const MEASURE_TICK: f64 = 0.25;
-const PURGE_TICK: f64 = 0.1;
+const DELETE_TICK: f64 = 0.1;
 const ESCAPE: &str = "\u{1b}";
 const OPEN: &str = "/usr/bin/open";
 
@@ -184,14 +183,9 @@ impl ShellController {
         if let Some(job) = &state.search {
             job.stop();
         }
-        if let Some(run) = state.purge.take() {
+        if let Some(run) = state.delete.take() {
             run.stop();
-            let untouched = run.finish().untouched;
-            if let Some(session) = state.session.as_mut()
-                && let Err(error) = session.return_untouched(untouched)
-            {
-                eprintln!("domovoi: {error}");
-            }
+            run.finish();
         }
         if let Some(session) = state.session.as_mut()
             && let Err(error) = session.persist()
@@ -843,9 +837,10 @@ impl ShellController {
         let index = session.index().expect("the tray belongs to a scanned volume");
         let measurement = tray_measurement.as_ref().expect("the tray is being measured");
         match measurement.exact() {
-            Some(exact) => TrayModel::measured(index, session.tray(), session.trash_journal(), exact),
-            None => TrayModel::measured(index, session.tray(), session.trash_journal(), measurement.estimate())
-                .with_progress(measurement.progress()),
+            Some(exact) => TrayModel::measured(index, session.tray(), exact),
+            None => {
+                TrayModel::measured(index, session.tray(), measurement.estimate()).with_progress(measurement.progress())
+            }
         }
     }
 
@@ -896,71 +891,55 @@ impl ShellController {
     }
 
     fn refresh_tray(&self) {
-        let confirming = self
-            .state
-            .borrow()
-            .tray
-            .as_ref()
-            .is_some_and(|sheet| sheet.screen.ornament.is_none());
+        let state = self.state.borrow();
+        let confirming =
+            state.delete.is_none() && state.tray.as_ref().is_some_and(|sheet| sheet.screen.ornament.is_none());
+        drop(state);
         if confirming {
             self.open_tray();
         }
     }
 
-    fn confirm_tray(&self) {
-        let before = self.measured_tray();
-        let outcomes = {
-            let mut state = self.state.borrow_mut();
-            state.tray_measurement = None;
-            state
-                .session
-                .as_mut()
-                .expect("the tray belongs to an open session")
-                .move_tray_to_trash()
-        };
-        let outcomes = match outcomes {
-            Ok(outcomes) => outcomes,
-            Err(error) => return self.fail(&error.to_string()),
-        };
-        let rebuilt = self.state.borrow_mut().rebuild_data(SystemTime::now());
-        if let Err(error) = rebuilt {
-            return self.fail(&error.to_string());
-        }
-        let model = {
-            let state = self.state.borrow();
-            let session = state.session.as_ref().expect("the tray belongs to an open session");
-            before.with_outcome(&outcomes, session.trash_journal())
-        };
-        self.show_tray(&model, true);
-        self.show_current();
-    }
-
-    fn purge_trash(&self) {
-        if self.state.borrow().purge.is_some() || !self.confirm_purge() {
+    fn delete_tray(&self) {
+        if self.state.borrow().delete.is_some() {
             return;
         }
-        let taken = self
-            .state
-            .borrow_mut()
-            .session
-            .as_mut()
-            .expect("the gate lends the journal of an open session")
-            .take_for_purge();
-        let entries = match taken {
-            Ok(entries) => entries,
-            Err(error) => return self.fail(&error.to_string()),
+        let count = {
+            let state = self.state.borrow();
+            let session = state.session.as_ref().expect("the tray belongs to an open session");
+            session.tray().items().len()
         };
-        let timer = self.repeating(PURGE_TICK, ShellController::purge_tick);
-        self.state.borrow_mut().purge = Some(PurgeRun::start(PurgeJob::start(entries), timer));
-        self.show_purge(PurgeStatus::default());
+        if count == 0 || !self.confirm_delete(count) {
+            return;
+        }
+        let (subjects, refusals) = {
+            let mut state = self.state.borrow_mut();
+            let sizes = state.tray_measurement.take().map(|measurement| {
+                measurement
+                    .exact()
+                    .map_or_else(|| measurement.estimate().to_vec(), <[Reclaimable]>::to_vec)
+            });
+            let session = state.session.as_mut().expect("the tray belongs to an open session");
+            let sizes = sizes.unwrap_or_else(|| {
+                let index = session.index().expect("the tray belongs to a scanned volume");
+                TrayModel::estimated_sizes(index, session.tray())
+            });
+            session.take_tray_for_delete(&sizes)
+        };
+        let timer = self.repeating(DELETE_TICK, ShellController::delete_tick);
+        self.state.borrow_mut().delete = Some(DeleteRun::start(DeleteJob::start(subjects), refusals, timer));
+        self.show_deleting(DeleteStatus::default());
     }
 
-    fn confirm_purge(&self) -> bool {
+    fn confirm_delete(&self, count: usize) -> bool {
         let alert = NSAlert::new(self.marker);
-        alert.setMessageText(&NSString::from_str(PURGE_CONFIRM));
-        alert.setInformativeText(&NSString::from_str(PURGE_CONFIRM_HINT));
+        alert.setMessageText(&NSString::from_str(&format!(
+            "{DELETE_CONFIRM} {}?",
+            format_count(count as u64, &OBJECTS)
+        )));
+        alert.setInformativeText(&NSString::from_str(DELETE_CONFIRM_HINT));
         alert
-            .addButtonWithTitle(&NSString::from_str(PURGE_ACCEPT))
+            .addButtonWithTitle(&NSString::from_str(DELETE))
             .setHasDestructiveAction(true);
         alert
             .addButtonWithTitle(&NSString::from_str(CANCEL))
@@ -968,40 +947,33 @@ impl ShellController {
         alert.runModal() == NSAlertFirstButtonReturn
     }
 
-    fn purge_tick(&self) {
+    fn delete_tick(&self) {
         let (status, finished) = {
             let state = self.state.borrow();
-            let Some(run) = state.purge.as_ref() else {
+            let Some(run) = state.delete.as_ref() else {
                 return;
             };
             (run.status(), run.is_finished())
         };
         if !finished {
-            return self.show_purge(status);
+            return self.show_deleting(status);
         }
         let run = self
             .state
             .borrow_mut()
-            .purge
+            .delete
             .take()
-            .expect("a finished purge is running");
-        let report = run.finish();
-        let outcome = PurgeOutcome {
-            removed: report.purged.len(),
-            failures: report
-                .failed
-                .iter()
-                .map(|(entry, error)| format!("{} — {error}", tilde(Path::new(&entry.original))))
-                .collect(),
-        };
-        let returned = self
+            .expect("a finished delete is running");
+        let (report, refusals) = run.finish();
+        let outcome = DeleteOutcome::from_report(&report, &refusals);
+        let settled = self
             .state
             .borrow_mut()
             .session
             .as_mut()
-            .expect("the journal of a purge belongs to an open session")
-            .return_untouched(report.untouched);
-        if let Err(error) = returned {
+            .expect("the deleted items belong to an open session")
+            .settle_delete(&report);
+        if let Err(error) = settled {
             return self.fail(&error.to_string());
         }
         match DiskOverview::measure(Path::new(SYSTEM_DATA_ROOT)) {
@@ -1011,21 +983,21 @@ impl ShellController {
         self.refresh();
         let model = {
             let state = self.state.borrow();
-            let (Some(sheet), Some(session)) = (state.tray.as_ref(), state.session.as_ref()) else {
+            let Some(sheet) = state.tray.as_ref() else {
                 return;
             };
-            sheet.model.clone().with_purged(outcome, session.trash_journal())
+            sheet.model.clone().with_deleted(outcome)
         };
-        self.show_tray(&model, false);
+        self.show_tray(&model, true);
     }
 
-    fn show_purge(&self, status: PurgeStatus) {
+    fn show_deleting(&self, status: DeleteStatus) {
         let model = {
             let state = self.state.borrow();
             let Some(sheet) = state.tray.as_ref() else {
                 return;
             };
-            sheet.model.clone().with_purge(status)
+            sheet.model.clone().with_deleting(status)
         };
         self.show_tray(&model, false);
     }
@@ -1041,36 +1013,6 @@ impl ShellController {
             sheet.window.orderOut(None);
         }
         self.show_current();
-    }
-
-    fn restore(&self, position: usize) {
-        let restored = {
-            let mut state = self.state.borrow_mut();
-            state
-                .session
-                .as_mut()
-                .expect("the journal belongs to an open session")
-                .restore(position)
-        };
-        if let Err(error) = restored {
-            let reason = match &error {
-                RestoreError::NotInTrash => RESTORE_NOT_IN_TRASH.to_owned(),
-                RestoreError::Replaced => RESTORE_REPLACED.to_owned(),
-                RestoreError::ParentMissing => RESTORE_PARENT_MISSING.to_owned(),
-                RestoreError::Io(error) => error.to_string(),
-            };
-            self.inform(&format!("{RESTORE_FAILED}: {reason}"));
-        }
-        self.refresh();
-        let showing_outcome = self
-            .state
-            .borrow()
-            .tray
-            .as_ref()
-            .is_some_and(|sheet| sheet.screen.ornament.is_some());
-        if showing_outcome {
-            self.open_tray();
-        }
     }
 
     fn show_in_finder(&self, node: usize) {
@@ -1250,20 +1192,13 @@ impl ActionHandler for ShellController {
             ShellAction::SelectDuplicateAction(clone) => self.select_duplicate_action(clone),
             ShellAction::ToggleCopy(tag) => self.toggle_copy(tag),
             ShellAction::ApplyDuplicates => self.apply_duplicates(),
-            ShellAction::ConfirmTray => self.confirm_tray(),
-            ShellAction::CloseTray => self.close_tray(),
-            ShellAction::OpenTrash => {
-                if let Err(error) = open_trash() {
-                    self.inform(&error.to_string());
-                }
-            }
-            ShellAction::Restore(position) => self.restore(position),
-            ShellAction::PurgeTrash => self.purge_trash(),
-            ShellAction::StopPurge => {
-                if let Some(run) = &self.state.borrow().purge {
+            ShellAction::DeleteTray => self.delete_tray(),
+            ShellAction::StopDelete => {
+                if let Some(run) = &self.state.borrow().delete {
                     run.stop();
                 }
             }
+            ShellAction::CloseTray => self.close_tray(),
             ShellAction::AskAssistant => self.ask_assistant(),
             ShellAction::StopAnswer => self.stop_answer(),
             ShellAction::AddAnswerToTray(position) => self.add_answer_to_tray(position),
@@ -1279,7 +1214,7 @@ impl ActionHandler for ShellController {
             ShellAction::SelectUnloadDelay(position) => self.select_unload_delay(position),
             ShellAction::ChangeSource => self.change_source(),
             ShellAction::ChooseModelFile => self.choose_model_file(),
-            ShellAction::TrashOrphan(position) => self.trash_orphan(position),
+            ShellAction::DeleteOrphan(position) => self.delete_orphan(position),
         }
     }
 

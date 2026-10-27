@@ -12,6 +12,7 @@ use crate::access_state::AccessState;
 use crate::apply_job::ApplyJob;
 use crate::assistant::Assistant;
 use crate::care_models::CareModels;
+use crate::delete_run::DeleteRun;
 use crate::disk_overview::DiskOverview;
 use crate::duplicate_job::DuplicateJob;
 use crate::duplicate_summary::DuplicateSummary;
@@ -20,7 +21,6 @@ use crate::duplicates_state::DuplicatesState;
 use crate::event_watch::EventWatch;
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::hover_tip::HoverTip;
-use crate::purge_run::PurgeRun;
 use crate::recommendations_model::RecommendationsModel;
 use crate::scan_job::ScanJob;
 use crate::scan_stage::ScanStage;
@@ -60,7 +60,7 @@ pub(crate) struct ShellState {
     pub watch: Option<EventWatch>,
     pub tray: Option<TraySheet>,
     pub tray_measurement: Option<TrayMeasurement>,
-    pub purge: Option<PurgeRun>,
+    pub delete: Option<DeleteRun>,
     pub applying: Option<ApplyJob>,
     pub settings_opened: bool,
     pub scan_without_access: bool,
@@ -96,7 +96,7 @@ impl ShellState {
             watch: None,
             tray: None,
             tray_measurement: None,
-            purge: None,
+            delete: None,
             applying: None,
             settings_opened: false,
             scan_without_access: false,
@@ -257,7 +257,7 @@ impl ShellState {
                 }
             }
         }
-        let tray = TrayModel::estimated(index, session.tray(), session.trash_journal());
+        let tray = TrayModel::estimated(index, session.tray());
         Ok(CareModels {
             recommendations,
             duplicates,
