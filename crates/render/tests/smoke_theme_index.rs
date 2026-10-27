@@ -1,7 +1,7 @@
 mod support;
 
 use domovoi_index::{Enrichment, Index, IndexRoot};
-use domovoi_render::{DiagramPainter, DiagramTree, GlyphAtlas, ROOT, SunburstLayout, category_color};
+use domovoi_render::{DiagramPainter, DiagramTree, GlyphAtlas, ROOT, SmallGroups, SunburstLayout, category_color};
 use domovoi_scanner::{ScanOptions, scan};
 use domovoi_testkit::{Fill, TempTree};
 use domovoi_theme::Palette;
@@ -41,7 +41,7 @@ fn the_real_palette_and_a_real_index_produce_a_frame() {
     assert_eq!(tree.node(ROOT).size, index.node(index.root()).allocated);
 
     let palette = &Palette::LIGHT;
-    let layout = SunburstLayout::compute(&tree, ROOT, SIDE, 1.0);
+    let layout = SunburstLayout::compute(&tree, ROOT, SIDE, 1.0, &SmallGroups::default());
     let largest = layout
         .segments
         .iter()

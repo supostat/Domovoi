@@ -9,7 +9,9 @@ use crate::diagram_strings::DiagramStrings;
 use crate::diagram_tree::DiagramTree;
 use crate::glyph_atlas::{ATLAS_SIDE, GlyphAtlas};
 use crate::glyph_instance::GlyphInstance;
+use crate::hit::Hit;
 use crate::scene::Scene;
+use crate::segment_kind::SegmentKind;
 use crate::shape_instance::{SHAPE_ARC, SHAPE_DISC, SHAPE_RECT, ShapeInstance};
 use crate::shaped_line::ShapedLine;
 use crate::sunburst_layout::SunburstLayout;
@@ -19,6 +21,7 @@ use crate::transition::HOVER_DIM_OPACITY;
 use crate::treemap_layout::TreemapLayout;
 
 const RING_FADE: f32 = 0.16;
+const SMALL_GROUP_OPACITY: f32 = 0.55;
 const GROUP_FILL: f32 = 0.15;
 const GROUP_STROKE: f32 = 0.55;
 const TILE_FILL: f32 = 0.82;
@@ -45,7 +48,7 @@ pub struct DiagramPainter<'a> {
     pub palette: &'a Palette,
     pub strings: &'a DiagramStrings,
     pub scale: f32,
-    pub hovered: Option<usize>,
+    pub hovered: Option<Hit>,
     pub dim_progress: f32,
     pub center: Option<&'a [String; 3]>,
 }
@@ -62,20 +65,37 @@ impl DiagramPainter<'_> {
         let center = layout.center();
         for segment in &layout.segments {
             let node = self.tree.node(segment.node);
-            let opacity = (1.0 - segment.ring as f32 * RING_FADE) * self.dim_factor(segment.node);
+            let opacity = (1.0 - segment.ring as f32 * RING_FADE) * self.dim_factor(segment.hit());
             let geometry = arc_geometry(segment);
             let previous = previous
-                .and_then(|layout| layout.segments.iter().find(|candidate| candidate.node == segment.node))
+                .and_then(|layout| {
+                    layout
+                        .segments
+                        .iter()
+                        .find(|candidate| candidate.hit() == segment.hit())
+                })
                 .map_or([geometry[0], geometry[0], geometry[2], geometry[3]], arc_geometry);
+            let (fill, stroke, dashed) = match segment.kind {
+                SegmentKind::Node => (
+                    faded(category_color(self.palette, node.category), opacity),
+                    self.hidden_stroke(node.category),
+                    node.category == Category::Hidden,
+                ),
+                SegmentKind::SmallGroup { .. } => (
+                    faded(self.palette.mute, opacity * SMALL_GROUP_OPACITY),
+                    self.palette.line.premultiplied(),
+                    false,
+                ),
+            };
             scene.shapes.push(ShapeInstance {
                 geometry,
                 previous,
-                fill: faded(category_color(self.palette, node.category), opacity),
-                stroke: self.hidden_stroke(node.category),
+                fill,
+                stroke,
                 center: [center.x, center.y],
                 stroke_width: HAIRLINE,
                 kind: SHAPE_ARC,
-                dashed: u32::from(node.category == Category::Hidden),
+                dashed: u32::from(dashed),
                 ..ShapeInstance::default()
             });
         }
@@ -90,19 +110,10 @@ impl DiagramPainter<'_> {
             kind: SHAPE_DISC,
             ..ShapeInstance::default()
         });
-        let shown = self.hovered.unwrap_or(layout.focus);
-        let node = self.tree.node(shown);
-        let caption = if self.hovered.is_some() {
-            self.strings.category_name(node.category)
-        } else if node.parent.is_some() {
-            self.strings.up
-        } else {
-            self.strings.used
-        };
-        let size = format_size(node.size);
+        let (caption, name, size) = self.center_lines(layout);
         let [caption, name, size] = match self.center {
             Some([caption, name, size]) => [caption.as_str(), name.as_str(), size.as_str()],
-            None => [caption, node.name.as_str(), size.as_str()],
+            None => [caption.as_str(), name.as_str(), size.as_str()],
         };
         for line in center_text(layout, caption, name, size) {
             let color = match line.role {
@@ -128,7 +139,7 @@ impl DiagramPainter<'_> {
         for tile in &layout.tiles {
             let node = self.tree.node(tile.node);
             let color = category_color(self.palette, node.category);
-            let dim = self.dim_factor(tile.node);
+            let dim = self.dim_factor(Hit::Node(tile.node));
             let geometry = [tile.rect.x, tile.rect.y, tile.rect.width, tile.rect.height];
             let (fill, stroke, corner) = match tile.role {
                 TileRole::Group => (
@@ -213,9 +224,32 @@ impl DiagramPainter<'_> {
         }
     }
 
-    fn dim_factor(&self, node: usize) -> f32 {
+    fn center_lines(&self, layout: &SunburstLayout) -> (String, String, String) {
+        if let Some(Hit::Group(parent)) = self.hovered
+            && let Some(group) = layout.groups().find(|segment| segment.node == parent)
+            && let SegmentKind::SmallGroup { count, bytes } = group.kind
+        {
+            return (
+                self.strings.small_group_count(count),
+                self.strings.small_group.to_owned(),
+                format_size(bytes),
+            );
+        }
+        let shown = self.hovered.and_then(Hit::node).unwrap_or(layout.focus);
+        let node = self.tree.node(shown);
+        let caption = if self.hovered.is_some() {
+            self.strings.category_name(node.category)
+        } else if node.parent.is_some() {
+            self.strings.up
+        } else {
+            self.strings.used
+        };
+        (caption.to_owned(), node.name.clone(), format_size(node.size))
+    }
+
+    fn dim_factor(&self, hit: Hit) -> f32 {
         match self.hovered {
-            Some(hovered) if hovered != node => 1.0 - (1.0 - HOVER_DIM_OPACITY) * self.dim_progress,
+            Some(hovered) if hovered != hit => 1.0 - (1.0 - HOVER_DIM_OPACITY) * self.dim_progress,
             _ => 1.0,
         }
     }

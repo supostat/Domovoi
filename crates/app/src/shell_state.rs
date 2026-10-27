@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 use domovoi_index::ModelEvent;
-use domovoi_render::{DiagramMode, NodeOrigin, ROOT};
+use domovoi_render::{DiagramMode, NodeOrigin, ROOT, SmallGroups};
 use domovoi_theme::Palette;
 use objc2::rc::Retained;
 use objc2::runtime::{NSObjectProtocol, ProtocolObject};
@@ -50,6 +50,7 @@ pub(crate) struct ShellState {
     pub focus: usize,
     pub focus_path: Option<PathBuf>,
     pub mode: DiagramMode,
+    pub small_groups: SmallGroups,
     pub views: Option<ScreenViews>,
     pub views_key: Option<ScreenKey>,
     pub scan: Option<ScanJob>,
@@ -70,7 +71,7 @@ pub(crate) struct ShellState {
 }
 
 impl ShellState {
-    pub(crate) fn new(mode: DiagramMode, assistant: Assistant) -> Self {
+    pub(crate) fn new(mode: DiagramMode, small_groups_always: bool, assistant: Assistant) -> Self {
         Self {
             stage: Stage::Access(AccessState::Missing),
             section: Section::Disk,
@@ -86,6 +87,7 @@ impl ShellState {
             focus: ROOT,
             focus_path: None,
             mode,
+            small_groups: SmallGroups::always(small_groups_always),
             views: None,
             views_key: None,
             scan: None,

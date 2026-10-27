@@ -213,7 +213,7 @@ impl DiagramView {
             let state = self.ivars().state.borrow();
             DiagramChange {
                 focus: state.focus(),
-                hovered: state.hovered,
+                hovered: state.hovered_node(),
                 pointer,
             }
         };

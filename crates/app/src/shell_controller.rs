@@ -42,7 +42,7 @@ use crate::delete_job::DeleteJob;
 use crate::delete_outcome::DeleteOutcome;
 use crate::delete_run::DeleteRun;
 use crate::delete_status::DeleteStatus;
-use crate::diagram_preference::{remember_mode, remembered_mode};
+use crate::diagram_preference::{remember_mode, remember_small_groups, remembered_mode, remembered_small_groups};
 use crate::disk_overview::{DiskOverview, SYSTEM_DATA_ROOT};
 use crate::duplicate_job::DuplicateJob;
 use crate::duplicate_summary::DuplicateSummary;
@@ -136,7 +136,7 @@ impl ShellController {
             actions: ShellActions::new(marker),
             hover: HoverPanel::new(marker),
             paths,
-            state: RefCell::new(ShellState::new(remembered_mode(), assistant)),
+            state: RefCell::new(ShellState::new(remembered_mode(), remembered_small_groups(), assistant)),
         });
         let handler: Weak<dyn ActionHandler> = controller.this.clone();
         controller.actions.connect(handler);
@@ -172,6 +172,20 @@ impl ShellController {
 
     pub(crate) fn dispatch(&self, action: ShellAction) {
         self.actions.dispatch(action);
+    }
+
+    pub(crate) fn small_groups_always(&self) -> bool {
+        self.state.borrow().small_groups.always
+    }
+
+    fn toggle_small_groups(&self) {
+        let mut state = self.state.borrow_mut();
+        state.small_groups.always = !state.small_groups.always;
+        let always = state.small_groups.always;
+        remember_small_groups(always);
+        if let Some(diagram) = state.views.as_ref().and_then(ScreenViews::diagram) {
+            diagram.update_state(|diagram| diagram.set_small_groups_always(always));
+        }
     }
 
     pub(crate) fn application_will_terminate(&self) {
@@ -385,10 +399,12 @@ impl ShellController {
                 let tree = data.tree.clone();
                 let tokens = state.palette.tokens;
                 let focus = state.focus;
+                let small_groups_always = state.small_groups.always;
                 diagram.update_state(|diagram| {
                     let reduce_motion = diagram.reduce_motion;
                     *diagram = DiagramState::new(tree, diagram.mode, DIAGRAM, tokens, diagram.width, diagram.height);
                     diagram.reduce_motion = reduce_motion;
+                    diagram.set_small_groups_always(small_groups_always);
                     diagram.jump_to(focus);
                 });
             }
@@ -468,7 +484,10 @@ impl ShellController {
                 let screen = ScanningScreen::build(marker, &data, &palette, &self.actions);
                 let diagram = match previous {
                     Some(ScreenViews::Scanning { diagram, .. }) => diagram,
-                    _ => match self.diagram_view(ScanningScreen::diagram_state(&data, &palette)) {
+                    _ => match self.diagram_view(
+                        ScanningScreen::diagram_state(&data, &palette),
+                        state.small_groups.always,
+                    ) {
                         Ok(diagram) => diagram,
                         Err(error) => {
                             drop(state);
@@ -505,7 +524,10 @@ impl ShellController {
                 let screen = MainScreen::build(marker, data, state.focus, state.mode, &palette, &self.actions);
                 let diagram = match previous {
                     Some(ScreenViews::Main { diagram, .. }) => diagram,
-                    _ => match self.diagram_view(MainScreen::diagram_state(data, state.focus, state.mode, &palette)) {
+                    _ => match self.diagram_view(
+                        MainScreen::diagram_state(data, state.focus, state.mode, &palette),
+                        state.small_groups.always,
+                    ) {
                         Ok(diagram) => diagram,
                         Err(error) => {
                             drop(state);
@@ -555,8 +577,13 @@ impl ShellController {
         }
     }
 
-    fn diagram_view(&self, mut diagram: DiagramState) -> Result<Retained<DiagramView>, String> {
+    fn diagram_view(
+        &self,
+        mut diagram: DiagramState,
+        small_groups_always: bool,
+    ) -> Result<Retained<DiagramView>, String> {
         diagram.reduce_motion = reduce_motion();
+        diagram.set_small_groups_always(small_groups_always);
         let renderer = DiagramRenderer::system_default(&diagram_metallib()).map_err(|error| error.to_string())?;
         let frame = NSRect::new(
             NSPoint::ZERO,
@@ -1165,6 +1192,7 @@ impl ActionHandler for ShellController {
                 }
                 self.show_current();
             }
+            ShellAction::ToggleSmallGroups => self.toggle_small_groups(),
             ShellAction::Focus(node) => self.focus_on(node),
             ShellAction::ShowInFinder(node) => self.show_in_finder(node),
             ShellAction::ShowClickedRowInFinder => {

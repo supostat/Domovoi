@@ -1,6 +1,8 @@
 use crate::diagram_mode::DiagramMode;
 use crate::diagram_tree::DiagramTree;
+use crate::hit::Hit;
 use crate::point::Point;
+use crate::small_groups::SmallGroups;
 use crate::sunburst_layout::SunburstLayout;
 use crate::treemap_layout::TreemapLayout;
 
@@ -11,9 +13,19 @@ pub enum DiagramLayout {
 }
 
 impl DiagramLayout {
-    pub fn compute(mode: DiagramMode, tree: &DiagramTree, focus: usize, width: f32, height: f32, sweep: f32) -> Self {
+    pub fn compute(
+        mode: DiagramMode,
+        tree: &DiagramTree,
+        focus: usize,
+        width: f32,
+        height: f32,
+        sweep: f32,
+        groups: &SmallGroups,
+    ) -> Self {
         match mode {
-            DiagramMode::Sunburst => Self::Sunburst(SunburstLayout::compute(tree, focus, width.min(height), sweep)),
+            DiagramMode::Sunburst => {
+                Self::Sunburst(SunburstLayout::compute(tree, focus, width.min(height), sweep, groups))
+            }
             DiagramMode::Treemap => Self::Treemap(TreemapLayout::compute(tree, focus, width, height)),
         }
     }
@@ -25,10 +37,10 @@ impl DiagramLayout {
         }
     }
 
-    pub fn hit_test(&self, point: Point) -> Option<usize> {
+    pub fn hit_test(&self, point: Point) -> Option<Hit> {
         match self {
             Self::Sunburst(layout) => layout.hit_test(point),
-            Self::Treemap(layout) => layout.hit_test(point),
+            Self::Treemap(layout) => layout.hit_test(point).map(Hit::Node),
         }
     }
 

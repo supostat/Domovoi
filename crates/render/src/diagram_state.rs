@@ -10,9 +10,11 @@ use crate::diagram_painter::DiagramPainter;
 use crate::diagram_strings::DiagramStrings;
 use crate::diagram_tree::{DiagramTree, ROOT};
 use crate::glyph_atlas::GlyphAtlas;
+use crate::hit::Hit;
 use crate::point::Point;
 use crate::scene::Scene;
 use crate::segment_focus::SegmentFocus;
+use crate::small_groups::SmallGroups;
 use crate::sunburst_layout::SunburstLayout;
 use crate::transition::Transition;
 
@@ -28,9 +30,10 @@ pub struct DiagramState {
     pub height: f32,
     pub reduce_motion: bool,
     pub sweep: f32,
-    pub hovered: Option<usize>,
+    pub hovered: Option<Hit>,
     pub center: Option<[String; 3]>,
     pub layout: DiagramLayout,
+    pub small_groups: SmallGroups,
     previous: Option<SunburstLayout>,
     zoom: Option<Transition>,
     dim: Option<Transition>,
@@ -46,7 +49,8 @@ impl DiagramState {
         width: f32,
         height: f32,
     ) -> Self {
-        let layout = DiagramLayout::compute(mode, &tree, ROOT, width, height, FULL_SWEEP);
+        let small_groups = SmallGroups::default();
+        let layout = DiagramLayout::compute(mode, &tree, ROOT, width, height, FULL_SWEEP, &small_groups);
         Self {
             tree,
             mode,
@@ -59,6 +63,7 @@ impl DiagramState {
             hovered: None,
             center: None,
             layout,
+            small_groups,
             previous: None,
             zoom: None,
             dim: None,
@@ -68,6 +73,10 @@ impl DiagramState {
 
     pub fn focus(&self) -> usize {
         self.layout.focus()
+    }
+
+    pub fn hovered_node(&self) -> Option<usize> {
+        self.hovered.and_then(Hit::node)
     }
 
     pub fn resize(&mut self, width: f32, height: f32) {
@@ -85,6 +94,21 @@ impl DiagramState {
 
     pub fn set_sweep(&mut self, sweep: f32) {
         self.sweep = sweep;
+        self.relayout(self.focus());
+    }
+
+    pub fn set_small_groups_always(&mut self, always: bool) {
+        self.small_groups.always = always;
+        self.previous = None;
+        self.zoom = None;
+        self.relayout(self.focus());
+    }
+
+    pub fn open_small_group(&mut self, parent: usize) {
+        self.small_groups.open(parent);
+        self.previous = None;
+        self.zoom = None;
+        self.hovered = None;
         self.relayout(self.focus());
     }
 
@@ -125,15 +149,19 @@ impl DiagramState {
             }
             return;
         }
-        if let Some(node) = self.layout.hit_test(point) {
-            let target = if self.tree.node(node).children.is_empty() {
-                self.tree.node(node).parent.filter(|parent| *parent != self.focus())
-            } else {
-                Some(node)
-            };
-            if let Some(target) = target {
-                self.set_focus(target, now);
+        match self.layout.hit_test(point) {
+            Some(Hit::Group(parent)) => self.open_small_group(parent),
+            Some(Hit::Node(node)) => {
+                let target = if self.tree.node(node).children.is_empty() {
+                    self.tree.node(node).parent.filter(|parent| *parent != self.focus())
+                } else {
+                    Some(node)
+                };
+                if let Some(target) = target {
+                    self.set_focus(target, now);
+                }
             }
+            None => {}
         }
     }
 
@@ -152,7 +180,7 @@ impl DiagramState {
         let segments = self.segments();
         let position = self.keyboard.step(forward, segments.len())?;
         let segment = segments[position].clone();
-        self.hovered = (!segment.is_center).then_some(segment.node);
+        self.hovered = (!segment.is_center).then(|| segment.hit());
         self.dim = self
             .hovered
             .map(|_| Transition::start(Motion::HoverDim, now, self.reduce_motion));
@@ -160,15 +188,21 @@ impl DiagramState {
     }
 
     pub fn open_keyboard_focus(&mut self, now: Instant) {
-        if let Some(segment) = self.keyboard_focus() {
-            let target = if segment.is_center {
-                self.tree.node(segment.node).parent
-            } else {
-                Some(segment.node)
-            };
-            if let Some(target) = target.filter(|target| !self.tree.node(*target).children.is_empty()) {
-                self.set_focus(target, now);
-            }
+        let Some(segment) = self.keyboard_focus() else {
+            return;
+        };
+        if segment.is_group {
+            self.open_small_group(segment.node);
+            self.keyboard.reset();
+            return;
+        }
+        let target = if segment.is_center {
+            self.tree.node(segment.node).parent
+        } else {
+            Some(segment.node)
+        };
+        if let Some(target) = target.filter(|target| !self.tree.node(*target).children.is_empty()) {
+            self.set_focus(target, now);
         }
     }
 
@@ -199,6 +233,14 @@ impl DiagramState {
     }
 
     fn relayout(&mut self, focus: usize) {
-        self.layout = DiagramLayout::compute(self.mode, &self.tree, focus, self.width, self.height, self.sweep);
+        self.layout = DiagramLayout::compute(
+            self.mode,
+            &self.tree,
+            focus,
+            self.width,
+            self.height,
+            self.sweep,
+            &self.small_groups,
+        );
     }
 }

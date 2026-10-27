@@ -10,6 +10,7 @@ pub enum ShellAction {
     Rescan,
     StopScan,
     ChangeMode(DiagramMode),
+    ToggleSmallGroups,
     Focus(usize),
     ShowInFinder(usize),
     ShowClickedRowInFinder,

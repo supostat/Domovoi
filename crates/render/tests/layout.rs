@@ -1,12 +1,15 @@
 mod support;
 
 use std::f32::consts::TAU;
+use std::time::Instant;
 
 use domovoi_render::{
-    FontFamily, GROUP_MIN_HEIGHT, GROUP_MIN_WIDTH, LABEL_MIN_HEIGHT, LABEL_MIN_WIDTH, Point, RING_COUNT, ROOT,
+    ArcSegment, DiagramLayout, DiagramMode, DiagramState, FontFamily, GROUP_MIN_HEIGHT, GROUP_MIN_WIDTH, Hit,
+    LABEL_MIN_HEIGHT, LABEL_MIN_WIDTH, Point, RING_COUNT, ROOT, SMALL_GROUP_SPAN, SegmentKind, SmallGroups,
     SunburstLayout, TextStyle, TileRole, TreemapLayout, VISIBLE_SIDE, center_text, fit_end,
 };
-use support::{book_v, fonts};
+use domovoi_theme::Palette;
+use support::{SMALL_FILE_BYTES, SMALL_FILES, STRINGS, book_v, fonts, small_group_tree};
 
 const SUNBURST_SIZE: f32 = 460.0;
 const TREEMAP_WIDTH: f32 = 820.0;
@@ -16,60 +19,170 @@ const PATH: &str = "~/Library/Application Support/MobileSync/Backup/00008110-001
 const NAME: &str = "com.apple.dt.Xcode.DerivedData.Facet-gxkqzjwbvdemafbtyhlu";
 const LONG_NAME: &str = "Final Cut · библиотека проекта «Отпуск в Карелии 2026»";
 
+fn span(segment: &ArcSegment) -> f32 {
+    segment.end_angle - segment.start_angle
+}
+
+fn closed() -> SmallGroups {
+    SmallGroups::default()
+}
+
 #[test]
 fn every_ring_of_the_sunburst_closes_the_full_circle_and_maps_to_the_node_depth() {
     let tree = book_v();
-    let layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0);
+    let layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &closed());
     assert!(
         (layout.ring_angle_sum(0) - TAU).abs() < ANGLE_TOLERANCE,
         "{}",
         layout.ring_angle_sum(0)
     );
     for segment in &layout.segments {
-        assert_eq!(
-            segment.ring + 1,
-            tree.node(segment.node).depth,
-            "{}",
-            tree.node(segment.node).name
-        );
+        let depth = tree.node(segment.node).depth;
+        match segment.kind {
+            SegmentKind::Node => {
+                assert_eq!(segment.ring + 1, depth, "{}", tree.node(segment.node).name);
+                assert!(
+                    span(segment) > SMALL_GROUP_SPAN,
+                    "a node arc narrower than the threshold joins the small group"
+                );
+            }
+            SegmentKind::SmallGroup { count, bytes } => {
+                assert_eq!(segment.ring, depth, "the group sits among the children of its parent");
+                assert!(count > 0 && bytes > 0);
+            }
+        }
         assert!(segment.ring < RING_COUNT);
-        assert!(
-            segment.end_angle - segment.start_angle > 0.006,
-            "level of detail drops slivers"
-        );
         let (start, end) = segment.drawn_angles();
         assert!(start < end, "the padding never inverts a segment");
     }
+    let mut parents: Vec<usize> = layout.groups().map(|group| group.node).collect();
+    let group_count = parents.len();
+    parents.sort_unstable();
+    parents.dedup();
+    assert_eq!(parents.len(), group_count, "one group per directory");
+    for group in layout.groups() {
+        let parent_span = if group.node == layout.focus {
+            TAU
+        } else {
+            let parent = layout
+                .segments
+                .iter()
+                .find(|segment| segment.kind == SegmentKind::Node && segment.node == group.node)
+                .expect("the parent of a group is laid out");
+            span(parent)
+        };
+        let nodes_span: f32 = layout
+            .segments
+            .iter()
+            .filter(|segment| segment.kind == SegmentKind::Node && tree.node(segment.node).parent == Some(group.node))
+            .map(span)
+            .sum();
+        assert!(
+            (parent_span - nodes_span - span(group)).abs() < ANGLE_TOLERANCE,
+            "the group takes exactly the remainder of {}",
+            tree.node(group.node).name
+        );
+    }
     let focus = tree.node(ROOT).children[0];
-    let zoomed = SunburstLayout::compute(&tree, focus, SUNBURST_SIZE, 1.0);
+    let zoomed = SunburstLayout::compute(&tree, focus, SUNBURST_SIZE, 1.0, &closed());
     assert!((zoomed.ring_angle_sum(0) - TAU).abs() < ANGLE_TOLERANCE);
     assert!(
         zoomed
             .segments
             .iter()
+            .filter(|segment| segment.kind == SegmentKind::Node)
             .all(|segment| segment.ring + 2 == tree.node(segment.node).depth)
     );
 }
 
 #[test]
-fn the_scan_sector_follows_the_actual_progress() {
-    let tree = book_v();
-    let half = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 0.5);
-    assert!(
-        half.segments
-            .iter()
-            .all(|segment| segment.end_angle <= TAU / 2.0 + ANGLE_TOLERANCE)
+fn small_children_fold_into_one_group_that_opens_on_demand() {
+    let tree = small_group_tree();
+    let large_folder = tree.node(ROOT).children[0];
+    let closed_layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &closed());
+    let group = *closed_layout.groups().next().expect("the small files form a group");
+    assert_eq!(closed_layout.groups().count(), 1);
+    assert_eq!((group.node, group.ring), (ROOT, 0));
+    assert_eq!(
+        group.kind,
+        SegmentKind::SmallGroup {
+            count: SMALL_FILES,
+            bytes: SMALL_FILES as u64 * SMALL_FILE_BYTES,
+        }
     );
-    assert!((half.ring_angle_sum(0) - TAU / 2.0).abs() < ANGLE_TOLERANCE);
+    assert_eq!(
+        closed_layout
+            .segments
+            .iter()
+            .filter(|segment| segment.ring == 0)
+            .count(),
+        2,
+        "the large folder and the group"
+    );
+    assert!((closed_layout.ring_angle_sum(0) - TAU).abs() < ANGLE_TOLERANCE);
+    let (angle, radius) = group.middle();
+    let middle = closed_layout.point_at(angle, radius);
+    assert_eq!(closed_layout.hit_test(middle), Some(Hit::Group(ROOT)));
+
+    let mut opened = closed();
+    opened.open(ROOT);
+    let open_layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &opened);
+    assert_eq!(open_layout.groups().count(), 0);
+    assert_eq!(
+        open_layout.segments.iter().filter(|segment| segment.ring == 0).count(),
+        SMALL_FILES + 1
+    );
+    assert!((open_layout.ring_angle_sum(0) - TAU).abs() < ANGLE_TOLERANCE);
+    let members: f32 = open_layout
+        .segments
+        .iter()
+        .filter(|segment| segment.ring == 0 && segment.node != large_folder)
+        .map(span)
+        .sum();
+    assert!(
+        (members - span(&group)).abs() < ANGLE_TOLERANCE,
+        "the members fill exactly the arc of the group"
+    );
+    let always = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &SmallGroups::always(true));
+    assert_eq!(always.segments, open_layout.segments);
+
+    let mut state = DiagramState::new(
+        tree.clone(),
+        DiagramMode::Sunburst,
+        STRINGS,
+        &Palette::DARK,
+        SUNBURST_SIZE,
+        SUNBURST_SIZE,
+    );
+    state.click(middle, Instant::now());
+    assert!(state.small_groups.is_open(ROOT), "a click opens the group");
+    assert_eq!(state.focus(), ROOT, "opening a group keeps the level");
+    let DiagramLayout::Sunburst(after_click) = &state.layout else {
+        panic!("the state stays a sunburst");
+    };
+    assert_eq!(after_click.segments, open_layout.segments);
+}
+
+#[test]
+fn the_scan_sector_follows_the_actual_progress() {
+    for tree in [book_v(), small_group_tree()] {
+        let half = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 0.5, &closed());
+        assert!(
+            half.segments
+                .iter()
+                .all(|segment| segment.end_angle <= TAU / 2.0 + ANGLE_TOLERANCE)
+        );
+        assert!((half.ring_angle_sum(0) - TAU / 2.0).abs() < ANGLE_TOLERANCE);
+    }
 }
 
 #[test]
 fn hit_testing_inverts_both_layouts() {
     let tree = book_v();
-    let sunburst = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0);
+    let sunburst = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &closed());
     for segment in &sunburst.segments {
         let (angle, radius) = segment.middle();
-        assert_eq!(sunburst.hit_test(sunburst.point_at(angle, radius)), Some(segment.node));
+        assert_eq!(sunburst.hit_test(sunburst.point_at(angle, radius)), Some(segment.hit()));
     }
     assert_eq!(
         sunburst.hit_test(sunburst.center()),
@@ -171,7 +284,7 @@ fn the_sun_center_shrinks_to_the_minimum_before_the_ellipsis() {
     fonts();
     let tree = book_v();
     for size in (140..=560).step_by(20) {
-        let layout = SunburstLayout::compute(&tree, ROOT, size as f32, 1.0);
+        let layout = SunburstLayout::compute(&tree, ROOT, size as f32, 1.0, &closed());
         for text in [PATH, NAME, LONG_NAME] {
             for line in center_text(&layout, text, text, text) {
                 let width = line.line.width();

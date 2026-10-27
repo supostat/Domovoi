@@ -4,9 +4,9 @@ use std::time::Instant;
 use domovoi_index::Category;
 use domovoi_render::{
     BUILT_METALLIB, DiagramOutline, DiagramPainter, DiagramRenderer, DiagramStrings, DiagramTree, GlyphAtlas,
-    NodeOrigin, ROOT, SunburstLayout, TreemapLayout, register_fonts,
+    NodeOrigin, ROOT, SmallGroups, SunburstLayout, TreemapLayout, register_fonts,
 };
-use domovoi_theme::Palette;
+use domovoi_theme::{Palette, PluralForms};
 
 const FIXTURES: [(&str, [usize; 3]); 2] = [("1 млн", [100, 100, 100]), ("5,65 млн", [150, 150, 251])];
 const SUNBURST_SIDE: f32 = 600.0;
@@ -19,6 +19,12 @@ const STRINGS: DiagramStrings = DiagramStrings {
     ],
     used: "used",
     up: "up",
+    small_group: "small items",
+    objects: PluralForms {
+        one: "item",
+        few: "items",
+        many: "items",
+    },
 };
 
 struct Sizes(u64);
@@ -61,7 +67,7 @@ fn main() {
     for (name, fanout) in FIXTURES {
         let tree = DiagramTree::from_outline(&outline(&fanout, &mut Sizes(7), 1));
         let started = Instant::now();
-        let sunburst = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIDE, 1.0);
+        let sunburst = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIDE, 1.0, &SmallGroups::default());
         let sunburst_layout = started.elapsed();
         let started = Instant::now();
         let treemap = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT);

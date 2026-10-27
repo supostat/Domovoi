@@ -5,7 +5,8 @@ use objc2_app_kit::{NSMenu, NSMenuItem};
 use objc2_foundation::NSString;
 
 use crate::strings::{
-    APP_NAME, CHECK_FOR_UPDATES, CLOSE_WINDOW, HIDE_APP, MINIMIZE, QUIT_APP, RESCAN_DISK, WINDOW_MENU,
+    ALWAYS_EXPAND_SMALL, APP_NAME, CHECK_FOR_UPDATES, CLOSE_WINDOW, HIDE_APP, MINIMIZE, QUIT_APP, RESCAN_DISK,
+    VIEW_MENU, WINDOW_MENU,
 };
 
 pub fn main_menu(marker: MainThreadMarker) -> Retained<NSMenu> {
@@ -20,6 +21,11 @@ pub fn main_menu(marker: MainThreadMarker) -> Retained<NSMenu> {
             (QUIT_APP, sel!(terminate:), "q"),
         ],
     );
+    let view = submenu(
+        marker,
+        VIEW_MENU,
+        &[(ALWAYS_EXPAND_SMALL, sel!(toggleSmallGroups:), "")],
+    );
     let window = submenu(
         marker,
         WINDOW_MENU,
@@ -29,6 +35,7 @@ pub fn main_menu(marker: MainThreadMarker) -> Retained<NSMenu> {
         ],
     );
     bar.addItem(&application);
+    bar.addItem(&view);
     bar.addItem(&window);
     bar
 }

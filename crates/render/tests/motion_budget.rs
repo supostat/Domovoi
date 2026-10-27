@@ -88,7 +88,7 @@ fn hovering_dims_the_other_segments_to_45_percent_in_120_ms() {
     let mut atlas = GlyphAtlas::default();
     let resting = state.scene(started, 1.0, &mut atlas).shapes[other].fill[3];
     state.hover(Some(layout.point_at(angle, radius)), started);
-    assert_eq!(state.hovered, Some(hovered.node));
+    assert_eq!(state.hovered, Some(hovered.hit()));
     let halfway = state.scene(started + Duration::from_millis(30), 1.0, &mut atlas).shapes[other].fill[3];
     let dimmed = state
         .scene(started + Duration::from_millis(120), 1.0, &mut atlas)

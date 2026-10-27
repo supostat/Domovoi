@@ -2,13 +2,16 @@ use std::f32::consts::TAU;
 
 use crate::arc_segment::ArcSegment;
 use crate::diagram_tree::DiagramTree;
+use crate::hit::Hit;
 use crate::point::Point;
+use crate::segment_kind::SegmentKind;
+use crate::small_groups::SmallGroups;
 
 pub const RING_COUNT: u32 = 4;
+pub const SMALL_GROUP_SPAN: f32 = 0.006;
 const INNER_SHARE: f32 = 0.19;
 const OUTER_MARGIN: f32 = 4.0;
 const RING_GAP: f32 = 1.5;
-const VISIBLE_SPAN: f32 = 0.006;
 const WIDE_SPAN: f32 = 0.025;
 const WIDE_PAD: f32 = 0.004;
 const NARROW_PAD: f32 = 0.001;
@@ -22,15 +25,21 @@ pub struct SunburstLayout {
     pub segments: Vec<ArcSegment>,
 }
 
+struct SmallRun {
+    start: f32,
+    count: usize,
+    bytes: u64,
+}
+
 impl SunburstLayout {
-    pub fn compute(tree: &DiagramTree, focus: usize, size: f32, sweep: f32) -> Self {
+    pub fn compute(tree: &DiagramTree, focus: usize, size: f32, sweep: f32, groups: &SmallGroups) -> Self {
         let mut layout = Self {
             size,
             focus,
             sweep: sweep.clamp(0.0, 1.0),
             segments: Vec::new(),
         };
-        layout.walk(tree, focus, 0.0, TAU, 0);
+        layout.walk(tree, focus, 0.0, TAU, 0, groups);
         layout
     }
 
@@ -61,7 +70,13 @@ impl SunburstLayout {
             .sum()
     }
 
-    pub fn hit_test(&self, point: Point) -> Option<usize> {
+    pub fn groups(&self) -> impl Iterator<Item = &ArcSegment> {
+        self.segments
+            .iter()
+            .filter(|segment| matches!(segment.kind, SegmentKind::SmallGroup { .. }))
+    }
+
+    pub fn hit_test(&self, point: Point) -> Option<Hit> {
         let center = self.center();
         let (dx, dy) = (point.x - center.x, point.y - center.y);
         let radius = dx.hypot(dy);
@@ -74,7 +89,7 @@ impl SunburstLayout {
                     && angle >= segment.start_angle
                     && angle < segment.end_angle
             })
-            .map(|segment| segment.node)
+            .map(ArcSegment::hit)
     }
 
     pub fn point_at(&self, angle: f32, radius: f32) -> Point {
@@ -85,32 +100,60 @@ impl SunburstLayout {
         }
     }
 
-    fn walk(&mut self, tree: &DiagramTree, node: usize, start: f32, end: f32, ring: u32) {
+    fn walk(&mut self, tree: &DiagramTree, node: usize, start: f32, end: f32, ring: u32, groups: &SmallGroups) {
         let parent_size = tree.node(node).size;
         if parent_size == 0 {
             return;
         }
         let limit = self.sweep * TAU;
+        let opened = groups.is_open(node);
         let mut angle = start;
+        let mut small: Option<SmallRun> = None;
         for child in tree.node(node).children.clone() {
-            let span = (end - start) * (tree.node(child).size as f32 / parent_size as f32);
+            let child_size = tree.node(child).size;
+            let span = (end - start) * (child_size as f32 / parent_size as f32);
             let child_end = angle + span;
-            if span > VISIBLE_SPAN && angle < limit {
-                let radius = self.inner_radius() + ring as f32 * self.ring_width();
-                self.segments.push(ArcSegment {
-                    node: child,
-                    ring,
-                    start_angle: angle,
-                    end_angle: child_end.min(limit),
-                    pad: if span > WIDE_SPAN { WIDE_PAD } else { NARROW_PAD },
-                    inner_radius: radius + RING_GAP,
-                    outer_radius: radius + self.ring_width() - RING_GAP,
-                });
-                if ring + 1 < RING_COUNT {
-                    self.walk(tree, child, angle, child_end, ring + 1);
+            if span > 0.0 && angle < limit {
+                if span > SMALL_GROUP_SPAN || opened {
+                    self.segments
+                        .push(self.segment(child, SegmentKind::Node, ring, angle, child_end.min(limit), span));
+                    if ring + 1 < RING_COUNT {
+                        self.walk(tree, child, angle, child_end, ring + 1, groups);
+                    }
+                } else {
+                    let run = small.get_or_insert(SmallRun {
+                        start: angle,
+                        count: 0,
+                        bytes: 0,
+                    });
+                    run.count += 1;
+                    run.bytes += child_size;
                 }
             }
             angle = child_end;
+        }
+        if let Some(run) = small {
+            let kind = SegmentKind::SmallGroup {
+                count: run.count,
+                bytes: run.bytes,
+            };
+            let group_end = angle.min(limit);
+            self.segments
+                .push(self.segment(node, kind, ring, run.start, group_end, group_end - run.start));
+        }
+    }
+
+    fn segment(&self, node: usize, kind: SegmentKind, ring: u32, start: f32, end: f32, span: f32) -> ArcSegment {
+        let radius = self.inner_radius() + ring as f32 * self.ring_width();
+        ArcSegment {
+            node,
+            kind,
+            ring,
+            start_angle: start,
+            end_angle: end,
+            pad: if span > WIDE_SPAN { WIDE_PAD } else { NARROW_PAD },
+            inner_radius: radius + RING_GAP,
+            outer_radius: radius + self.ring_width() - RING_GAP,
         }
     }
 }

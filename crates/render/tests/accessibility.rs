@@ -4,7 +4,7 @@ use std::process::ExitCode;
 
 use domovoi_render::{
     AccessibleSegment, DiagramGraphics, DiagramLayout, DiagramMode, DiagramState, DiagramTree, DiagramView, GlyphAtlas,
-    ROOT, TileRole,
+    Hit, ROOT, TileRole,
 };
 use domovoi_theme::{Palette, format_size};
 use objc2::rc::Retained;
@@ -12,7 +12,7 @@ use objc2::runtime::AnyObject;
 use objc2::{MainThreadMarker, msg_send};
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
 use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
-use support::{STRINGS, book_v, fonts, renderer};
+use support::{SMALL_FILE_BYTES, SMALL_FILES, STRINGS, book_v, fonts, renderer, small_group_tree};
 
 const SIDE: f64 = 460.0;
 const RIGHT_ARROW: u16 = 124;
@@ -115,7 +115,7 @@ fn check_sunburst(checks: &mut Checks, view: &DiagramView, tree: &DiagramTree) -
                 format!("the frame of {} holds its arc", segment.label),
             );
             checks.expect(
-                layout.hit_test(middle) == Some(segment.node),
+                layout.hit_test(middle) == Some(segment.hit()),
                 format!("hit-testing {} finds it", segment.label),
             );
         }
@@ -148,6 +148,52 @@ fn check_keyboard(checks: &mut Checks, view: &DiagramView, expected: &[Accessibl
         "return opens the focused level",
     );
     checks.expect(view.state().focus() != ROOT, "the diagram left the root");
+}
+
+fn check_small_group(checks: &mut Checks, view: &DiagramView) {
+    view.update_state(|state| {
+        *state = DiagramState::new(
+            small_group_tree(),
+            DiagramMode::Sunburst,
+            STRINGS,
+            &Palette::DARK,
+            SIDE as f32,
+            SIDE as f32,
+        );
+    });
+    let segments = view.state().segments();
+    let Some(group) = segments.iter().find(|segment| segment.is_group).cloned() else {
+        checks.expect(false, "the small files are exposed as one group element");
+        return;
+    };
+    checks.expect(
+        group.label == STRINGS.small_group_label(SMALL_FILES, SMALL_FILES as u64 * SMALL_FILE_BYTES),
+        format!("the group label names the count and the size: {}", group.label),
+    );
+    if let DiagramLayout::Sunburst(layout) = &view.state().layout {
+        let arc = layout.groups().next().expect("the group is laid out");
+        let (angle, radius) = arc.middle();
+        let middle = layout.point_at(angle, radius);
+        checks.expect(group.frame.contains(middle), "the frame of the group holds its arc");
+        checks.expect(
+            layout.hit_test(middle) == Some(Hit::Group(ROOT)),
+            "hit-testing the group finds the group of the root",
+        );
+    }
+    check_elements(checks, view, &segments);
+    press(view, RIGHT_ARROW);
+    press(view, RIGHT_ARROW);
+    checks.expect(
+        view.state().keyboard_focus().as_ref() == Some(&group),
+        "the keyboard walk reaches the group after the large folder",
+    );
+    press(view, RETURN);
+    checks.expect(view.state().small_groups.is_open(ROOT), "return opens the group");
+    checks.expect(view.state().focus() == ROOT, "opening a group keeps the level");
+    checks.expect(
+        view.state().segments().len() == SMALL_FILES + 2,
+        "the opened members become elements beside the large folder and the center",
+    );
 }
 
 fn check_treemap(checks: &mut Checks, view: &DiagramView) {
@@ -189,6 +235,7 @@ fn main() -> ExitCode {
     };
     let expected = check_sunburst(&mut checks, &view, &tree);
     check_keyboard(&mut checks, &view, &expected);
+    check_small_group(&mut checks, &view);
     check_treemap(&mut checks, &view);
     if checks.failures.is_empty() {
         println!("accessibility: {} checks passed", checks.count);

@@ -6,9 +6,13 @@ use domovoi_index::Category;
 use domovoi_render::{
     BUILT_METALLIB, DiagramOutline, DiagramRenderer, DiagramStrings, DiagramTree, NodeOrigin, register_fonts,
 };
+use domovoi_theme::PluralForms;
 use serde_json::Value;
 
 const GIGABYTE: f64 = 1_000_000_000.0;
+pub(crate) const SMALL_FILES: usize = 40;
+pub(crate) const SMALL_FILE_BYTES: u64 = 20_000_000;
+const LARGE_FOLDER_BYTES: u64 = 100_000_000_000;
 
 pub(crate) const STRINGS: DiagramStrings = DiagramStrings {
     category_names: [
@@ -24,6 +28,12 @@ pub(crate) const STRINGS: DiagramStrings = DiagramStrings {
     ],
     used: "занято",
     up: "↑ наверх",
+    small_group: "мелкие объекты",
+    objects: PluralForms {
+        one: "объект",
+        few: "объекта",
+        many: "объектов",
+    },
 };
 
 pub(crate) fn crate_path(relative: &str) -> PathBuf {
@@ -38,6 +48,32 @@ pub(crate) fn book_v() -> DiagramTree {
     let text = std::fs::read_to_string(crate_path("tests/fixtures/book_v.json")).expect("the fixture reads");
     let value: Value = serde_json::from_str(&text).expect("the fixture is JSON");
     DiagramTree::from_outline(&outline(&value))
+}
+
+pub(crate) fn small_group_tree() -> DiagramTree {
+    let leaf = |name: String, size: u64, category: Category| DiagramOutline {
+        name,
+        category,
+        size,
+        origin: NodeOrigin::Outline,
+        children: Vec::new(),
+    };
+    let mut children = vec![DiagramOutline {
+        name: "Photos Library".to_owned(),
+        category: Category::Media,
+        size: 0,
+        origin: NodeOrigin::Outline,
+        children: vec![leaf("originals".to_owned(), LARGE_FOLDER_BYTES, Category::Media)],
+    }];
+    children
+        .extend((0..SMALL_FILES).map(|number| leaf(format!("note-{number:02}.txt"), SMALL_FILE_BYTES, Category::Docs)));
+    DiagramTree::from_outline(&DiagramOutline {
+        name: "Documents".to_owned(),
+        category: Category::Home,
+        size: 0,
+        origin: NodeOrigin::Outline,
+        children,
+    })
 }
 
 pub(crate) fn renderer() -> DiagramRenderer {

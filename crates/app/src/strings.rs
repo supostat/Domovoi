@@ -59,6 +59,9 @@ pub const CHECK_FOR_UPDATES: &str = "Проверить обновления…"
 pub const HIDE_APP: &str = "Скрыть DOMOVOI";
 pub const QUIT_APP: &str = "Завершить DOMOVOI";
 pub const WINDOW_MENU: &str = "Окно";
+pub const VIEW_MENU: &str = "Вид";
+pub const ALWAYS_EXPAND_SMALL: &str = "Всегда раскрывать мелкие объекты";
+pub const SMALL_GROUP: &str = "мелкие объекты";
 pub const MINIMIZE: &str = "Свернуть";
 pub const CLOSE_WINDOW: &str = "Закрыть окно";
 pub const FAILURE_TITLE: &str = "Домовой не смог продолжить";
@@ -377,4 +380,6 @@ pub const DIAGRAM: DiagramStrings = DiagramStrings {
     ],
     used: "занято",
     up: "↑ наверх",
+    small_group: SMALL_GROUP,
+    objects: OBJECTS,
 };

@@ -4,7 +4,10 @@ use std::rc::Rc;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObjectProtocol};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
-use objc2_app_kit::{NSApplication, NSApplicationDelegate, NSMenuItem, NSMenuItemValidation};
+use objc2_app_kit::{
+    NSApplication, NSApplicationDelegate, NSControlStateValueOff, NSControlStateValueOn, NSMenuItem,
+    NSMenuItemValidation,
+};
 use objc2_foundation::{NSNotification, NSObject};
 
 use domovoi_downloader::ModelStore;
@@ -46,6 +49,13 @@ define_class!(
                 controller.dispatch(ShellAction::Rescan);
             }
         }
+
+        #[unsafe(method(toggleSmallGroups:))]
+        fn toggle_small_groups(&self, _sender: Option<&AnyObject>) {
+            if let Some(controller) = self.ivars().controller.get() {
+                controller.dispatch(ShellAction::ToggleSmallGroups);
+            }
+        }
     }
 
     unsafe impl NSMenuItemValidation for AppDelegate {
@@ -58,6 +68,19 @@ define_class!(
                     .controller
                     .get()
                     .is_some_and(|controller| controller.allows(ShellAction::Rescan)),
+                Some(action) if action == sel!(toggleSmallGroups:) => {
+                    let always = self
+                        .ivars()
+                        .controller
+                        .get()
+                        .is_some_and(|controller| controller.small_groups_always());
+                    item.setState(if always {
+                        NSControlStateValueOn
+                    } else {
+                        NSControlStateValueOff
+                    });
+                    true
+                }
                 _ => true,
             }
         }
