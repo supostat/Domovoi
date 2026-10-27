@@ -20,6 +20,7 @@ pub enum ShellAction {
     ShowProperties(usize),
     ShowClickedRowProperties,
     ExportCsv,
+    TogglePreview,
     Navigate(Section),
     OpenTray,
     ToggleCard(usize),

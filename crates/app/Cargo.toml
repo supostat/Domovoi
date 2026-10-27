@@ -99,7 +99,8 @@ objc2-app-kit = { workspace = true, features = [
 ] }
 objc2-core-foundation = { workspace = true, features = ["CFCGTypes"] }
 objc2-core-graphics = { workspace = true, features = ["CGBitmapContext", "CGColor", "CGColorSpace", "CGContext", "CGImage", "CGPath"] }
-objc2-foundation = { workspace = true, features = ["NSArray", "NSAttributedString", "NSBundle", "NSDate", "NSDictionary", "NSError", "NSGeometry", "NSIndexPath", "NSNotification", "NSObject", "NSOperation", "NSProcessInfo", "NSRange", "NSRunLoop", "NSString", "NSTimer", "NSURL", "NSUserDefaults", "NSValue", "block2"] }
+objc2-quick-look-ui = { workspace = true, features = ["QLPreviewItem", "QLPreviewPanel", "objc2-app-kit"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSAttributedString", "NSBundle", "NSDate", "NSDictionary", "NSError", "NSGeometry", "NSIndexPath", "NSIndexSet", "NSNotification", "NSObject", "NSOperation", "NSProcessInfo", "NSRange", "NSRunLoop", "NSString", "NSTimer", "NSURL", "NSUserDefaults", "NSValue", "block2"] }
 serde.workspace = true
 serde_json.workspace = true
 

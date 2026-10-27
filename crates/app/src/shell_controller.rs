@@ -24,8 +24,10 @@ use objc2_app_kit::{
     NSWorkspaceOpenConfiguration,
 };
 use objc2_foundation::{
-    NSArray, NSBundle, NSInteger, NSNotification, NSOperationQueue, NSPoint, NSRect, NSSize, NSString, NSTimer, NSURL,
+    NSArray, NSBundle, NSIndexSet, NSInteger, NSNotFound, NSNotification, NSOperationQueue, NSPoint, NSRect, NSSize,
+    NSString, NSTimer, NSUInteger, NSURL,
 };
+use objc2_quick_look_ui::QLPreviewPanel;
 
 use crate::access_screen::AccessScreen;
 use crate::access_state::AccessState;
@@ -48,6 +50,7 @@ use crate::delete_status::DeleteStatus;
 use crate::diagram_preference::{remember_mode, remember_small_groups, remembered_mode, remembered_small_groups};
 use crate::disk_overview::{DiskOverview, SYSTEM_DATA_ROOT};
 use crate::duplicate_job::DuplicateJob;
+use crate::duplicate_key::DuplicateKey;
 use crate::duplicate_summary::DuplicateSummary;
 use crate::duplicates_layout::DuplicatesLayout;
 use crate::duplicates_model::DuplicatesModel;
@@ -62,6 +65,8 @@ use crate::main_screen::MainScreen;
 use crate::model_screen::ModelScreen;
 use crate::navigation::Navigation;
 use crate::node_facts::NodeFacts;
+use crate::preview_source::PreviewSource;
+use crate::preview_targets::PreviewTargets;
 use crate::properties_panel::PropertiesPanel;
 use crate::recommendations_screen::RecommendationsScreen;
 use crate::scan_job::ScanJob;
@@ -110,6 +115,7 @@ pub(crate) struct ShellController {
     actions: Retained<ShellActions>,
     hover: HoverPanel,
     properties: PropertiesPanel,
+    preview: Retained<PreviewSource>,
     paths: SessionPaths,
     state: RefCell<ShellState>,
 }
@@ -143,6 +149,7 @@ impl ShellController {
             actions: ShellActions::new(marker),
             hover: HoverPanel::new(marker),
             properties: PropertiesPanel::new(marker),
+            preview: PreviewSource::new(marker),
             paths,
             state: RefCell::new(ShellState::new(remembered_mode(), remembered_small_groups(), assistant)),
         });
@@ -154,6 +161,7 @@ impl ShellController {
                 controller.restyle();
             }
         }));
+        controller.root.set_preview_source(controller.preview.clone());
         controller.observe_contrast();
         controller.window.center();
         controller.window.makeKeyAndOrderFront(None);
@@ -1137,6 +1145,53 @@ impl ShellController {
         Some((button.into_super().into_super(), bounds))
     }
 
+    fn toggle_preview(&self) {
+        let targets = self.preview_targets();
+        self.preview.set_targets(&targets);
+        let Some(panel) = (unsafe { QLPreviewPanel::sharedPreviewPanel(self.marker) }) else {
+            return;
+        };
+        if panel.isVisible() {
+            if targets.is_empty() {
+                panel.orderOut(None);
+            } else {
+                unsafe { panel.reloadData() };
+            }
+        } else if !targets.is_empty() {
+            panel.makeKeyAndOrderFront(None);
+        }
+    }
+
+    fn preview_targets(&self) -> PreviewTargets {
+        let state = self.state.borrow();
+        let Some(index) = state.session.as_ref().and_then(Session::index) else {
+            return PreviewTargets::default();
+        };
+        match (&state.views, &state.data) {
+            (Some(ScreenViews::Main { screen, .. }), Some(data)) => {
+                let rows = data.level_rows(state.focus);
+                let nodes: Vec<usize> = selected_rows(&screen.list.table.selectedRowIndexes())
+                    .filter_map(|row| rows.get(row).map(|row| row.node))
+                    .collect();
+                PreviewTargets::from_level(&data.tree, index, &nodes)
+            }
+            (Some(ScreenViews::Duplicates(screen)), Some(data)) => {
+                let Some((outline, _)) = &screen.outline else {
+                    return PreviewTargets::default();
+                };
+                let keys: Vec<DuplicateKey> = selected_rows(&outline.selectedRowIndexes())
+                    .filter_map(|row| outline.itemAtRow(NSInteger::try_from(row).ok()?))
+                    .filter_map(|item| {
+                        item.downcast_ref::<NSString>()
+                            .map(|key| DuplicateKey::parse(&key.to_string()))
+                    })
+                    .collect();
+                PreviewTargets::from_duplicates(data.care.duplicates.groups(), &keys)
+            }
+            _ => PreviewTargets::default(),
+        }
+    }
+
     fn export_csv(&self) {
         let volume = self
             .state
@@ -1323,6 +1378,7 @@ impl ActionHandler for ShellController {
                 }
             }
             ShellAction::ExportCsv => self.export_csv(),
+            ShellAction::TogglePreview => self.toggle_preview(),
             ShellAction::OpenClickedRow => {
                 let openable = self.clicked_row().filter(|node| {
                     let state = self.state.borrow();
@@ -1384,6 +1440,19 @@ impl ActionHandler for ShellController {
             _ => self.state.borrow().gate().allows(action),
         }
     }
+}
+
+fn selected_rows(indexes: &NSIndexSet) -> impl Iterator<Item = usize> + '_ {
+    let absent = NSUInteger::try_from(NSNotFound).expect("NSNotFound is a positive sentinel");
+    let mut next = indexes.firstIndex();
+    std::iter::from_fn(move || {
+        if next == absent {
+            return None;
+        }
+        let current = next;
+        next = indexes.indexGreaterThanIndex(next);
+        Some(current)
+    })
 }
 
 fn sync_assistant(state: &mut ShellState, previous: Option<&ScreenViews>) {

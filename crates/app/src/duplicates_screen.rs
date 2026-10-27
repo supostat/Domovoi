@@ -21,6 +21,7 @@ use crate::empty_state::empty_state;
 use crate::fill_view::{FillStyle, FillView};
 use crate::label::{label, measure_label, retext};
 use crate::pane_head::pane_head;
+use crate::preview_outline::PreviewOutline;
 use crate::probes::Probes;
 use crate::section::Section;
 use crate::segmented_switch::SegmentedSwitch;
@@ -524,7 +525,8 @@ fn groups_outline(
     scroll.setAutoresizingMask(
         NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
     );
-    let outline = NSOutlineView::initWithFrame(NSOutlineView::alloc(marker), NSRect::new(NSPoint::ZERO, inner.size));
+    let outline: Retained<NSOutlineView> =
+        PreviewOutline::new(marker, NSRect::new(NSPoint::ZERO, inner.size), actions).into_super();
     outline.setStyle(NSTableViewStyle::Plain);
     outline.setHeaderView(None);
     outline.setBackgroundColor(&palette.tokens.bg.ns_color());

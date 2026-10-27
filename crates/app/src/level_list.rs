@@ -6,6 +6,8 @@ use objc2::{MainThreadMarker, MainThreadOnly, sel};
 use objc2_app_kit::{
     NSMenu, NSMenuItem, NSScrollView, NSTableColumn, NSTableView, NSTableViewColumnAutoresizingStyle, NSTableViewStyle,
 };
+
+use crate::preview_table::PreviewTable;
 use objc2_foundation::{NSRect, NSString};
 
 use crate::level_list_source::{LevelListModel, LevelListSource, ROW_HEIGHT};
@@ -25,7 +27,7 @@ impl LevelList {
     pub fn build(marker: MainThreadMarker, frame: NSRect, palette: ShellPalette, actions: &ShellActions) -> Self {
         let scroll = NSScrollView::initWithFrame(NSScrollView::alloc(marker), frame);
         scroll.setDrawsBackground(false);
-        let table = NSTableView::initWithFrame(NSTableView::alloc(marker), frame);
+        let table: Retained<NSTableView> = PreviewTable::new(marker, frame, actions).into_super();
         table.setStyle(NSTableViewStyle::Plain);
         table.setHeaderView(None);
         table.setBackgroundColor(&palette.tokens.bg.ns_color());

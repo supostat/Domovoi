@@ -8,6 +8,7 @@ use objc2_app_kit::{
 use objc2_core_foundation::CGFloat;
 use objc2_foundation::{NSInteger, NSObject, NSString};
 
+use crate::duplicate_key::DuplicateKey;
 use crate::duplicate_rows::{GROUP_GAP, GROUP_HEIGHT, MEMBER_HEIGHT, group_row, member_row};
 use crate::duplicates_layout::DuplicatesLayout;
 use crate::duplicates_source_model::DuplicatesSourceModel;
@@ -28,8 +29,8 @@ define_class!(
             let groups = self.ivars().groups.borrow();
             let count = match item.map(locate) {
                 None => groups.len(),
-                Some((group, None)) => groups[group].copies.len() + 1,
-                Some((_, Some(_))) => 0,
+                Some(DuplicateKey { group, member: None }) => groups[group].copies.len() + 1,
+                Some(DuplicateKey { member: Some(_), .. }) => 0,
             };
             NSInteger::try_from(count).expect("groups are few")
         }
@@ -38,17 +39,23 @@ define_class!(
         fn child(&self, _outline: &NSOutlineView, index: NSInteger, item: Option<&AnyObject>) -> Retained<AnyObject> {
             let index = usize::try_from(index).expect("AppKit asks for a valid child");
             let key = match item.map(locate) {
-                None => format!("{index}"),
-                Some((group, _)) => format!("{group}.{index}"),
+                None => DuplicateKey {
+                    group: index,
+                    member: None,
+                },
+                Some(parent) => DuplicateKey {
+                    group: parent.group,
+                    member: Some(index),
+                },
             };
-            let key = NSString::from_str(&key);
+            let key = NSString::from_str(&key.text());
             self.ivars().keys.borrow_mut().push(key.clone());
             key.into()
         }
 
         #[unsafe(method(outlineView:isItemExpandable:))]
         fn expandable(&self, _outline: &NSOutlineView, item: &AnyObject) -> bool {
-            locate(item).1.is_none()
+            locate(item).member.is_none()
         }
     }
 
@@ -58,8 +65,8 @@ define_class!(
 
     unsafe impl NSOutlineViewDelegate for DuplicatesSource {
         #[unsafe(method(outlineView:shouldSelectItem:))]
-        fn should_select(&self, _outline: &NSOutlineView, _item: &AnyObject) -> bool {
-            false
+        fn should_select(&self, _outline: &NSOutlineView, item: &AnyObject) -> bool {
+            locate(item).member.is_some()
         }
 
         #[unsafe(method(outlineView:shouldShowOutlineCellForItem:))]
@@ -69,7 +76,7 @@ define_class!(
 
         #[unsafe(method(outlineView:heightOfRowByItem:))]
         fn row_height(&self, _outline: &NSOutlineView, item: &AnyObject) -> CGFloat {
-            if locate(item).1.is_none() {
+            if locate(item).member.is_none() {
                 GROUP_GAP + GROUP_HEIGHT
             } else {
                 MEMBER_HEIGHT
@@ -86,7 +93,7 @@ define_class!(
             let model = self.ivars();
             let marker = MainThreadMarker::from(self);
             let groups = model.groups.borrow();
-            Some(match locate(item) {
+            Some(match locate(item).into_pair() {
                 (group, None) => group_row(marker, &groups[group], model.width, &model.palette),
                 (group, Some(0)) => {
                     member_row(
@@ -138,13 +145,11 @@ impl DuplicatesSource {
     }
 }
 
-fn locate(item: &AnyObject) -> (usize, Option<usize>) {
-    let key = item
-        .downcast_ref::<NSString>()
-        .expect("duplicate rows are keyed by strings")
-        .to_string();
-    let mut parts = key
-        .split('.')
-        .map(|part| part.parse::<usize>().expect("duplicate keys are numeric"));
-    (parts.next().expect("a key names a group"), parts.next())
+fn locate(item: &AnyObject) -> DuplicateKey {
+    DuplicateKey::parse(
+        &item
+            .downcast_ref::<NSString>()
+            .expect("duplicate rows are keyed by strings")
+            .to_string(),
+    )
 }
