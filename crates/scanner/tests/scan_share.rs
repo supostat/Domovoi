@@ -1,4 +1,3 @@
-use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
@@ -37,7 +36,6 @@ fn shares(root: &Path, expected_directories: Option<u64>) -> (Vec<f32>, Option<f
     let (sender, receiver) = mpsc::sync_channel(BACKLOG);
     let listener = thread::spawn(move || receiver.iter().collect::<Vec<ScanProgress>>());
     let options = ScanOptions {
-        workers: NonZeroUsize::new(1),
         progress: Some(sender),
         expected_directories,
         ..ScanOptions::default()

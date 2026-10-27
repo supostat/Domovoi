@@ -45,6 +45,7 @@ pub fn scan(root: &Path, options: &ScanOptions) -> Result<ScanReport, ScanError>
         deferred: Mutex::new(Vec::new()),
         monitor: StallMonitor::default(),
         share: ProgressShare::new(options.expected_directories),
+        progress_order: Mutex::new(()),
     };
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(options.workers.map_or(0, NonZeroUsize::get))
@@ -131,6 +132,7 @@ struct Walk<'options> {
     deferred: Mutex<Vec<DeferredFolder>>,
     monitor: StallMonitor,
     share: ProgressShare,
+    progress_order: Mutex<()>,
 }
 
 struct DeferredFolder {
@@ -277,6 +279,7 @@ impl Walk<'_> {
         let files = self.files.fetch_add(files, Ordering::Relaxed) + files;
         let bytes = self.bytes.fetch_add(bytes, Ordering::Relaxed) + bytes;
         if let Some(progress) = &self.options.progress {
+            let ordered = self.progress_order.lock().expect("progress order is not poisoned");
             let event = ScanProgress::Walking {
                 files,
                 bytes,
@@ -286,6 +289,7 @@ impl Walk<'_> {
             match progress.try_send(event) {
                 Ok(()) | Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {}
             }
+            drop(ordered);
         }
     }
 }

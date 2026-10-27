@@ -39,6 +39,7 @@ const ARCHIVE_BLOB_BYTES: usize = 8 * MEGABYTE;
 const MUSIC: &str = "Music";
 const NESTED_MUSIC: &str = "Music ▸ Music";
 const ANGLE_TOLERANCE: f64 = 1e-3;
+const SHARE_TOLERANCE: f64 = 1e-4;
 
 fn manifest_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
@@ -184,11 +185,40 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     populate(&mount_point);
     let state = TempTree::new().expect("a temp tree is created");
     let models = state.path().join("models");
-    let snapshots = state.path().join("snapshots");
     let entry = tiny_entry();
     let content = fs::read(manifest_path(TINY_MODEL)).expect("the tiny model reads");
     seed_partial(&models, &entry, &content);
     let server = serve(&entry, content);
+    let csv = state.path().join("index.csv");
+    let scenario = scenario(&mount_point, state.path(), &models, &csv, server.base());
+    let scenario_path = state.path().join("scenario.json");
+    let report_path = state.path().join("report.json");
+    fs::write(&scenario_path, scenario.to_string()).expect("the scenario is written");
+    let output = Command::new(&executable)
+        .arg("--e2e")
+        .arg(&scenario_path)
+        .arg("--report")
+        .arg(&report_path)
+        .env(METAL_DEVICES, "0")
+        .output()
+        .expect("the bundled application starts");
+    let report: Value = serde_json::from_str(&fs::read_to_string(&report_path).expect("the report is written"))
+        .expect("the report parses");
+    assert!(
+        output.status.success(),
+        "the main path failed: {}\n{report:#}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_index_and_care(&report, &mount_point);
+    assert_disk_update(&report);
+    assert_interface_techniques(&report, &csv);
+    assert_scanner_techniques(&report);
+    assert_model_and_answer(&report, &server);
+    assert_snapshots(&report);
+}
+
+fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror: &str) -> Value {
+    let snapshots = state.join("snapshots");
     let unwatched = mount_point.join("unwatched.txt");
     let fresh_in_root = mount_point.join("fresh.txt");
     let fresh_in_depth = mount_point.join(DEEP_FOLDER).join("fresh.o");
@@ -197,10 +227,9 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     let fresh_note = notes.join("fresh-note.txt");
     let archive = mount_point.join(ARCHIVE);
     let music = mount_point.join(MUSIC);
-    let csv = state.path().join("index.csv");
-    let scenario = json!({
+    json!({
         "root": mount_point,
-        "state": state.path().join("session"),
+        "state": state.join("session"),
         "steps": [
             {"step": "scan"},
             {"step": "reopen_cache"},
@@ -227,13 +256,15 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
             {"step": "small_groups", "path": archive},
             {"step": "preview_targets", "path": music},
             {"step": "export_csv", "path": csv},
+            {"step": "hidden_space"},
+            {"step": "tmutil_commands"},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
             {
                 "step": "download_model",
                 "catalog": manifest_path(TEST_CATALOG),
                 "entry": ENTRY,
-                "mirror": server.base(),
+                "mirror": mirror,
                 "models": models,
             },
             {
@@ -248,30 +279,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
             },
             {"step": "snapshots", "directory": snapshots, "scale": 1},
         ],
-    });
-    let scenario_path = state.path().join("scenario.json");
-    let report_path = state.path().join("report.json");
-    fs::write(&scenario_path, scenario.to_string()).expect("the scenario is written");
-    let output = Command::new(&executable)
-        .arg("--e2e")
-        .arg(&scenario_path)
-        .arg("--report")
-        .arg(&report_path)
-        .env(METAL_DEVICES, "0")
-        .output()
-        .expect("the bundled application starts");
-    let report: Value = serde_json::from_str(&fs::read_to_string(&report_path).expect("the report is written"))
-        .expect("the report parses");
-    assert!(
-        output.status.success(),
-        "the main path failed: {}\n{report:#}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_index_and_care(&report, &mount_point);
-    assert_disk_update(&report);
-    assert_interface_techniques(&report, &csv);
-    assert_model_and_answer(&report, &server);
-    assert_snapshots(&report);
+    })
 }
 
 fn assert_index_and_care(report: &Value, mount_point: &Path) {
@@ -448,6 +456,68 @@ fn assert_interface_techniques(report: &Value, csv: &Path) {
         text.starts_with("path,bytes,category,modified\r\n"),
         "{}",
         &text[..64.min(text.len())]
+    );
+}
+
+fn assert_scanner_techniques(report: &Value) {
+    let share = &step(report, "scan")["share_events"];
+    assert!(
+        share["count"].as_u64().is_some_and(|count| count > 1),
+        "the first scan reports its share more than once: {share}"
+    );
+    assert_eq!(share["drops"], 0, "the share never falls back: {share}");
+    let last = share["last"].as_f64().expect("the last share is reported");
+    assert!(
+        last > 0.0 && last <= 1.0 + SHARE_TOLERANCE,
+        "a folder the walk cannot open completes its share without an event, so the last sample stays within the whole: {share}"
+    );
+    assert_eq!(
+        share["walked"].as_f64(),
+        Some(1.0),
+        "the end of the walk reports the whole: {share}"
+    );
+    let rescan = step(report, "rescan");
+    assert!(
+        rescan["expected_directories"]
+            .as_u64()
+            .is_some_and(|directories| directories > 0),
+        "the rescan knows the folder count of the previous index: {rescan}"
+    );
+    assert_eq!(
+        rescan["share"].as_f64(),
+        Some(1.0),
+        "the rescan ends complete: {rescan}"
+    );
+    let hidden = step(report, "hidden_space");
+    assert_eq!(hidden["discrepancy"], false, "{hidden:#}");
+    assert!(
+        hidden["total"].as_i64().is_some_and(|total| total >= 0),
+        "the volume holds at least what the scan saw: {hidden:#}"
+    );
+    assert_eq!(
+        hidden["other_user_homes"], 0,
+        "the image has no home folders of other users: {hidden:#}"
+    );
+    assert!(
+        hidden["hidden_folders"].as_u64().is_some_and(|folders| folders >= 1),
+        "the locked folder stays hidden: {hidden:#}"
+    );
+    let commands = step(report, "tmutil_commands");
+    let time_machine = commands["time_machine"]
+        .as_u64()
+        .expect("Time Machine snapshots are counted");
+    let thinning = u64::from(commands["other"].as_u64().expect("other snapshots are counted") > 0);
+    assert_eq!(
+        commands["lines"].as_u64(),
+        Some(time_machine + thinning),
+        "one line per Time Machine snapshot and one thinning line for the rest: {commands}"
+    );
+    assert_eq!(
+        commands["time_machine"].as_u64(),
+        step(report, "hidden_space")["snapshots"]
+            .as_u64()
+            .map(|all| all - commands["other"].as_u64().unwrap_or(0)),
+        "{commands}"
     );
 }
 

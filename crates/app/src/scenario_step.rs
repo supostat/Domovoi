@@ -57,4 +57,6 @@ pub enum ScenarioStep {
     ExportCsv {
         path: PathBuf,
     },
+    HiddenSpace,
+    TmutilCommands,
 }
