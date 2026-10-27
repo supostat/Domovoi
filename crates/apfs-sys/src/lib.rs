@@ -49,7 +49,7 @@ pub use os_build::os_build_version;
 pub use path_entry::path_entry;
 pub use processes::{pids_with_open, process_path, running_bundle_roots};
 pub use snapshot::{Snapshot, snapshots};
-pub use snapshot_class::SnapshotClass;
+pub use snapshot_class::{SnapshotClass, time_machine_stamp};
 pub use stream_identity::{StreamIdentity, stream_identity};
 pub use volume::{data_volume, volume_used, volume_uuid};
 pub use volume_capabilities::{VolumeCapabilities, volume_capabilities};

@@ -19,9 +19,9 @@ use objc2::rc::{Retained, autoreleasepool};
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
     NSAlert, NSAlertFirstButtonReturn, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
-    NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSModalResponseOK, NSSavePanel, NSView, NSWindow,
-    NSWindowStyleMask, NSWorkspace, NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification,
-    NSWorkspaceOpenConfiguration,
+    NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSModalResponseOK, NSPasteboard,
+    NSPasteboardTypeString, NSSavePanel, NSView, NSWindow, NSWindowStyleMask, NSWorkspace,
+    NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification, NSWorkspaceOpenConfiguration,
 };
 use objc2_foundation::{
     NSArray, NSBundle, NSIndexSet, NSInteger, NSNotFound, NSNotification, NSOperationQueue, NSPoint, NSRect, NSSize,
@@ -90,10 +90,11 @@ use crate::shell_state::ShellState;
 use crate::stage::Stage;
 use crate::strings::{
     APP_NAME, CANCEL, CLONED, DELETE, DELETE_CONFIRM, DELETE_CONFIRM_HINT, DIAGRAM, FAILURE_CLOSE, FAILURE_TITLE,
-    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, OPEN_DISK_UTILITY, TERMINAL_MISSING, UNRESPONSIVE_TITLE, UPDATING_INDEX,
-    csv_file_name, unresponsive_body,
+    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, OPEN_DISK_UTILITY, TERMINAL_MISSING, TMUTIL_COPIED, UNRESPONSIVE_TITLE,
+    UPDATING_INDEX, csv_file_name, unresponsive_body,
 };
 use crate::tilde::tilde;
+use crate::tmutil_commands::tmutil_commands;
 use crate::tray_measurement::TrayMeasurement;
 use crate::tray_model::TrayModel;
 use crate::tray_screen::TrayScreen;
@@ -1218,6 +1219,14 @@ impl ShellController {
         }
     }
 
+    fn copy_tmutil(&self) {
+        let commands = tmutil_commands(&self.state.borrow().overview().volumes.snapshots);
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        pasteboard.setString_forType(&NSString::from_str(&commands), unsafe { NSPasteboardTypeString });
+        self.inform(TMUTIL_COPIED);
+    }
+
     fn export_csv(&self) {
         let volume = self
             .state
@@ -1414,6 +1423,7 @@ impl ActionHandler for ShellController {
                     self.show_properties(node, Some(anchor));
                 }
             }
+            ShellAction::CopyTmutil => self.copy_tmutil(),
             ShellAction::ExportCsv => self.export_csv(),
             ShellAction::TogglePreview => self.toggle_preview(),
             ShellAction::OpenClickedRow => {
@@ -1474,6 +1484,9 @@ impl ActionHandler for ShellController {
             ShellAction::ShowClickedRowProperties => self
                 .clicked_row()
                 .is_some_and(|node| self.state.borrow().hover_tip(node).is_some()),
+            ShellAction::CopyTmutil => self
+                .clicked_row()
+                .is_some_and(|node| self.state.borrow().offers_tmutil(node)),
             _ => self.state.borrow().gate().allows(action),
         }
     }

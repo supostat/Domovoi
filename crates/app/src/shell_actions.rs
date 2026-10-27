@@ -239,6 +239,11 @@ define_class!(
         fn show_clicked_row_properties(&self, _sender: Option<&AnyObject>) {
             self.dispatch(ShellAction::ShowClickedRowProperties);
         }
+
+        #[unsafe(method(copyTmutilForClickedRow:))]
+        fn copy_tmutil_for_clicked_row(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::CopyTmutil);
+        }
     }
 
     unsafe impl NSMenuItemValidation for ShellActions {
@@ -293,6 +298,8 @@ impl ShellActions {
             node.map(ShellAction::ShowProperties)
         } else if selector == sel!(showClickedRowProperties:) {
             Some(ShellAction::ShowClickedRowProperties)
+        } else if selector == sel!(copyTmutilForClickedRow:) {
+            Some(ShellAction::CopyTmutil)
         } else if selector == sel!(focusNode:) {
             node.map(ShellAction::Focus)
         } else if selector == sel!(selectUnloadDelay:) {

@@ -2,7 +2,7 @@ use std::io;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use domovoi_index::ModelEvent;
+use domovoi_index::{Category, ModelEvent};
 use domovoi_render::{DiagramMode, NodeOrigin, ROOT, SmallGroups};
 use domovoi_theme::Palette;
 use objc2::rc::Retained;
@@ -33,6 +33,7 @@ use crate::shell_data::ShellData;
 use crate::shell_gate::ShellGate;
 use crate::shell_palette::ShellPalette;
 use crate::stage::Stage;
+use crate::strings::{DIAGRAM, PURGEABLE};
 use crate::tray_measurement::TrayMeasurement;
 use crate::tray_model::TrayModel;
 use crate::tray_sheet::TraySheet;
@@ -182,6 +183,15 @@ impl ShellState {
     pub(crate) fn hover_tip(&self, node: usize) -> Option<HoverTip> {
         let data = self.data.as_ref()?;
         HoverTip::for_node(data, self.session.as_ref().and_then(Session::index), node)
+    }
+
+    pub(crate) fn offers_tmutil(&self, node: usize) -> bool {
+        let Some(data) = self.data.as_ref() else {
+            return false;
+        };
+        let name = &data.tree.node(node).name;
+        let hidden_row = name == DIAGRAM.category_name(Category::Hidden) || name == PURGEABLE;
+        hidden_row && !self.overview().volumes.snapshots.is_empty()
     }
 
     pub(crate) fn node_path(&self, node: usize) -> Option<PathBuf> {

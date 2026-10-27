@@ -14,7 +14,7 @@ use crate::level_list_source::{LevelListModel, LevelListSource, ROW_HEIGHT};
 use crate::level_row::LevelRow;
 use crate::shell_actions::ShellActions;
 use crate::shell_palette::ShellPalette;
-use crate::strings::{OPEN_IN_TERMINAL, PROPERTIES, SHOW_IN_FINDER};
+use crate::strings::{COPY_TMUTIL, OPEN_IN_TERMINAL, PROPERTIES, SHOW_IN_FINDER};
 
 #[derive(Debug)]
 pub struct LevelList {
@@ -41,6 +41,7 @@ impl LevelList {
             (SHOW_IN_FINDER, sel!(showClickedRowInFinder:)),
             (OPEN_IN_TERMINAL, sel!(openClickedRowInTerminal:)),
             (PROPERTIES, sel!(showClickedRowProperties:)),
+            (COPY_TMUTIL, sel!(copyTmutilForClickedRow:)),
         ];
         for (title, selector) in entries {
             let item = unsafe {

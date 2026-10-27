@@ -147,6 +147,11 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
         Some("2 домашние папки других пользователей: их размер виден только администратору")
     );
     assert!(strings::PURGEABLE_TIME_MACHINE.contains("Time Machine"));
+    assert_eq!(
+        strings::TMUTIL_COPIED,
+        "Команда tmutil скопирована. Вставьте её в Terminal, чтобы удалить локальные снапшоты"
+    );
+    assert!(!strings::COPY_TMUTIL.contains('!'));
     assert!(!strings::UNACCOUNTED_HINT.contains('!'));
     assert_eq!(
         strings::SNAPSHOTS_RELEASE,

@@ -19,6 +19,7 @@ pub enum ShellAction {
     OpenClickedRowInTerminal,
     ShowProperties(usize),
     ShowClickedRowProperties,
+    CopyTmutil,
     ExportCsv,
     TogglePreview,
     Navigate(Section),
