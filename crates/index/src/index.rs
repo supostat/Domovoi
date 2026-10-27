@@ -186,6 +186,18 @@ impl Index {
         self.hidden_folders
     }
 
+    pub fn directory_count(&self) -> u64 {
+        let mut count = 0;
+        let mut pending = vec![self.root()];
+        while let Some(id) = pending.pop() {
+            if self.node(id).kind == NodeKind::Directory {
+                count += 1;
+            }
+            pending.extend(self.children(id));
+        }
+        count
+    }
+
     pub(crate) fn count_hidden(&self, ids: &[NodeId]) -> u64 {
         ids.iter().filter(|id| self.node(**id).reach.hides_content()).count() as u64
     }

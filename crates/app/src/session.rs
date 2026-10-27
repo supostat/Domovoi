@@ -132,6 +132,7 @@ impl Session {
             workers: Some(self.workers),
             progress,
             cancel,
+            expected_directories: self.index.as_ref().map(Index::directory_count),
             ..ScanOptions::default()
         };
         let report = scan(&self.root, &options)?;

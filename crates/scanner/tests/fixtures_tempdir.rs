@@ -220,7 +220,8 @@ fn progress_reports_firmlink_paths_and_ends_with_the_walked_totals() {
         events.last(),
         Some(&ScanProgress::Walked {
             files: report.files,
-            bytes: report.bytes
+            bytes: report.bytes,
+            share: 1.0,
         })
     );
     assert_eq!(report.files, 2);

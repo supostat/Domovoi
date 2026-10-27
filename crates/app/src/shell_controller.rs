@@ -287,8 +287,7 @@ impl ShellController {
         {
             let mut state = self.state.borrow_mut();
             state.watch = None;
-            let expected = state.overview().volumes.data_used.value;
-            state.scan = Some(ScanJob::start(session, full_first_scan, expected, timer));
+            state.scan = Some(ScanJob::start(session, full_first_scan, timer));
             state.stage = Stage::Scanning;
             state.section = Section::Disk;
             state.access = access;

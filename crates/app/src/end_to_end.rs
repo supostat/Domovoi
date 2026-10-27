@@ -218,11 +218,6 @@ impl EndToEnd {
     }
 
     fn rescan(&mut self, path: &Path) -> Result<Value, String> {
-        let expected = DiskOverview::measure(&self.root)
-            .map_err(|error| error.to_string())?
-            .volumes
-            .data_used
-            .value;
         let timer = unsafe {
             NSTimer::timerWithTimeInterval_repeats_block(
                 SCAN_POLL.as_secs_f64(),
@@ -231,7 +226,7 @@ impl EndToEnd {
             )
         };
         let session = self.session.take().expect(SESSION_BETWEEN_STEPS);
-        let mut job = ScanJob::start(session, false, expected, timer);
+        let mut job = ScanJob::start(session, false, timer);
         while !job.is_finished() {
             job.absorb_progress();
             thread::sleep(SCAN_POLL);

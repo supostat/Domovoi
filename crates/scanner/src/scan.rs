@@ -21,6 +21,7 @@ use crate::cancel_token::CancelToken;
 use crate::canonical_paths::CanonicalPaths;
 use crate::node::Node;
 use crate::node_state::NodeState;
+use crate::progress_share::{ProgressShare, SHARE_UNIT};
 use crate::scan_error::ScanError;
 use crate::scan_options::ScanOptions;
 use crate::scan_progress::ScanProgress;
@@ -43,6 +44,7 @@ pub fn scan(root: &Path, options: &ScanOptions) -> Result<ScanReport, ScanError>
         bytes: AtomicU64::new(0),
         deferred: Mutex::new(Vec::new()),
         monitor: StallMonitor::default(),
+        share: ProgressShare::new(options.expected_directories),
     };
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(options.workers.map_or(0, NonZeroUsize::get))
@@ -79,7 +81,8 @@ pub fn scan(root: &Path, options: &ScanOptions) -> Result<ScanReport, ScanError>
     let files = walk.files.into_inner();
     let bytes = walk.bytes.into_inner();
     if let Some(progress) = &options.progress {
-        match progress.send(ScanProgress::Walked { files, bytes }) {
+        let share = walk.share.share();
+        match progress.send(ScanProgress::Walked { files, bytes, share }) {
             Ok(()) | Err(SendError(_)) => {}
         }
     }
@@ -125,13 +128,19 @@ struct Walk<'options> {
     paths: CanonicalPaths,
     files: AtomicU64,
     bytes: AtomicU64,
-    deferred: Mutex<Vec<Vec<usize>>>,
+    deferred: Mutex<Vec<DeferredFolder>>,
     monitor: StallMonitor,
+    share: ProgressShare,
+}
+
+struct DeferredFolder {
+    position: Vec<usize>,
+    share: u64,
 }
 
 impl Walk<'_> {
     fn run(&self, pool: &rayon::ThreadPool, directory: BorrowedFd<'_>, root_node: &mut Node) -> Result<(), ScanError> {
-        pool.install(|| self.list(directory, Path::new(""), root_node, &[]));
+        pool.install(|| self.list(directory, Path::new(""), root_node, &[], SHARE_UNIT));
         self.stop_if_cancelled()?;
         let deferred = mem::take(&mut *self.deferred.lock().expect("deferred list is not poisoned"));
         if !deferred.is_empty() {
@@ -157,7 +166,7 @@ impl Walk<'_> {
         }
     }
 
-    fn list(&self, directory: BorrowedFd<'_>, relative: &Path, node: &mut Node, position: &[usize]) {
+    fn list(&self, directory: BorrowedFd<'_>, relative: &Path, node: &mut Node, position: &[usize], share: u64) {
         if self.options.cancel.is_cancelled() {
             return;
         }
@@ -166,10 +175,15 @@ impl Walk<'_> {
             Ok(entries) => entries,
             Err(error) => {
                 node.state = NodeState::of_listing_error(&error);
+                self.share.complete(share);
                 return;
             }
         };
         let mut children: Vec<Node> = entries.into_iter().map(|entry| listed_node(directory, entry)).collect();
+        let folders = children.iter().filter(|child| child.state == NodeState::Listed).count() as u64;
+        let child_share = share / folders.max(1);
+        self.share.complete(share - child_share * folders);
+        self.share.directory_listed();
         self.report_progress(relative, &children);
         rayon::scope(|scope| {
             for (index, child) in children.iter_mut().enumerate() {
@@ -184,10 +198,13 @@ impl Walk<'_> {
                     self.deferred
                         .lock()
                         .expect("deferred list is not poisoned")
-                        .push(child_position);
+                        .push(DeferredFolder {
+                            position: child_position,
+                            share: child_share,
+                        });
                     continue;
                 }
-                scope.spawn(move |_| self.descend(directory, &child_relative, child, &child_position));
+                scope.spawn(move |_| self.descend(directory, &child_relative, child, &child_position, child_share));
             }
         });
         node.children = children;
@@ -204,22 +221,23 @@ impl Walk<'_> {
         Ok(entries)
     }
 
-    fn descend(&self, parent: BorrowedFd<'_>, relative: &Path, node: &mut Node, position: &[usize]) {
+    fn descend(&self, parent: BorrowedFd<'_>, relative: &Path, node: &mut Node, position: &[usize], share: u64) {
         match open_directory(parent, &node.name) {
-            Ok(directory) => self.list(directory.as_fd(), relative, node, position),
+            Ok(directory) => self.list(directory.as_fd(), relative, node, position, share),
             Err(error) => {
                 node.state = NodeState::of_open_error(&error, || stat_at(parent, &node.name).map(drop));
+                self.share.complete(share);
             }
         }
     }
 
-    fn scan_deferred(&self, root: BorrowedFd<'_>, root_node: &mut Node, deferred: &[Vec<usize>]) {
-        for position in deferred {
-            self.reopen_and_list(root, descend_to(root_node, position), position);
+    fn scan_deferred(&self, root: BorrowedFd<'_>, root_node: &mut Node, deferred: &[DeferredFolder]) {
+        for folder in deferred {
+            self.reopen_and_list(root, descend_to(root_node, &folder.position), folder);
         }
     }
 
-    fn reopen_and_list(&self, root: BorrowedFd<'_>, target: DeferredTarget<'_>, position: &[usize]) {
+    fn reopen_and_list(&self, root: BorrowedFd<'_>, target: DeferredTarget<'_>, folder: &DeferredFolder) {
         let DeferredTarget { node, ancestors } = target;
         let mut relative = PathBuf::new();
         let mut parent: Option<OwnedFd> = None;
@@ -232,13 +250,20 @@ impl Walk<'_> {
                 }
                 Err(error) => {
                     node.state = NodeState::of_open_error(&error, || stat_at(directory, name).map(drop));
+                    self.share.complete(folder.share);
                     return;
                 }
             }
         }
         relative.push(&node.name);
         node.state = NodeState::Listed;
-        self.descend(parent.as_ref().map_or(root, AsFd::as_fd), &relative, node, position);
+        self.descend(
+            parent.as_ref().map_or(root, AsFd::as_fd),
+            &relative,
+            node,
+            &folder.position,
+            folder.share,
+        );
     }
 
     fn report_progress(&self, relative: &Path, children: &[Node]) {
@@ -256,6 +281,7 @@ impl Walk<'_> {
                 files,
                 bytes,
                 current: self.paths.canonical(relative),
+                share: self.share.share(),
             };
             match progress.try_send(event) {
                 Ok(()) | Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {}

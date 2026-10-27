@@ -139,7 +139,7 @@ fn measure_folder(
         };
         let walk = scope.spawn(move || scan(item, &options));
         for event in events {
-            let (ScanProgress::Walking { files, bytes, .. } | ScanProgress::Walked { files, bytes }) = event;
+            let (ScanProgress::Walking { files, bytes, .. } | ScanProgress::Walked { files, bytes, .. }) = event;
             report(
                 progress,
                 MeasureProgress {

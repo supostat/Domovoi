@@ -17,6 +17,7 @@ pub struct ScanOptions {
     pub cancel: CancelToken,
     pub protected: ProtectedFolders,
     pub onboarding: Arc<Onboarding>,
+    pub expected_directories: Option<u64>,
 }
 
 impl Default for ScanOptions {
@@ -28,6 +29,7 @@ impl Default for ScanOptions {
             cancel: CancelToken::default(),
             protected: ProtectedFolders::default(),
             onboarding: Arc::new(Onboarding::finished()),
+            expected_directories: None,
         }
     }
 }
