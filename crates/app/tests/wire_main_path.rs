@@ -24,7 +24,7 @@ const SPARSE_LENGTH: u64 = 64 * 1024 * 1024;
 const FRESH_FILE_BYTES: usize = 64 * 1024;
 const DEEP_FOLDER: &str = "Users/tester/Library/Developer/Xcode/DerivedData/App-abc/Build/Intermediates";
 const CHANGE_TIMEOUT_SECONDS: u64 = 10;
-const TRASH_HEAVY_NODES: usize = 2;
+const DELETE_HEAVY_NODES: usize = 2;
 const SNAPSHOTS: usize = 16;
 const NOTES: &str = "Notes";
 const NOTE_FILES: usize = 60;
@@ -137,10 +137,6 @@ fn seed_partial(models: &Path, entry: &CatalogEntry, content: &[u8]) {
     assert!(status.success(), "the partial file remembers its validator");
 }
 
-fn trash_of(mount_point: &Path) -> PathBuf {
-    mount_point.join(".Trashes").join(unsafe { libc::getuid() }.to_string())
-}
-
 fn steps<'a>(report: &'a Value, name: &str) -> Vec<&'a Value> {
     report["steps"]
         .as_array()
@@ -180,7 +176,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     let unwatched = mount_point.join("unwatched.txt");
     let fresh_in_root = mount_point.join("fresh.txt");
     let fresh_in_depth = mount_point.join(DEEP_FOLDER).join("fresh.o");
-    let next_to_trashed = mount_point.join("Projects/engine/after-trash.txt");
+    let next_to_deleted = mount_point.join("Projects/engine/after-delete.txt");
     let notes = mount_point.join(NOTES);
     let fresh_note = notes.join("fresh-note.txt");
     let scenario = json!({
@@ -196,22 +192,20 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
             {"step": "create_file", "path": fresh_in_depth, "bytes": FRESH_FILE_BYTES},
             {"step": "await_change", "path": fresh_in_depth, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
             {"step": "recommendations"},
-            {"step": "trash_recommendations", "level": "safe"},
-            {"step": "create_file", "path": next_to_trashed, "bytes": FRESH_FILE_BYTES},
+            {"step": "delete_recommendations", "level": "safe"},
+            {"step": "create_file", "path": next_to_deleted, "bytes": FRESH_FILE_BYTES},
             {
                 "step": "await_change",
-                "path": next_to_trashed,
+                "path": next_to_deleted,
                 "timeout_seconds": CHANGE_TIMEOUT_SECONDS,
-                "heavy_nodes": TRASH_HEAVY_NODES,
+                "heavy_nodes": DELETE_HEAVY_NODES,
             },
-            {"step": "restore_last"},
             {"step": "scroll_disk_list", "path": notes},
             {"step": "create_file", "path": fresh_note, "bytes": FRESH_FILE_BYTES},
             {"step": "await_change", "path": fresh_note, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
             {"step": "update_disk_screen"},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
-            {"step": "purge_trash"},
             {
                 "step": "download_model",
                 "catalog": manifest_path(TEST_CATALOG),
@@ -282,12 +276,12 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
             "only one level is read: {change}"
         );
     }
-    let moved_to_trash = changes[2];
+    let after_delete = changes[2];
     assert!(
-        moved_to_trash["applied_in_background"]
+        after_delete["applied_in_background"]
             .as_u64()
             .is_some_and(|batches| batches > 0),
-        "the batch after the move to the Trash is applied with the session in a background job: {moved_to_trash}"
+        "the batch after the delete is applied with the session in a background job: {after_delete}"
     );
     let recommendations = step(report, "recommendations");
     let cards: Vec<&str> = recommendations["cards"]
@@ -304,45 +298,70 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
             .is_some_and(|blocked| !blocked.is_empty()),
         "the locked build folder is refused by the denylist: {recommendations:#}"
     );
-    assert!(report["totals"]["safe"].as_u64().is_some_and(|safe| safe > 0));
-    let trash = trash_of(mount_point);
-    let trashed = step(report, "trash_recommendations");
-    assert!(trashed["moved"].as_u64().is_some_and(|moved| moved > 0), "{trashed:#}");
     assert!(
-        trashed["measured_files"].as_u64().is_some_and(|files| files > 0),
-        "the tray is measured in the background before the move: {trashed:#}"
+        recommendations["total"].as_u64().is_some_and(|total| total > 0),
+        "the rules find something to free before the delete: {recommendations:#}"
     );
-    assert_eq!(trashed["estimated"].as_bool(), Some(false), "{trashed:#}");
+    assert_eq!(
+        report["totals"]["safe"], 0,
+        "the safe recommendations are gone once deleted: {:#}",
+        report["totals"]
+    );
+    assert_delete_and_clone(report, mount_point);
+}
+
+fn assert_delete_and_clone(report: &Value, mount_point: &Path) {
+    let deleted = step(report, "delete_recommendations");
+    let expected = deleted["expected"].as_u64().expect("the tray total is reported");
+    assert!(expected > 0, "{deleted:#}");
     assert!(
-        trashed["trashed"]
-            .as_array()
-            .expect("the trash step lists moved paths")
-            .iter()
-            .filter_map(Value::as_str)
-            .all(|path| Path::new(path).starts_with(&trash)),
-        "{trashed:#}"
+        deleted["measured_files"].as_u64().is_some_and(|files| files > 0),
+        "the tray is measured in the background before the delete: {deleted:#}"
     );
-    let restored = step(report, "restore_last")["restored"]
-        .as_str()
-        .expect("a restored path is reported");
-    assert!(Path::new(restored).exists(), "{restored} is back");
+    assert!(
+        deleted["deleted"].as_u64().is_some_and(|objects| objects > 0),
+        "the safe recommendations are deleted: {deleted:#}"
+    );
+    assert_eq!(deleted["freed"].as_u64(), Some(expected), "{deleted:#}");
+    assert_eq!(deleted["failures"], json!([]), "{deleted:#}");
+    assert_eq!(
+        deleted["paths_left"], 0,
+        "the disk no longer holds the taken items: {deleted:#}"
+    );
+    let (free_before, free_after) = (
+        deleted["free_before"].as_u64().expect("free space before"),
+        deleted["free_after"].as_u64().expect("free space after"),
+    );
+    assert!(
+        free_after > free_before,
+        "the volume has more free space after the delete: {deleted:#}"
+    );
+    assert!(!mount_point.join("Projects/engine/target").exists());
+    assert!(!mount_point.join("Projects/site/node_modules").exists());
     assert!(mount_point.join("Projects/frozen/target/debug/frozen").exists());
     assert!(
         step(report, "find_duplicates")["groups"]
             .as_array()
             .is_some_and(|groups| !groups.is_empty())
     );
-    assert!(step(report, "replace_with_clone")["trashed"].as_str().is_some());
-    let purge = step(report, "purge_trash");
+    let replaced = step(report, "replace_with_clone");
     assert!(
-        purge["purged"].as_u64().is_some_and(|purged| purged > 0),
-        "what Domovoi moved to the Trash is removed for good: {purge}"
+        replaced["freed"].as_u64().is_some_and(|freed| freed > 0),
+        "the old body of the replaced copy is deleted: {replaced:#}"
     );
-    assert_eq!(purge["failed"], json!([]), "{purge}");
-    assert_eq!(purge["journal_left"], 0, "the journal forgets the removed set: {purge}");
-    assert_eq!(
-        purge["paths_left"], 0,
-        "the Trash no longer holds the removed set: {purge}"
+    let temporaries: Vec<PathBuf> = fs::read_dir(mount_point.join("Media"))
+        .expect("the media folder lists")
+        .map(|entry| entry.expect("an entry reads").path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with(".domovoi-tmp-"))
+        })
+        .collect();
+    assert!(temporaries.is_empty(), "no temporary is left behind: {temporaries:?}");
+    assert!(
+        !mount_point.join(".Trashes").exists(),
+        "nothing goes to the Trash of the volume"
     );
 }
 

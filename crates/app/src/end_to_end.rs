@@ -274,6 +274,9 @@ impl EndToEnd {
         }
         let (measured, measured_files, sizes) = self.measured_tray()?;
         let expected = measured.total();
+        let free_before = DiskOverview::measure(&self.root)
+            .map_err(|error| error.to_string())?
+            .free_bytes();
         let (subjects, refusals) = self.session_mut().take_tray_for_delete(&sizes);
         let taken: Vec<PathBuf> = subjects.iter().map(|subject| subject.physical.clone()).collect();
         let job = DeleteJob::start(subjects);
@@ -285,6 +288,9 @@ impl EndToEnd {
         self.session_mut()
             .settle_delete(&report)
             .map_err(|error| error.to_string())?;
+        let free_after = DiskOverview::measure(&self.root)
+            .map_err(|error| error.to_string())?
+            .free_bytes();
         Ok(json!({
             "step": "delete_recommendations",
             "expected": expected,
@@ -293,6 +299,8 @@ impl EndToEnd {
             "freed": outcome.freed,
             "failures": outcome.failures,
             "paths_left": taken.iter().filter(|path| path.symlink_metadata().is_ok()).count(),
+            "free_before": free_before,
+            "free_after": free_after,
         }))
     }
 
