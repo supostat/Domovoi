@@ -1,11 +1,12 @@
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
-    NSAccessibility, NSBackingStoreType, NSColor, NSLineBreakMode, NSPanel, NSTextField, NSWindow,
-    NSWindowOrderingMode, NSWindowStyleMask,
+    NSBackingStoreType, NSColor, NSLineBreakMode, NSPanel, NSTextField, NSWindow, NSWindowOrderingMode,
+    NSWindowStyleMask,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_foundation::{NSPoint, NSRect, NSSize};
 
+use crate::fact_rows::FactRows;
 use crate::fill_view::{FillStyle, FillView};
 use crate::hover_tip::HoverTip;
 use crate::label::label;
@@ -133,34 +134,15 @@ impl HoverPanel {
             (&self.source, tip.source, tokens.dim),
             (&self.note, tip.note.unwrap_or_default(), tokens.mute),
         ];
-        let inner = WIDTH - 2.0 * PADDING;
-        self.note.setPreferredMaxLayoutWidth(inner);
-        let visible: Vec<_> = rows.iter().filter(|(_, text, _)| !text.is_empty()).collect();
-        let heights: Vec<f64> = visible
-            .iter()
-            .map(|(field, text, color)| {
-                let full = NSString::from_str(text);
-                field.setStringValue(&full);
-                field.setToolTip(Some(&full));
-                field.setAccessibilityLabel(Some(&full));
-                field.setTextColor(Some(&color.ns_color()));
-                field.fittingSize().height
-            })
-            .collect();
-        let height = 2.0 * PADDING + heights.iter().sum::<f64>() + LINE_GAP * (heights.len().saturating_sub(1)) as f64;
-        let mut top = PADDING;
-        for (field, _, _) in &rows {
-            field.setHidden(true);
+        self.note.setPreferredMaxLayoutWidth(WIDTH - 2.0 * PADDING);
+        FactRows {
+            width: WIDTH,
+            padding: PADDING,
+            gap: LINE_GAP,
+            below: 0.0,
+            rows: &rows,
         }
-        for ((field, _, _), line_height) in visible.iter().zip(&heights) {
-            field.setHidden(false);
-            field.setFrame(NSRect::new(
-                NSPoint::new(PADDING, height - top - line_height),
-                NSSize::new(inner, *line_height),
-            ));
-            top += line_height + LINE_GAP;
-        }
-        height
+        .lay_out()
     }
 
     pub(crate) fn hide(&self) {

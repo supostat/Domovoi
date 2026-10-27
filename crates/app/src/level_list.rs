@@ -12,7 +12,7 @@ use crate::level_list_source::{LevelListModel, LevelListSource, ROW_HEIGHT};
 use crate::level_row::LevelRow;
 use crate::shell_actions::ShellActions;
 use crate::shell_palette::ShellPalette;
-use crate::strings::SHOW_IN_FINDER;
+use crate::strings::{OPEN_IN_TERMINAL, PROPERTIES, SHOW_IN_FINDER};
 
 #[derive(Debug)]
 pub struct LevelList {
@@ -35,17 +35,24 @@ impl LevelList {
         column.setWidth(frame.size.width);
         table.addTableColumn(&column);
         let menu = NSMenu::new(marker);
-        let show = unsafe {
-            NSMenuItem::initWithTitle_action_keyEquivalent(
-                NSMenuItem::alloc(marker),
-                &NSString::from_str(SHOW_IN_FINDER),
-                Some(sel!(showClickedRowInFinder:)),
-                &NSString::new(),
-            )
-        };
+        let entries = [
+            (SHOW_IN_FINDER, sel!(showClickedRowInFinder:)),
+            (OPEN_IN_TERMINAL, sel!(openClickedRowInTerminal:)),
+            (PROPERTIES, sel!(showClickedRowProperties:)),
+        ];
+        for (title, selector) in entries {
+            let item = unsafe {
+                NSMenuItem::initWithTitle_action_keyEquivalent(
+                    NSMenuItem::alloc(marker),
+                    &NSString::from_str(title),
+                    Some(selector),
+                    &NSString::new(),
+                )
+            };
+            unsafe { item.setTarget(Some(actions.target())) };
+            menu.addItem(&item);
+        }
         unsafe {
-            show.setTarget(Some(actions.target()));
-            menu.addItem(&show);
             table.setMenu(Some(&menu));
             table.setTarget(Some(actions.target()));
             table.setDoubleAction(Some(sel!(openClickedRow:)));

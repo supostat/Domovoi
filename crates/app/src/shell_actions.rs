@@ -219,6 +219,26 @@ define_class!(
         fn open_clicked_row(&self, _sender: Option<&AnyObject>) {
             self.dispatch(ShellAction::OpenClickedRow);
         }
+
+        #[unsafe(method(openNodeInTerminal:))]
+        fn open_node_in_terminal(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::OpenInTerminal(tag_of(sender)));
+        }
+
+        #[unsafe(method(openClickedRowInTerminal:))]
+        fn open_clicked_row_in_terminal(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::OpenClickedRowInTerminal);
+        }
+
+        #[unsafe(method(showNodeProperties:))]
+        fn show_node_properties(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::ShowProperties(tag_of(sender)));
+        }
+
+        #[unsafe(method(showClickedRowProperties:))]
+        fn show_clicked_row_properties(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ShowClickedRowProperties);
+        }
     }
 
     unsafe impl NSMenuItemValidation for ShellActions {
@@ -265,6 +285,14 @@ impl ShellActions {
             node.map(ShellAction::ShowInFinder)
         } else if selector == sel!(showClickedRowInFinder:) {
             Some(ShellAction::ShowClickedRowInFinder)
+        } else if selector == sel!(openNodeInTerminal:) {
+            node.map(ShellAction::OpenInTerminal)
+        } else if selector == sel!(openClickedRowInTerminal:) {
+            Some(ShellAction::OpenClickedRowInTerminal)
+        } else if selector == sel!(showNodeProperties:) {
+            node.map(ShellAction::ShowProperties)
+        } else if selector == sel!(showClickedRowProperties:) {
+            Some(ShellAction::ShowClickedRowProperties)
         } else if selector == sel!(focusNode:) {
             node.map(ShellAction::Focus)
         } else if selector == sel!(selectUnloadDelay:) {

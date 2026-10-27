@@ -153,7 +153,7 @@ impl ShellData {
                 let node = self.tree.node(*child);
                 LevelRow {
                     node: *child,
-                    name: node.name.clone(),
+                    name: self.tree.display_name(*child, DIAGRAM.nested_separator),
                     size_text: format_size(node.size),
                     share: node.size as f64 / largest as f64,
                     category: node.category,

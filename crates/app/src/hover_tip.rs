@@ -3,7 +3,7 @@ use domovoi_render::NodeOrigin;
 use domovoi_theme::format_size;
 
 use crate::shell_data::ShellData;
-use crate::strings::{SNAPSHOTS_RELEASE, SOURCE_APFS, SOURCE_MACOS_ESTIMATE, SOURCE_SCAN};
+use crate::strings::{DIAGRAM, SNAPSHOTS_RELEASE, SOURCE_APFS, SOURCE_MACOS_ESTIMATE, SOURCE_SCAN};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HoverTip {
@@ -22,7 +22,7 @@ impl HoverTip {
             _ => None,
         };
         Some(Self {
-            name: record.name.clone(),
+            name: data.tree.display_name(node, DIAGRAM.nested_separator),
             size_text: format_size(record.size),
             path,
             source: source_label(record.origin)?,

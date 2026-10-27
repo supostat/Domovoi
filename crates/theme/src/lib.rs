@@ -2,12 +2,14 @@
 
 mod age;
 mod appearance;
+mod civil_date;
 mod count;
 mod digits;
 #[allow(unsafe_code)]
 mod ffi;
 #[rustfmt::skip]
 mod generated;
+mod iso_date;
 mod memory;
 mod motion;
 mod plural;
@@ -21,6 +23,7 @@ pub use appearance::palette_for;
 pub use count::format_count;
 pub use digits::group_thousands;
 pub use generated::{FONT_STACKS, FontStacks, Palette, RADII, Radii};
+pub use iso_date::format_iso_utc;
 pub use memory::format_memory;
 pub use motion::Motion;
 pub use plural::PluralForms;

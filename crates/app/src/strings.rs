@@ -43,6 +43,17 @@ pub const FULL_FIRST_SCAN: &str = "После обновления macOS пер�
 pub const FILES_MILLIONS: &str = "млн файлов";
 pub const TRAY: &str = "Корзина Домового";
 pub const SHOW_IN_FINDER: &str = "Показать в Finder";
+pub const OPEN_IN_TERMINAL: &str = "Открыть в Terminal";
+pub const PROPERTIES: &str = "Свойства";
+pub const INSIDE: &str = "внутри";
+pub const TERMINAL_MISSING: &str = "Terminal не найден на этом Mac";
+pub const FILE_MENU: &str = "Файл";
+pub const EXPORT_CSV: &str = "Экспортировать список…";
+pub const NESTED_NAME_SEPARATOR: &str = " ▸ ";
+
+pub fn csv_file_name(volume: &str) -> String {
+    format!("Домовой — {volume}.csv")
+}
 pub const SUNBURST: &str = "Sunburst";
 pub const TREEMAP: &str = "Treemap";
 pub const SOURCE_SCAN: &str = "по скану";
@@ -382,4 +393,5 @@ pub const DIAGRAM: DiagramStrings = DiagramStrings {
     up: "↑ наверх",
     small_group: SMALL_GROUP,
     objects: OBJECTS,
+    nested_separator: NESTED_NAME_SEPARATOR,
 };

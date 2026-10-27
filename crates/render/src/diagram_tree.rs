@@ -33,6 +33,16 @@ impl DiagramTree {
         self.nodes.is_empty()
     }
 
+    pub fn display_name(&self, node: usize, nested_separator: &str) -> String {
+        let record = &self.nodes[node];
+        match record.parent.map(|parent| &self.nodes[parent].name) {
+            Some(parent_name) if *parent_name == record.name => {
+                format!("{parent_name}{nested_separator}{}", record.name)
+            }
+            _ => record.name.clone(),
+        }
+    }
+
     pub fn path(&self, node: usize) -> Vec<usize> {
         let mut path = vec![node];
         let mut current = node;

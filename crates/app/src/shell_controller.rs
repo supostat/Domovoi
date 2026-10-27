@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr::NonNull;
@@ -18,11 +19,12 @@ use objc2::rc::{Retained, autoreleasepool};
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
     NSAlert, NSAlertFirstButtonReturn, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
-    NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSView, NSWindow, NSWindowStyleMask, NSWorkspace,
-    NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification,
+    NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSModalResponseOK, NSSavePanel, NSView, NSWindow,
+    NSWindowStyleMask, NSWorkspace, NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification,
+    NSWorkspaceOpenConfiguration,
 };
 use objc2_foundation::{
-    NSArray, NSBundle, NSNotification, NSOperationQueue, NSPoint, NSRect, NSSize, NSString, NSTimer, NSURL,
+    NSArray, NSBundle, NSInteger, NSNotification, NSOperationQueue, NSPoint, NSRect, NSSize, NSString, NSTimer, NSURL,
 };
 
 use crate::access_screen::AccessScreen;
@@ -38,6 +40,7 @@ use crate::care_models::CareModels;
 #[cfg(feature = "claude-code")]
 use crate::claude_search::installed_claude_code;
 use crate::clone_refusal_text::clone_refusal_text;
+use crate::csv_export::csv_lines;
 use crate::delete_job::DeleteJob;
 use crate::delete_outcome::DeleteOutcome;
 use crate::delete_run::DeleteRun;
@@ -58,6 +61,8 @@ use crate::hover_panel::HoverPanel;
 use crate::main_screen::MainScreen;
 use crate::model_screen::ModelScreen;
 use crate::navigation::Navigation;
+use crate::node_facts::NodeFacts;
+use crate::properties_panel::PropertiesPanel;
 use crate::recommendations_screen::RecommendationsScreen;
 use crate::scan_job::ScanJob;
 use crate::scanning_screen::{ScanningScreen, center_lines};
@@ -77,7 +82,7 @@ use crate::shell_state::ShellState;
 use crate::stage::Stage;
 use crate::strings::{
     APP_NAME, CANCEL, CLONED, DELETE, DELETE_CONFIRM, DELETE_CONFIRM_HINT, DIAGRAM, FAILURE_CLOSE, FAILURE_TITLE,
-    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, UPDATING_INDEX,
+    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, TERMINAL_MISSING, UPDATING_INDEX, csv_file_name,
 };
 use crate::tilde::tilde;
 use crate::tray_measurement::TrayMeasurement;
@@ -89,6 +94,7 @@ const SCAN_TICK: f64 = 1.0 / 30.0;
 const SEARCH_TICK: f64 = 1.0 / 10.0;
 const EVENTS_TICK: f64 = 0.5;
 const MEASURE_TICK: f64 = 0.25;
+const TERMINAL_BUNDLE: &str = "com.apple.Terminal";
 const DELETE_TICK: f64 = 0.1;
 const ESCAPE: &str = "\u{1b}";
 const OPEN: &str = "/usr/bin/open";
@@ -103,6 +109,7 @@ pub(crate) struct ShellController {
     root: Retained<ShellRootView>,
     actions: Retained<ShellActions>,
     hover: HoverPanel,
+    properties: PropertiesPanel,
     paths: SessionPaths,
     state: RefCell<ShellState>,
 }
@@ -135,6 +142,7 @@ impl ShellController {
             root,
             actions: ShellActions::new(marker),
             hover: HoverPanel::new(marker),
+            properties: PropertiesPanel::new(marker),
             paths,
             state: RefCell::new(ShellState::new(remembered_mode(), remembered_small_groups(), assistant)),
         });
@@ -1060,6 +1068,108 @@ impl ShellController {
         state.data.as_ref()?.level_rows(focus).get(row).map(|row| row.node)
     }
 
+    fn open_in_terminal(&self, node: usize) {
+        let Some(path) = self.state.borrow().node_path(node) else {
+            return;
+        };
+        let directory = if path.is_dir() {
+            path
+        } else {
+            path.parent().map_or_else(|| path.clone(), Path::to_path_buf)
+        };
+        let workspace = NSWorkspace::sharedWorkspace();
+        let Some(terminal) = workspace.URLForApplicationWithBundleIdentifier(&NSString::from_str(TERMINAL_BUNDLE))
+        else {
+            return self.inform(TERMINAL_MISSING);
+        };
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&directory.to_string_lossy()));
+        workspace.openURLs_withApplicationAtURL_configuration_completionHandler(
+            &NSArray::from_retained_slice(&[url]),
+            &terminal,
+            &NSWorkspaceOpenConfiguration::configuration(),
+            None,
+        );
+    }
+
+    fn show_properties(&self, node: usize, anchor: Option<(Retained<NSView>, NSRect)>) {
+        let facts = {
+            let state = self.state.borrow();
+            let index = state.session.as_ref().and_then(Session::index);
+            state
+                .data
+                .as_ref()
+                .and_then(|data| NodeFacts::for_node(data, index, node, SystemTime::now()))
+        };
+        let Some(facts) = facts else {
+            return;
+        };
+        let (view, rect) = anchor.unwrap_or_else(|| {
+            let root: Retained<NSView> = self.root.clone().into_super();
+            let bounds = root.bounds();
+            (root, bounds)
+        });
+        self.hover.hide();
+        let palette = self.state.borrow().palette;
+        self.properties
+            .show(self.marker, &facts, &palette, &self.actions, &view, rect);
+    }
+
+    fn clicked_row_anchor(&self) -> Option<(usize, (Retained<NSView>, NSRect))> {
+        let node = self.clicked_row()?;
+        let state = self.state.borrow();
+        let Some(ScreenViews::Main { screen, .. }) = &state.views else {
+            return None;
+        };
+        let table = &screen.list.table;
+        let rect = table.rectOfRow(table.clickedRow());
+        let view: Retained<NSView> = table.clone().into_super().into_super();
+        Some((node, (view, rect)))
+    }
+
+    fn crumb_anchor(&self, node: usize) -> Option<(Retained<NSView>, NSRect)> {
+        let state = self.state.borrow();
+        let Some(ScreenViews::Main { screen, .. }) = &state.views else {
+            return None;
+        };
+        let tag = NSInteger::try_from(node).ok()?;
+        let button = screen.crumbs.buttons().into_iter().find(|button| button.tag() == tag)?;
+        let bounds = button.bounds();
+        Some((button.into_super().into_super(), bounds))
+    }
+
+    fn export_csv(&self) {
+        let volume = self
+            .state
+            .borrow()
+            .data
+            .as_ref()
+            .map(|data| data.disk_name.clone())
+            .unwrap_or_default();
+        let panel = NSSavePanel::savePanel(self.marker);
+        panel.setNameFieldStringValue(&NSString::from_str(&csv_file_name(&volume)));
+        panel.setCanCreateDirectories(true);
+        if panel.runModal() != NSModalResponseOK {
+            return;
+        }
+        let Some(path) = panel
+            .URL()
+            .and_then(|url| url.path())
+            .map(|path| PathBuf::from(path.to_string()))
+        else {
+            return;
+        };
+        let written = {
+            let state = self.state.borrow();
+            match state.session.as_ref().and_then(Session::index) {
+                Some(index) => fs::write(&path, csv_lines(index, index.root())),
+                None => return,
+            }
+        };
+        if let Err(error) = written {
+            self.fail(&error.to_string());
+        }
+    }
+
     fn relaunch(&self) {
         let bundle = NSBundle::mainBundle();
         let spawned = match bundle.bundleIdentifier() {
@@ -1200,6 +1310,19 @@ impl ActionHandler for ShellController {
                     self.show_in_finder(node);
                 }
             }
+            ShellAction::OpenInTerminal(node) => self.open_in_terminal(node),
+            ShellAction::OpenClickedRowInTerminal => {
+                if let Some(node) = self.clicked_row() {
+                    self.open_in_terminal(node);
+                }
+            }
+            ShellAction::ShowProperties(node) => self.show_properties(node, self.crumb_anchor(node)),
+            ShellAction::ShowClickedRowProperties => {
+                if let Some((node, anchor)) = self.clicked_row_anchor() {
+                    self.show_properties(node, Some(anchor));
+                }
+            }
+            ShellAction::ExportCsv => self.export_csv(),
             ShellAction::OpenClickedRow => {
                 let openable = self.clicked_row().filter(|node| {
                     let state = self.state.borrow();
@@ -1248,10 +1371,16 @@ impl ActionHandler for ShellController {
 
     fn allows(&self, action: ShellAction) -> bool {
         match action {
-            ShellAction::ShowInFinder(node) => self.state.borrow().node_path(node).is_some(),
-            ShellAction::ShowClickedRowInFinder => self
+            ShellAction::ShowInFinder(node) | ShellAction::OpenInTerminal(node) => {
+                self.state.borrow().node_path(node).is_some()
+            }
+            ShellAction::ShowProperties(node) => self.state.borrow().hover_tip(node).is_some(),
+            ShellAction::ShowClickedRowInFinder | ShellAction::OpenClickedRowInTerminal => self
                 .clicked_row()
                 .is_some_and(|node| self.state.borrow().node_path(node).is_some()),
+            ShellAction::ShowClickedRowProperties => self
+                .clicked_row()
+                .is_some_and(|node| self.state.borrow().hover_tip(node).is_some()),
             _ => self.state.borrow().gate().allows(action),
         }
     }

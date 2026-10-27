@@ -25,6 +25,7 @@ const STRINGS: DiagramStrings = DiagramStrings {
         few: "items",
         many: "items",
     },
+    nested_separator: " > ",
 };
 
 struct Sizes(u64);

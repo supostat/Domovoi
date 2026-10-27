@@ -15,6 +15,11 @@ pub enum ShellAction {
     ShowInFinder(usize),
     ShowClickedRowInFinder,
     OpenClickedRow,
+    OpenInTerminal(usize),
+    OpenClickedRowInTerminal,
+    ShowProperties(usize),
+    ShowClickedRowProperties,
+    ExportCsv,
     Navigate(Section),
     OpenTray,
     ToggleCard(usize),
@@ -56,6 +61,7 @@ impl ShellAction {
                 | Self::ToggleDuplicateSearch
                 | Self::ApplyDuplicates
                 | Self::AskAssistant
+                | Self::ExportCsv
         )
     }
 }

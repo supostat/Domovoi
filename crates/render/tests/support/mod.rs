@@ -34,6 +34,7 @@ pub(crate) const STRINGS: DiagramStrings = DiagramStrings {
         few: "объекта",
         many: "объектов",
     },
+    nested_separator: " ▸ ",
 };
 
 pub(crate) fn crate_path(relative: &str) -> PathBuf {

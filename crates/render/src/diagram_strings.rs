@@ -8,6 +8,7 @@ pub struct DiagramStrings {
     pub up: &'static str,
     pub small_group: &'static str,
     pub objects: PluralForms,
+    pub nested_separator: &'static str,
 }
 
 impl DiagramStrings {

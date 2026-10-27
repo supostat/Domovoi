@@ -244,7 +244,11 @@ impl DiagramPainter<'_> {
         } else {
             self.strings.used
         };
-        (caption.to_owned(), node.name.clone(), format_size(node.size))
+        (
+            caption.to_owned(),
+            self.tree.display_name(shown, self.strings.nested_separator),
+            format_size(node.size),
+        )
     }
 
     fn dim_factor(&self, hit: Hit) -> f32 {
