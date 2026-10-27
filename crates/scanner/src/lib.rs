@@ -14,6 +14,7 @@ mod scan_error;
 mod scan_options;
 mod scan_progress;
 mod scan_report;
+mod stall_monitor;
 mod volume_events;
 
 pub use cancel_token::CancelToken;
@@ -27,4 +28,5 @@ pub use scan_error::ScanError;
 pub use scan_options::ScanOptions;
 pub use scan_progress::ScanProgress;
 pub use scan_report::ScanReport;
+pub use stall_monitor::{STALL_LIMIT, StallMonitor};
 pub use volume_events::{Since, VolumeEvent, VolumeEventStream, current_event_id, history_store};

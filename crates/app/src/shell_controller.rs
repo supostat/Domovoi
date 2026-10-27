@@ -90,7 +90,8 @@ use crate::shell_state::ShellState;
 use crate::stage::Stage;
 use crate::strings::{
     APP_NAME, CANCEL, CLONED, DELETE, DELETE_CONFIRM, DELETE_CONFIRM_HINT, DIAGRAM, FAILURE_CLOSE, FAILURE_TITLE,
-    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, TERMINAL_MISSING, UPDATING_INDEX, csv_file_name,
+    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, OPEN_DISK_UTILITY, TERMINAL_MISSING, UNRESPONSIVE_TITLE, UPDATING_INDEX,
+    csv_file_name, unresponsive_body,
 };
 use crate::tilde::tilde;
 use crate::tray_measurement::TrayMeasurement;
@@ -103,6 +104,7 @@ const SEARCH_TICK: f64 = 1.0 / 10.0;
 const EVENTS_TICK: f64 = 0.5;
 const MEASURE_TICK: f64 = 0.25;
 const TERMINAL_BUNDLE: &str = "com.apple.Terminal";
+const DISK_UTILITY_BUNDLE: &str = "com.apple.DiskUtility";
 const DELETE_TICK: f64 = 0.1;
 const ESCAPE: &str = "\u{1b}";
 const OPEN: &str = "/usr/bin/open";
@@ -328,6 +330,10 @@ impl ShellController {
                     self.install(session);
                 }
                 Err(SessionError::Scan(ScanError::Cancelled)) => self.install(session),
+                Err(SessionError::Scan(ScanError::Unresponsive { path })) => {
+                    self.fail_unresponsive(&path);
+                    self.install(session);
+                }
                 Err(error) => {
                     self.state.borrow_mut().session = Some(session);
                     self.fail(&error.to_string());
@@ -1258,6 +1264,17 @@ impl ShellController {
         }
     }
 
+    fn fail_unresponsive(&self, path: &Path) {
+        let alert = NSAlert::new(self.marker);
+        alert.setMessageText(&NSString::from_str(UNRESPONSIVE_TITLE));
+        alert.setInformativeText(&NSString::from_str(&unresponsive_body(&path.to_string_lossy())));
+        alert.addButtonWithTitle(&NSString::from_str(OPEN_DISK_UTILITY));
+        alert.addButtonWithTitle(&NSString::from_str(FAILURE_CLOSE));
+        if alert.runModal() == NSAlertFirstButtonReturn {
+            open_disk_utility();
+        }
+    }
+
     fn inform(&self, message: &str) {
         let alert = NSAlert::new(self.marker);
         alert.setMessageText(&NSString::from_str(message));
@@ -1460,6 +1477,17 @@ impl ActionHandler for ShellController {
                 .is_some_and(|node| self.state.borrow().hover_tip(node).is_some()),
             _ => self.state.borrow().gate().allows(action),
         }
+    }
+}
+
+fn open_disk_utility() {
+    let workspace = NSWorkspace::sharedWorkspace();
+    if let Some(url) = workspace.URLForApplicationWithBundleIdentifier(&NSString::from_str(DISK_UTILITY_BUNDLE)) {
+        workspace.openApplicationAtURL_configuration_completionHandler(
+            &url,
+            &NSWorkspaceOpenConfiguration::configuration(),
+            None,
+        );
     }
 }
 

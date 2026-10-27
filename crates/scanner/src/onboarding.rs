@@ -28,12 +28,13 @@ impl Onboarding {
         *self.finished.lock().expect("onboarding state is not poisoned")
     }
 
-    pub(crate) fn wait_until_finished(&self, cancel: &CancelToken) -> bool {
+    pub(crate) fn wait_until_finished(&self, cancel: &CancelToken, heartbeat: &dyn Fn()) -> bool {
         let mut finished = self.finished.lock().expect("onboarding state is not poisoned");
         while !*finished {
             if cancel.is_cancelled() {
                 return false;
             }
+            heartbeat();
             finished = self
                 .changed
                 .wait_timeout(finished, CANCEL_CHECK_INTERVAL)

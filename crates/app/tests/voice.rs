@@ -130,6 +130,11 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
         spoken(&scan_finished_line(Duration::from_secs(48))),
         "Скан завершён за 48 с"
     );
+    assert_eq!(strings::UNRESPONSIVE_TITLE, "Файловая система не отвечает");
+    assert!(
+        strings::unresponsive_body("/Volumes/Backup").ends_with("Последняя папка: /Volumes/Backup"),
+        "the stall notice names the folder it waited on"
+    );
     assert!(
         strings::ACCESS_STEPS[1].concat().contains("перетащите иконку"),
         "the access steps offer dragging the icon into the list"

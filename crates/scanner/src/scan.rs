@@ -6,9 +6,10 @@ use std::num::NonZeroUsize;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{SendError, TrySendError};
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SendError, TrySendError};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime};
 
 use domovoi_apfs_sys::sys::EF_NO_XATTRS;
 use domovoi_apfs_sys::{
@@ -16,6 +17,7 @@ use domovoi_apfs_sys::{
     set_thread_disk_policy_utility, set_vfs_policies, stat_at,
 };
 
+use crate::cancel_token::CancelToken;
 use crate::canonical_paths::CanonicalPaths;
 use crate::node::Node;
 use crate::node_state::NodeState;
@@ -23,9 +25,12 @@ use crate::scan_error::ScanError;
 use crate::scan_options::ScanOptions;
 use crate::scan_progress::ScanProgress;
 use crate::scan_report::ScanReport;
+use crate::stall_monitor::{STALL_LIMIT, StallMonitor};
 
 const WORKER_STACK_BYTES: usize = 64 * 1024 * 1024;
 const WORKER_NAME: &str = "domovoi-scan";
+const MONITOR_INTERVAL: Duration = Duration::from_secs(1);
+const HEARTBEAT_EVERY: usize = 256;
 
 pub fn scan(root: &Path, options: &ScanOptions) -> Result<ScanReport, ScanError> {
     raise_nofile_limit().map_err(ScanError::Setup)?;
@@ -37,6 +42,7 @@ pub fn scan(root: &Path, options: &ScanOptions) -> Result<ScanReport, ScanError>
         files: AtomicU64::new(0),
         bytes: AtomicU64::new(0),
         deferred: Mutex::new(Vec::new()),
+        monitor: StallMonitor::default(),
     };
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(options.workers.map_or(0, NonZeroUsize::get))
@@ -52,15 +58,23 @@ pub fn scan(root: &Path, options: &ScanOptions) -> Result<ScanReport, ScanError>
         state: NodeState::Listed,
         children: Vec::new(),
     };
-    pool.install(|| walk.list(directory.as_fd(), Path::new(""), &mut root_node, &[]));
-    walk.stop_if_cancelled()?;
-    let deferred = mem::take(&mut *walk.deferred.lock().expect("deferred list is not poisoned"));
-    if !deferred.is_empty() {
-        if !options.onboarding.wait_until_finished(&options.cancel) {
-            return Err(ScanError::Cancelled);
+    let stalled = AtomicBool::new(false);
+    let outcome = thread::scope(|scope| {
+        let (stop, stopped) = mpsc::channel::<()>();
+        let (monitor, cancel, stalled) = (&walk.monitor, &options.cancel, &stalled);
+        scope.spawn(move || watch_for_stalls(monitor, cancel, stalled, &stopped));
+        let outcome = walk.run(&pool, directory.as_fd(), &mut root_node);
+        drop(stop);
+        outcome
+    });
+    match outcome {
+        Err(ScanError::Cancelled) if stalled.load(Ordering::Relaxed) => {
+            return Err(ScanError::Unresponsive {
+                path: walk.monitor.last_path(),
+            });
         }
-        pool.install(|| walk.scan_deferred(directory.as_fd(), &mut root_node, &deferred));
-        walk.stop_if_cancelled()?;
+        Err(error) => return Err(error),
+        Ok(()) => {}
     }
     let files = walk.files.into_inner();
     let bytes = walk.bytes.into_inner();
@@ -112,9 +126,29 @@ struct Walk<'options> {
     files: AtomicU64,
     bytes: AtomicU64,
     deferred: Mutex<Vec<Vec<usize>>>,
+    monitor: StallMonitor,
 }
 
 impl Walk<'_> {
+    fn run(&self, pool: &rayon::ThreadPool, directory: BorrowedFd<'_>, root_node: &mut Node) -> Result<(), ScanError> {
+        pool.install(|| self.list(directory, Path::new(""), root_node, &[]));
+        self.stop_if_cancelled()?;
+        let deferred = mem::take(&mut *self.deferred.lock().expect("deferred list is not poisoned"));
+        if !deferred.is_empty() {
+            let heartbeat = || self.monitor.heartbeat(Instant::now());
+            if !self
+                .options
+                .onboarding
+                .wait_until_finished(&self.options.cancel, &heartbeat)
+            {
+                return Err(ScanError::Cancelled);
+            }
+            pool.install(|| self.scan_deferred(directory, root_node, &deferred));
+            self.stop_if_cancelled()?;
+        }
+        Ok(())
+    }
+
     fn stop_if_cancelled(&self) -> Result<(), ScanError> {
         if self.options.cancel.is_cancelled() {
             Err(ScanError::Cancelled)
@@ -127,7 +161,8 @@ impl Walk<'_> {
         if self.options.cancel.is_cancelled() {
             return;
         }
-        let entries = match BulkListing::new(directory, self.options.attributes).collect::<io::Result<Vec<_>>>() {
+        self.monitor.enter(relative, Instant::now());
+        let entries = match self.list_entries(directory) {
             Ok(entries) => entries,
             Err(error) => {
                 node.state = NodeState::of_listing_error(&error);
@@ -156,6 +191,17 @@ impl Walk<'_> {
             }
         });
         node.children = children;
+    }
+
+    fn list_entries(&self, directory: BorrowedFd<'_>) -> io::Result<Vec<BulkEntry>> {
+        let mut entries = Vec::new();
+        for entry in BulkListing::new(directory, self.options.attributes) {
+            entries.push(entry?);
+            if entries.len() % HEARTBEAT_EVERY == 0 {
+                self.monitor.heartbeat(Instant::now());
+            }
+        }
+        Ok(entries)
     }
 
     fn descend(&self, parent: BorrowedFd<'_>, relative: &Path, node: &mut Node, position: &[usize]) {
@@ -221,6 +267,21 @@ impl Walk<'_> {
 struct DeferredTarget<'tree> {
     node: &'tree mut Node,
     ancestors: Vec<std::ffi::OsString>,
+}
+
+fn watch_for_stalls(monitor: &StallMonitor, cancel: &CancelToken, stalled: &AtomicBool, stopped: &Receiver<()>) {
+    loop {
+        match stopped.recv_timeout(MONITOR_INTERVAL) {
+            Ok(()) | Err(RecvTimeoutError::Disconnected) => return,
+            Err(RecvTimeoutError::Timeout) => {
+                if monitor.is_stalled(Instant::now(), STALL_LIMIT) {
+                    stalled.store(true, Ordering::Relaxed);
+                    cancel.cancel();
+                    return;
+                }
+            }
+        }
+    }
 }
 
 fn descend_to<'tree>(root: &'tree mut Node, position: &[usize]) -> DeferredTarget<'tree> {

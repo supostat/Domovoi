@@ -45,6 +45,15 @@ pub const THREADS: PluralForms = PluralForms {
 pub const WALKED: &str = "обойдено";
 pub const INDEXING: &str = "Собираю индекс…";
 pub const SCAN_FINISHED_IN: &str = "Скан завершён за";
+pub const UNRESPONSIVE_TITLE: &str = "Файловая система не отвечает";
+pub const UNRESPONSIVE_HINT: &str =
+    "Домовой ждал ответа диска дольше минуты и остановил скан. Проверьте том в Дисковой утилите.";
+pub const LAST_FOLDER: &str = "Последняя папка:";
+pub const OPEN_DISK_UTILITY: &str = "Открыть Дисковую утилиту";
+
+pub fn unresponsive_body(path: &str) -> String {
+    format!("{UNRESPONSIVE_HINT} {LAST_FOLDER} {path}")
+}
 pub const FULL_FIRST_SCAN: &str = "После обновления macOS первый скан полный.";
 pub const FILES_MILLIONS: &str = "млн файлов";
 pub const TRAY: &str = "Корзина Домового";
