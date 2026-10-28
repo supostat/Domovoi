@@ -1,7 +1,7 @@
 use domovoi_grammar::{CompiledSchema, FinalAnswer, ModelHypothesis, Tool, ToolCall};
 use serde_json::{Value, json};
 
-use crate::agent_answer::AgentAnswer;
+use crate::agent_answer::{AgentAnswer, suggested_action};
 use crate::agent_context::AgentContext;
 use crate::home_path::resolved;
 use crate::tool_runner::ToolRunner;
@@ -12,6 +12,9 @@ pub(crate) const SERVER_NAME: &str = "domovoi";
 const NOTE_HYPOTHESIS: &str = "note_hypothesis";
 const NOTE_HYPOTHESIS_DESCRIPTION: &str =
     "записать гипотезу о незнакомой папке или файле: полный путь, догадка «Похоже на…» и уверенность от 0 до 1";
+const MARK_FOR_DELETION: &str = "mark_for_deletion";
+const MARK_FOR_DELETION_DESCRIPTION: &str = "предложить отметить к удалению папку или файл по полному пути: кнопку \
+     покажет приложение, если правила разрешают; путь вне индекса или без такого правила вернёт ошибку";
 const LATEST_PROTOCOL: &str = "2025-11-25";
 const KNOWN_PROTOCOLS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const PARSE_ERROR: i64 = -32_700;
@@ -24,6 +27,7 @@ pub struct McpSession<'a> {
     runner: ToolRunner<'a>,
     steps: Vec<ToolStep>,
     hypotheses: Vec<ModelHypothesis>,
+    targets: Vec<String>,
 }
 
 impl std::fmt::Debug for McpSession<'_> {
@@ -32,6 +36,7 @@ impl std::fmt::Debug for McpSession<'_> {
             .debug_struct("McpSession")
             .field("steps", &self.steps)
             .field("hypotheses", &self.hypotheses)
+            .field("targets", &self.targets)
             .finish_non_exhaustive()
     }
 }
@@ -43,6 +48,7 @@ impl<'a> McpSession<'a> {
             runner: ToolRunner::new(context),
             steps: Vec::new(),
             hypotheses: Vec::new(),
+            targets: Vec::new(),
         }
     }
 
@@ -78,6 +84,7 @@ impl<'a> McpSession<'a> {
         let answer = FinalAnswer {
             answer: text,
             hypotheses: self.hypotheses,
+            targets: self.targets,
         };
         AgentAnswer::assembled(self.context, answer, self.steps)
     }
@@ -90,6 +97,9 @@ impl<'a> McpSession<'a> {
         let arguments = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
         if name == NOTE_HYPOTHESIS {
             return Ok(self.noted(&arguments));
+        }
+        if name == MARK_FOR_DELETION {
+            return Ok(self.marked(&arguments));
         }
         let tool = Tool::from_name(name).ok_or_else(|| (INVALID_PARAMS, format!("неизвестный инструмент {name}")))?;
         let schema =
@@ -134,6 +144,42 @@ impl<'a> McpSession<'a> {
         self.hypotheses.push(hypothesis);
         tool_result(&json!({"noted": true}), false)
     }
+
+    fn marked(&mut self, arguments: &Value) -> Value {
+        let schema = CompiledSchema::compile(&mark_schema()).expect("the mark schema stays inside the safe subset");
+        if let Err(violation) = schema.validate(arguments) {
+            return tool_result(&rejected_arguments(&violation.to_string()), true);
+        }
+        if self.targets.len() == FinalAnswer::MOST_TARGETS {
+            let limit = json!({"error": "целей на один ответ больше нельзя", "most": FinalAnswer::MOST_TARGETS});
+            return tool_result(&limit, true);
+        }
+        let path = arguments["path"]
+            .as_str()
+            .expect("the schema makes the path a string")
+            .to_owned();
+        let index = self.context.index;
+        let Some(node) = index.find(&resolved(&path, self.context.home, index)) else {
+            return tool_result(&json!({"error": "узел не найден", "path": path}), true);
+        };
+        let Some(action) = suggested_action(self.context, node) else {
+            return tool_result(
+                &json!({"error": "правила не разрешают отметить этот путь к удалению", "path": path}),
+                true,
+            );
+        };
+        self.targets.push(path);
+        tool_result(&json!({"marked": true, "bytes": action.allocated}), false)
+    }
+}
+
+fn mark_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {"path": FinalAnswer::target_schema()},
+        "required": ["path"],
+        "additionalProperties": false
+    })
 }
 
 fn initialized(params: &Value) -> Value {
@@ -164,6 +210,11 @@ fn tool_list() -> Vec<Value> {
         "name": NOTE_HYPOTHESIS,
         "description": NOTE_HYPOTHESIS_DESCRIPTION,
         "inputSchema": ModelHypothesis::schema()
+    }));
+    tools.push(json!({
+        "name": MARK_FOR_DELETION,
+        "description": MARK_FOR_DELETION_DESCRIPTION,
+        "inputSchema": mark_schema()
     }));
     tools
 }

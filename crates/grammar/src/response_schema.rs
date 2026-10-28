@@ -71,6 +71,14 @@ impl ResponseSchema {
                     .iter()
                     .map(ModelHypothesis::from_validated)
                     .collect(),
+                targets: value.get("targets").map_or_else(Vec::new, |targets| {
+                    targets
+                        .as_array()
+                        .expect("the schema makes targets an array")
+                        .iter()
+                        .map(|target| target.as_str().expect("the schema makes targets strings").to_owned())
+                        .collect()
+                }),
             }),
             other => unreachable!("the schema allows only known kinds, got {other:?}"),
         })
@@ -123,6 +131,11 @@ fn final_answer_schema() -> Value {
                 "type": "array",
                 "items": ModelHypothesis::schema(),
                 "maxItems": ModelHypothesis::MOST_PER_ANSWER
+            },
+            "targets": {
+                "type": "array",
+                "items": FinalAnswer::target_schema(),
+                "maxItems": FinalAnswer::MOST_TARGETS
             }
         },
         "required": ["kind", "answer", "hypotheses"],

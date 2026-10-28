@@ -35,8 +35,33 @@ fn tool_calls_and_final_answers_parse_into_typed_responses() {
                 guess: "Похоже на кэш".to_owned(),
                 confidence: 0.75,
             }],
+            targets: Vec::new(),
         })
     );
+}
+
+#[test]
+fn a_final_answer_may_name_what_to_mark_for_deletion() {
+    let schema = ResponseSchema::answers_and_tool_calls();
+    let answer = schema
+        .parse(r#"{"kind": "final", "answer": "Лучше удалить только v3.", "hypotheses": [], "targets": ["~/Library/pnpm/store/v3"]}"#)
+        .expect("an answer with targets parses");
+    assert_eq!(
+        answer,
+        ModelResponse::Final(FinalAnswer {
+            answer: "Лучше удалить только v3.".to_owned(),
+            hypotheses: Vec::new(),
+            targets: vec!["~/Library/pnpm/store/v3".to_owned()],
+        })
+    );
+    let too_many: Vec<String> = (0..=FinalAnswer::MOST_TARGETS)
+        .map(|number| format!("~/p{number}"))
+        .collect();
+    let crowded =
+        serde_json::json!({"kind": "final", "answer": "Ок.", "hypotheses": [], "targets": too_many}).to_string();
+    assert!(schema.parse(&crowded).is_err(), "more targets than allowed are refused");
+    let empty = r#"{"kind": "final", "answer": "Ок.", "hypotheses": [], "targets": [""]}"#;
+    assert!(schema.parse(empty).is_err(), "an empty target is refused");
 }
 
 #[test]
