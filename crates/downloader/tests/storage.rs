@@ -142,7 +142,7 @@ fn a_file_placed_by_hand_is_accepted_only_by_its_sha256() {
 }
 
 #[test]
-fn removing_a_model_moves_it_to_the_trash_of_its_volume() {
+fn removing_a_model_deletes_it_for_good_without_the_volume_trash() {
     let volume = ImageVolume::create(VolumeFormat::Apfs, Visibility::Hidden).expect("the image attaches");
     let store = ModelStore::open(&volume.mount_point().join("models")).expect("the model store opens");
     let entry = tiny_entry();
@@ -159,7 +159,7 @@ fn removing_a_model_moves_it_to_the_trash_of_its_volume() {
     }
     assert!(outside.exists());
 
-    let event = store.remove(&installed).expect("the model goes to the Trash");
+    let event = store.remove(&installed).expect("the model is deleted");
     assert_eq!(
         event,
         ModelEvent::Removed {
@@ -167,9 +167,13 @@ fn removing_a_model_moves_it_to_the_trash_of_its_volume() {
         }
     );
     assert!(!installed.exists());
+    assert!(store.directory().is_dir(), "the models folder stays");
     let trash = volume
         .mount_point()
         .join(".Trashes")
         .join(current_user_id().to_string());
-    assert!(trash.join(&entry.file).exists(), "the model is in the volume Trash");
+    assert!(
+        !trash.join(&entry.file).exists(),
+        "the model does not go to the volume Trash"
+    );
 }
