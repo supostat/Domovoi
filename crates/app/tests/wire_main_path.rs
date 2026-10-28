@@ -3,6 +3,7 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use domovoi_app::strings;
 use domovoi_downloader::{Catalog, CatalogEntry, ModelStore};
 use domovoi_render::BgraImage;
 use domovoi_testkit::{CDN_ETAG, HfServer, ImageVolume, ServerBehaviour, TempTree, Visibility, VolumeFormat};
@@ -39,6 +40,7 @@ const ARCHIVE_BLOB_BYTES: usize = 8 * MEGABYTE;
 const MUSIC: &str = "Music";
 const NESTED_MUSIC: &str = "Music ▸ Music";
 const ANGLE_TOLERANCE: f64 = 1e-3;
+const CARD_RULE: &str = "cargo.target";
 
 fn manifest_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
@@ -239,6 +241,18 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
             {"step": "create_file", "path": fresh_in_depth, "bytes": FRESH_FILE_BYTES},
             {"step": "await_change", "path": fresh_in_depth, "timeout_seconds": CHANGE_TIMEOUT_SECONDS},
             {"step": "recommendations"},
+            {
+                "step": "download_model",
+                "catalog": manifest_path(TEST_CATALOG),
+                "entry": ENTRY,
+                "mirror": mirror,
+                "models": models,
+            },
+            {
+                "step": "ask_about_card",
+                "rule": CARD_RULE,
+                "max_tokens_per_step": RANDOM_MODEL_TOKENS_PER_STEP,
+            },
             {"step": "delete_recommendations", "level": "safe"},
             {"step": "create_file", "path": next_to_deleted, "bytes": FRESH_FILE_BYTES},
             {
@@ -259,13 +273,6 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
             {"step": "tmutil_commands"},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
-            {
-                "step": "download_model",
-                "catalog": manifest_path(TEST_CATALOG),
-                "entry": ENTRY,
-                "mirror": mirror,
-                "models": models,
-            },
             {
                 "step": "ask_assistant",
                 "question": QUESTION,
@@ -514,6 +521,20 @@ fn assert_model_and_answer(report: &Value, server: &HfServer) {
             .any(|request| request.status == PARTIAL_STATUS && request.if_range.as_deref() == Some(CDN_ETAG)),
         "the download resumed with Range and If-Range: {requests:?}"
     );
+    let card = step(report, "ask_about_card");
+    assert_eq!(card["question"], strings::CARD_QUESTION, "{card:#}");
+    assert_eq!(card["card_rule"], CARD_RULE, "{card:#}");
+    assert_eq!(card["history_turns"], 0, "the card question opens the chat: {card:#}");
+    assert!(
+        card["tools"].as_array().is_some_and(|tools| !tools.is_empty()),
+        "a question about a card starts with a tool call: {card:#}"
+    );
+    assert!(
+        card["answer_characters"]
+            .as_u64()
+            .is_some_and(|characters| characters > 0),
+        "{card:#}"
+    );
     let answers = steps(report, "ask_assistant");
     assert_eq!(answers.len(), 2, "{report:#}");
     let (first, follow_up) = (answers[0], answers[1]);
@@ -530,11 +551,14 @@ fn assert_model_and_answer(report: &Value, server: &HfServer) {
             "{answer:#}"
         );
     }
-    assert_eq!(first["history_turns"], 0, "{first:#}");
+    assert_eq!(
+        first["history_turns"], 1,
+        "the question about a card is the first turn of the chat: {first:#}"
+    );
     assert!(first["chat_entries"].as_u64().is_some_and(|entries| entries >= 3));
     assert_eq!(
-        follow_up["history_turns"], 1,
-        "the follow-up sees the first turn: {follow_up:#}"
+        follow_up["history_turns"], 2,
+        "the follow-up sees the earlier turns: {follow_up:#}"
     );
     assert!(
         follow_up["chat_entries"].as_u64() > first["chat_entries"].as_u64(),

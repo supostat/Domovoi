@@ -27,6 +27,7 @@ use crate::apply_job::ApplyJob;
 use crate::assistant::Assistant;
 use crate::assistant_settings::AssistantSettings;
 use crate::cache_opening::CacheOpening;
+use crate::card_question::card_focus;
 use crate::care_models::CareModels;
 use crate::chat_model::ChatModel;
 use crate::csv_export::csv_lines;
@@ -41,6 +42,7 @@ use crate::event_queue::{EventQueue, HEAVY_DELTA_NODES};
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
 use crate::preview_targets::PreviewTargets;
+use crate::provenance::Provenance;
 use crate::question::Question;
 use crate::recommendations_model::RecommendationsModel;
 use crate::safety_badge::SafetyBadge;
@@ -57,6 +59,7 @@ use crate::session_paths::SessionPaths;
 use crate::shell_data::ShellData;
 use crate::shell_snapshot::write_snapshots;
 use crate::snapshot_options::SnapshotOptions;
+use crate::strings::CARD_QUESTION;
 use crate::tmutil_commands::tmutil_commands;
 use crate::tray_measure_job::TrayMeasureJob;
 use crate::tray_model::TrayModel;
@@ -184,7 +187,11 @@ impl EndToEnd {
             ScenarioStep::AskAssistant {
                 question,
                 max_tokens_per_step,
-            } => self.ask_assistant(question, *max_tokens_per_step),
+            } => self.ask_assistant(question, FocusContext::default(), *max_tokens_per_step),
+            ScenarioStep::AskAboutCard {
+                rule,
+                max_tokens_per_step,
+            } => self.ask_about_card(rule, *max_tokens_per_step),
             ScenarioStep::ScrollDiskList { path } => self.scroll_disk_list(marker, path),
             ScenarioStep::UpdateDiskScreen => self.update_disk_screen(),
             ScenarioStep::Snapshots { directory, scale } => {
@@ -430,7 +437,30 @@ impl EndToEnd {
         Ok(report)
     }
 
-    fn ask_assistant(&mut self, question: &str, max_tokens_per_step: Option<u32>) -> Result<Value, String> {
+    fn ask_about_card(&mut self, rule: &str, max_tokens_per_step: Option<u32>) -> Result<Value, String> {
+        let card = self
+            .recommendations()
+            .cards
+            .into_iter()
+            .find(|card| card.provenance == Provenance::Rule(rule.to_owned()))
+            .ok_or_else(|| format!("no card of the rule {rule}"))?;
+        let focus = FocusContext {
+            card: Some(card_focus(&card)),
+            ..FocusContext::default()
+        };
+        let mut report = self.ask_assistant(CARD_QUESTION, focus, max_tokens_per_step)?;
+        report["step"] = "ask_about_card".into();
+        report["question"] = CARD_QUESTION.into();
+        report["card_rule"] = rule.into();
+        Ok(report)
+    }
+
+    fn ask_assistant(
+        &mut self,
+        question: &str,
+        focus: FocusContext,
+        max_tokens_per_step: Option<u32>,
+    ) -> Result<Value, String> {
         let (entry, weights) = self.model.clone().ok_or("a question needs a downloaded model")?;
         let timeouts = Timeouts::from_environment().map_err(|error| error.to_string())?;
         let mut client =
@@ -447,7 +477,7 @@ impl EndToEnd {
         let asked = Question {
             text: question.to_owned(),
             history: self.chat.past_turns(),
-            focus: FocusContext::default(),
+            focus,
         };
         self.chat.ask(question);
         let session = self.session.as_ref().expect(SESSION_BETWEEN_STEPS);
@@ -677,6 +707,7 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::ReplaceWithClone => "replace_with_clone",
         ScenarioStep::DownloadModel { .. } => "download_model",
         ScenarioStep::AskAssistant { .. } => "ask_assistant",
+        ScenarioStep::AskAboutCard { .. } => "ask_about_card",
         ScenarioStep::ScrollDiskList { .. } => "scroll_disk_list",
         ScenarioStep::UpdateDiskScreen => "update_disk_screen",
         ScenarioStep::Snapshots { .. } => "snapshots",

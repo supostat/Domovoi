@@ -39,6 +39,11 @@ pub enum ScenarioStep {
         #[serde(default)]
         max_tokens_per_step: Option<u32>,
     },
+    AskAboutCard {
+        rule: String,
+        #[serde(default)]
+        max_tokens_per_step: Option<u32>,
+    },
     ScrollDiskList {
         path: PathBuf,
     },
