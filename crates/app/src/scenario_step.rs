@@ -26,6 +26,9 @@ pub enum ScenarioStep {
     DeleteRecommendations {
         level: SafetyBadge,
     },
+    RemoveApplication {
+        path: PathBuf,
+    },
     FindDuplicates,
     ReplaceWithClone,
     DownloadModel {

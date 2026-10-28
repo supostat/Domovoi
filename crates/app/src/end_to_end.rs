@@ -161,10 +161,18 @@ impl EndToEnd {
             ScenarioStep::Recommendations => {
                 let model = self.recommendations();
                 let rules: Vec<String> = model.cards.iter().map(|card| card.provenance.label()).collect();
+                let paths: Vec<&[String]> = model.cards.iter().map(|card| card.paths.as_slice()).collect();
                 let blocked: Vec<&str> = model.cards.iter().filter_map(|card| card.blocked.as_deref()).collect();
-                Ok(json!({ "step": "recommendations", "cards": rules, "blocked": blocked, "total": model.total() }))
+                Ok(json!({
+                    "step": "recommendations",
+                    "cards": rules,
+                    "card_paths": paths,
+                    "blocked": blocked,
+                    "total": model.total()
+                }))
             }
             ScenarioStep::DeleteRecommendations { level } => self.delete_recommendations(*level),
+            ScenarioStep::RemoveApplication { path } => self.remove_application(path),
             ScenarioStep::FindDuplicates => {
                 let started = Instant::now();
                 self.session_mut()
@@ -380,6 +388,43 @@ impl EndToEnd {
             "paths_left": taken.iter().filter(|path| path.symlink_metadata().is_ok()).count(),
             "free_before": free_before,
             "free_after": free_after,
+        }))
+    }
+
+    fn remove_application(&mut self, bundle: &Path) -> Result<Value, String> {
+        let node = self
+            .session()
+            .index()
+            .and_then(|index| index.find(bundle))
+            .ok_or_else(|| format!("{} is not indexed", bundle.display()))?;
+        if !self.session_mut().add_application_to_tray(node) {
+            return Err(format!("{} is not an application bundle", bundle.display()));
+        }
+        let name_only: Vec<PathBuf> = self
+            .session()
+            .tray()
+            .applications()
+            .iter()
+            .flat_map(|application| application.name_only.clone())
+            .collect();
+        let (_, _, sizes) = self.measured_tray()?;
+        let (subjects, refusals) = self.session_mut().take_tray_for_delete(&sizes);
+        let taken: Vec<PathBuf> = subjects.iter().map(|subject| subject.physical.clone()).collect();
+        let job = DeleteJob::start(subjects);
+        while !job.is_finished() {
+            thread::sleep(SCAN_POLL);
+        }
+        let report = job.finish();
+        self.session_mut()
+            .settle_delete(&report)
+            .map_err(|error| error.to_string())?;
+        Ok(json!({
+            "step": "remove_application",
+            "deleted": taken,
+            "refused": refusals.len(),
+            "failures": report.failed.len(),
+            "name_only": name_only,
+            "paths_left": taken.iter().filter(|path| path.symlink_metadata().is_ok()).count(),
         }))
     }
 
@@ -710,6 +755,7 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::AwaitChange { .. } => "await_change",
         ScenarioStep::Recommendations => "recommendations",
         ScenarioStep::DeleteRecommendations { .. } => "delete_recommendations",
+        ScenarioStep::RemoveApplication { .. } => "remove_application",
         ScenarioStep::FindDuplicates => "find_duplicates",
         ScenarioStep::ReplaceWithClone => "replace_with_clone",
         ScenarioStep::DownloadModel { .. } => "download_model",

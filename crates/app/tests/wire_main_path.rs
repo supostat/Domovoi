@@ -6,7 +6,10 @@ use std::process::Command;
 use domovoi_app::strings;
 use domovoi_downloader::{Catalog, CatalogEntry, ModelStore};
 use domovoi_render::BgraImage;
-use domovoi_testkit::{CDN_ETAG, HfServer, ImageVolume, ServerBehaviour, TempTree, Visibility, VolumeFormat};
+use domovoi_testkit::{
+    CDN_ETAG, HfServer, ImageVolume, PropertyValue, ServerBehaviour, TempTree, Visibility, VolumeFormat, app_container,
+    application_bundle, write_property_list,
+};
 use domovoi_theme::{NO_BREAK_SPACE, group_thousands};
 use serde_json::{Value, json};
 
@@ -39,6 +42,9 @@ const ARCHIVE: &str = "Archive";
 const ARCHIVE_PARTS: usize = 100;
 const ARCHIVE_BLOB_BYTES: usize = 8 * MEGABYTE;
 const MUSIC: &str = "Music";
+const LIBRARY: &str = "Users/tester/Library";
+const TINY_BUNDLE: &str = "Applications/Tiny.app";
+const TINY_AGENT: &str = "LaunchAgents/com.domovoi.tiny.helper.plist";
 const NESTED_MUSIC: &str = "Music ▸ Music";
 const ANGLE_TOLERANCE: f64 = 1e-3;
 const CARD_RULE: &str = "cargo.target";
@@ -121,6 +127,41 @@ fn populate(root: &Path) {
     }
     write(&root.join(MUSIC).join(MUSIC).join("song.mp3"), &noise(MEGABYTE, 7));
     write(&root.join(MUSIC).join("Podcasts/talk.mp3"), &noise(MEGABYTE / 2, 8));
+    populate_applications(root);
+}
+
+fn populate_applications(root: &Path) {
+    let library = root.join(LIBRARY);
+    application_bundle(
+        &root.join("Applications"),
+        "Tiny",
+        "com.domovoi.tiny",
+        &["group.com.domovoi.tiny"],
+    )
+    .expect("the installed application is built");
+    app_container(&library.join("Containers/com.domovoi.tiny"), "com.domovoi.tiny").expect("its container");
+    write(
+        &library.join("Group Containers/group.com.domovoi.tiny/shared.db"),
+        &noise(FRESH_FILE_BYTES, 9),
+    );
+    write_property_list(
+        &library.join(TINY_AGENT),
+        &[
+            ("Label", PropertyValue::Text("com.domovoi.tiny.helper")),
+            ("AssociatedBundleIdentifiers", PropertyValue::Text("com.domovoi.tiny")),
+        ],
+    )
+    .expect("its launch agent is written");
+    write(&library.join("Application Support/Tiny/state.json"), b"{}");
+    app_container(&library.join("Containers/com.example.renamed"), "com.domovoi.gone").expect("a leftover container");
+    write(
+        &library.join("Caches/com.domovoi.gone/cache.db"),
+        &noise(FRESH_FILE_BYTES, 10),
+    );
+    write(
+        &library.join("Group Containers/ZYXWV98765.com.domovoi.gone/data.db"),
+        &noise(FRESH_FILE_BYTES, 11),
+    );
 }
 
 fn tiny_entry() -> CatalogEntry {
@@ -272,6 +313,7 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
             {"step": "export_csv", "path": csv},
             {"step": "hidden_space"},
             {"step": "tmutil_commands"},
+            {"step": "remove_application", "path": mount_point.join(TINY_BUNDLE)},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
             {
@@ -347,6 +389,80 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
         report["totals"]
     );
     assert_delete_and_clone(report, mount_point);
+    assert_application_removal(report, mount_point);
+}
+
+fn card_paths(report: &Value, rule: &str) -> Vec<PathBuf> {
+    let recommendations = step(report, "recommendations");
+    let position = recommendations["cards"]
+        .as_array()
+        .expect("the report lists cards")
+        .iter()
+        .position(|card| {
+            card.as_str()
+                .is_some_and(|label| label.ends_with(&format!(" · {rule}")))
+        })
+        .unwrap_or_else(|| panic!("there is a {rule} card: {recommendations:#}"));
+    recommendations["card_paths"][position]
+        .as_array()
+        .expect("a card lists its paths")
+        .iter()
+        .map(|path| PathBuf::from(path.as_str().expect("a path is text")))
+        .collect()
+}
+
+fn listed(value: &Value) -> Vec<PathBuf> {
+    value
+        .as_array()
+        .expect("the report lists paths")
+        .iter()
+        .map(|path| PathBuf::from(path.as_str().expect("a path is text")))
+        .collect()
+}
+
+fn assert_application_removal(report: &Value, mount_point: &Path) {
+    let library = mount_point.join(LIBRARY);
+    assert_eq!(
+        card_paths(report, "apps.leftover-caches"),
+        [library.join("Caches/com.domovoi.gone")]
+    );
+    let mut leftover_data = card_paths(report, "apps.leftover-data");
+    leftover_data.sort();
+    assert_eq!(
+        leftover_data,
+        [
+            library.join("Containers/com.example.renamed"),
+            library.join("Group Containers/ZYXWV98765.com.domovoi.gone"),
+        ],
+        "only the removed application leaves data behind"
+    );
+    let removed = step(report, "remove_application");
+    let mut deleted = listed(&removed["deleted"]);
+    deleted.sort();
+    let mut expected = vec![
+        mount_point.join(TINY_BUNDLE),
+        library.join("Containers/com.domovoi.tiny"),
+        library.join("Group Containers/group.com.domovoi.tiny"),
+        library.join(TINY_AGENT),
+    ];
+    expected.sort();
+    assert_eq!(deleted, expected, "{removed:#}");
+    assert_eq!(removed["refused"], 0, "{removed:#}");
+    assert_eq!(removed["failures"], 0, "{removed:#}");
+    assert_eq!(
+        removed["paths_left"], 0,
+        "the application and its files are gone: {removed:#}"
+    );
+    assert_eq!(
+        listed(&removed["name_only"]),
+        [library.join("Application Support/Tiny")],
+        "a folder that only shares the name is reported unmarked"
+    );
+    assert!(library.join("Application Support/Tiny/state.json").exists());
+    for shared in ["Containers", "Group Containers", "LaunchAgents", "Application Support"] {
+        assert!(library.join(shared).is_dir(), "{shared} stays");
+    }
+    assert!(mount_point.join("Applications").is_dir());
 }
 
 fn assert_delete_and_clone(report: &Value, mount_point: &Path) {
