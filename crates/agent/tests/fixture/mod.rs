@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::collections::BTreeSet;
-use std::fs::File;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
 use domovoi_agent::{AgentContext, FocusContext};
@@ -60,12 +60,23 @@ impl Fixture {
                 .file("payload.bin", 2_000, Fill::Noise(4))
                 .expect("a file is written");
         }
+        let root = IndexRoot::for_path(tree.path()).expect("the root kind is known");
+        Self::indexed(tree, root)
+    }
+
+    pub(crate) fn on_volume(tree: TempTree) -> Self {
+        let root = IndexRoot::Volume {
+            path: fs::canonicalize(tree.path())
+                .expect("the root resolves")
+                .to_string_lossy()
+                .into_owned(),
+        };
+        Self::indexed(tree, root)
+    }
+
+    fn indexed(tree: TempTree, root: IndexRoot) -> Self {
         let report = scan(tree.path(), &ScanOptions::default()).expect("the tree scans");
-        let index = Index::build(
-            &report,
-            IndexRoot::for_path(tree.path()).expect("the root kind is known"),
-            &Enrichment::default(),
-        );
+        let index = Index::build(&report, root, &Enrichment::default());
         let rules = RuleSet::for_volume(tree.path(), &ConfigOverrides::default()).expect("the rules are prepared");
         let denylist = Denylist::new(CaseRule::Insensitive).expect("the denylist is prepared");
         let totals = Recommendations::build(&index, &rules, &denylist, &BTreeSet::new(), Vec::new()).totals;

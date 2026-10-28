@@ -1,14 +1,14 @@
 mod synthetic_tree;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use domovoi_apfs_sys::{data_volume, volume_capabilities};
-use domovoi_index::{Index, SafetyLevel};
+use domovoi_index::{Enrichment, Index, InstalledApplications, SafetyLevel};
 use domovoi_rules::{CaseRule, ConfigOverrides, RuleSet, SimulatorRuntimes, rule_table};
 use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat};
-use synthetic_tree::{data_volume_index, directory, file, merge, path_tree};
+use synthetic_tree::{data_volume_index, data_volume_index_with, directory, file, merge, path_tree};
 
 struct OnlyOldDevicesMissing;
 
@@ -39,6 +39,20 @@ fn claimed(index: &Index, rules: &RuleSet) -> BTreeMap<PathBuf, &'static str> {
         .into_iter()
         .map(|claim| (index.path(claim.node), rules.rule(claim.rule).id))
         .collect()
+}
+
+fn installed_container_owners() -> Enrichment {
+    Enrichment {
+        applications: InstalledApplications::new(HashMap::from(["com.docker.docker", "com.example.Notes"].map(
+            |bundle_id| {
+                (
+                    bundle_id.to_owned(),
+                    PathBuf::from(format!("/Applications/{bundle_id}.app")),
+                )
+            },
+        ))),
+        ..Enrichment::default()
+    }
 }
 
 fn fixture_for_every_rule() -> (Vec<(&'static str, &'static str)>, Index) {
@@ -107,7 +121,9 @@ fn fixture_for_every_rule() -> (Vec<(&'static str, &'static str)>, Index) {
             "/Users/igor/Library/Containers/com.example.Notes/Data/Library/Caches",
             "cache.app.generic",
         ),
-        ("/Users/igor/Library/Caches/com.example.viewer", "caches.user"),
+        ("/Users/igor/Library/Caches/viewer-thumbnails", "caches.user"),
+        ("/Users/igor/Library/Caches/com.example.gone", "apps.leftover-caches"),
+        ("/Users/igor/Library/Containers/com.example.gone", "apps.leftover-data"),
     ];
     let mut roots = Vec::new();
     for (path, _) in &fixtures {
@@ -133,7 +149,10 @@ fn fixture_for_every_rule() -> (Vec<(&'static str, &'static str)>, Index) {
     roots.push(path_tree("/Users/igor/Projects/engram", file("Cargo.toml")));
     roots.push(path_tree("/Users/igor/Projects/site", file("package.json")));
     roots.push(path_tree("/Users/igor/Projects/tool", file("build.zig")));
-    (fixtures, data_volume_index(merge(roots)))
+    (
+        fixtures,
+        data_volume_index_with(merge(roots), &installed_container_owners()),
+    )
 }
 
 #[test]

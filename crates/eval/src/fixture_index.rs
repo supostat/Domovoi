@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 use domovoi_agent::{AgentContext, FocusContext, PastTurn};
 use domovoi_apfs_sys::{EntryAttributes, ObjectKind};
 use domovoi_index::SafetyLevel;
-use domovoi_index::{Enrichment, Index, IndexRoot};
+use domovoi_index::{Enrichment, Index, IndexRoot, InstalledApplications};
 use domovoi_rules::{
     CaseRule, ConfigOverrides, Denylist, InstalledSimulatorRuntimes, LevelTotals, RuleSet, rule_table,
 };
@@ -14,6 +14,8 @@ use domovoi_scanner::{Node, NodeState, ScanReport};
 
 pub const FIXTURE_HOME: &str = "/Users/fixture";
 const MODEL_FILE: &str = "Library/Application Support/Domovoi/models/Qwen3.5-4B-Q4_K_M.gguf";
+const DOCKER_BUNDLE_ID: &str = "com.docker.docker";
+const DOCKER_APPLICATION: &str = "/Applications/Docker.app";
 const SECONDS_PER_DAY: u64 = 86_400;
 const FILES: [(&str, u64, u64); 31] = [
     (
@@ -114,6 +116,10 @@ impl FixtureIndex {
             bytes: FILES.iter().map(|(_, bytes, _)| bytes).sum(),
         };
         let enrichment = Enrichment {
+            applications: InstalledApplications::new(HashMap::from([(
+                DOCKER_BUNDLE_ID.to_owned(),
+                PathBuf::from(DOCKER_APPLICATION),
+            )])),
             model_paths: vec![Path::new(FIXTURE_HOME).join(MODEL_FILE)],
             ..Enrichment::default()
         };

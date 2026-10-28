@@ -7,6 +7,7 @@ use crate::path_pattern::PathPattern;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Condition {
     SimulatorRuntimeMissing,
+    OwnerMissing,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -5,12 +5,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use app_fixture::{application, container, volume_index};
+use app_fixture::volume_index;
 use domovoi_index::{
     CacheError, CacheHeader, ChangedPath, Enrichment, Index, IndexRoot, OwnerEvidence, open_cache, write_cache,
 };
 use domovoi_scanner::{Node, ScanOptions, scan};
-use domovoi_testkit::{Fill, TempTree};
+use domovoi_testkit::{Fill, TempTree, app_container, application_bundle};
 use synthetic_tree::{data_volume, directory, file, opened_file};
 
 const LAST_EVENT: u64 = 42;
@@ -201,16 +201,18 @@ fn a_cache_written_after_a_delta_opens_with_the_same_live_tree_and_takes_new_del
 fn bundles_and_owner_evidence_survive_the_cache() {
     let tree = TempTree::new().expect("temp tree is created");
     let root = tree.path().join("volume");
-    application(
+    application_bundle(
         &root.join("Applications"),
         "Tiny",
         "com.domovoi.tiny",
         &["group.com.domovoi.tiny"],
-    );
-    container(
+    )
+    .expect("the application is built");
+    app_container(
         &root.join("Users/tester/Library/Containers/com.domovoi.tiny"),
         "com.domovoi.tiny",
-    );
+    )
+    .expect("the container is built");
     let index = volume_index(&root);
     let path = tree.path().join("scan.cache");
     write_cache(&path, &header("1.0"), LAST_EVENT, &index).expect("cache is written");

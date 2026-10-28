@@ -179,6 +179,10 @@ impl Index {
         &self.bundles
     }
 
+    pub fn root_components(&self) -> Vec<String> {
+        self.root.root_components()
+    }
+
     pub fn generation(&self) -> u64 {
         self.generation
     }

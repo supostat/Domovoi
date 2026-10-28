@@ -29,6 +29,7 @@ mod mcp_proxy;
 mod mcp_server;
 #[cfg(feature = "claude-code")]
 mod mcp_session;
+mod owner_record;
 mod past_turn;
 #[cfg(feature = "claude-code")]
 mod private_socket;

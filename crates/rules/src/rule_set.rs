@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fmt;
 use std::io;
-use std::path::{Component, Path};
+use std::path::Path;
 
 use domovoi_apfs_sys::volume_capabilities;
-use domovoi_index::{Index, NodeId, SafetyLevel, SafetyLevels};
+use domovoi_index::{App, Index, NodeId, SafetyLevel, SafetyLevels};
 
 use crate::claim_frame::ClaimFrame;
 use crate::claim_scope::ClaimScope;
@@ -153,11 +153,19 @@ impl RuleSet {
     fn frame(&self, index: &Index, node: NodeId, components: &[String], inherited: Option<usize>) -> ClaimFrame {
         let effective = self.matching_rule(index, node, components).or(inherited);
         match effective {
-            Some(rule) if index.children(node).next().is_none() || !self.deeper_rule_possible(components) => {
+            Some(rule)
+                if index.children(node).next().is_none()
+                    || !self.deeper_rule_possible(components)
+                    || self.claims_owned_root_whole(rule) =>
+            {
                 ClaimFrame::Claimed(rule)
             }
             _ => ClaimFrame::Open(effective),
         }
+    }
+
+    fn claims_owned_root_whole(&self, rule: usize) -> bool {
+        self.rules[rule].condition == Some(Condition::OwnerMissing)
     }
 
     fn deeper_rule_possible(&self, components: &[String]) -> bool {
@@ -188,12 +196,9 @@ impl RuleSet {
 
     fn root_components(&self, index: &Index) -> Vec<String> {
         index
-            .path(index.root())
-            .components()
-            .filter_map(|component| match component {
-                Component::Normal(name) => Some(normalized(name, self.case)),
-                _ => None,
-            })
+            .root_components()
+            .iter()
+            .map(|component| normalized(OsStr::new(component), self.case))
             .collect()
     }
 
@@ -223,6 +228,10 @@ impl RuleSet {
             Some(Condition::SimulatorRuntimeMissing) => {
                 self.runtimes.device_runtime_missing(&index.physical_path(node))
             }
+            Some(Condition::OwnerMissing) => index
+                .ownership(node)
+                .and_then(|ownership| index.app(ownership.app))
+                .is_some_and(App::is_leftover),
         }
     }
 }

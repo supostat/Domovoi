@@ -5,10 +5,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use app_fixture::{application, volume_index};
+use app_fixture::volume_index;
 use domovoi_index::{Category, ChangedPath, Enrichment, Index, IndexRoot, Installation, StaleDelta};
 use domovoi_scanner::{ScanOptions, scan};
-use domovoi_testkit::{Fill, TempTree};
+use domovoi_testkit::{Fill, TempTree, application_bundle};
 
 const UNREADABLE: libc::mode_t = 0o000;
 const SHARED_HOME: &str = "/Users/Shared";
@@ -248,7 +248,8 @@ fn a_bundle_that_appears_and_vanishes_moves_its_files_between_installed_and_left
             .clone()
     };
     assert_eq!(installation(&index), Installation::Missing);
-    application(&under(&root, "Applications"), "Tiny", "com.domovoi.tiny", &[]);
+    application_bundle(&under(&root, "Applications"), "Tiny", "com.domovoi.tiny", &[])
+        .expect("the application is built");
     apply(&mut index, &[("Applications", false)]);
     assert!(matches!(installation(&index), Installation::Installed { .. }));
     assert_matches(&index, &volume_index(&root));

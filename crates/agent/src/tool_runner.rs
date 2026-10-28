@@ -8,6 +8,7 @@ use serde_json::{Map, Value, json};
 use crate::agent_context::AgentContext;
 use crate::home_path::resolved;
 use crate::level_name::{level_name, level_named};
+use crate::owner_record::owner_record;
 use crate::tool_outcome::ToolOutcome;
 
 const DEFAULT_LIMIT: usize = 10;
@@ -207,7 +208,8 @@ impl<'a> ToolRunner<'a> {
             "files": record.files,
             "days_since_activity": self.days_since_activity(node),
             "level": rule.map(|rule| level_name(rule.level)),
-            "rule": rule.map(|rule| rule.id)
+            "rule": rule.map(|rule| rule.id),
+            "owner": owner_record(index, node)
         })
     }
 

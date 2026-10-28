@@ -97,8 +97,12 @@ pub(crate) fn data_volume(children: Vec<Node>) -> (ScanReport, IndexRoot) {
 }
 
 pub(crate) fn data_volume_index(children: Vec<Node>) -> Index {
+    data_volume_index_with(children, &Enrichment::default())
+}
+
+pub(crate) fn data_volume_index_with(children: Vec<Node>, enrichment: &Enrichment) -> Index {
     let (report, root) = data_volume(children);
-    Index::build(&report, root, &Enrichment::default())
+    Index::build(&report, root, enrichment)
 }
 
 pub(crate) fn merge(trees: Vec<Node>) -> Vec<Node> {

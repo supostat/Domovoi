@@ -3,10 +3,13 @@ mod app_fixture;
 use std::fs;
 use std::path::Path;
 
-use app_fixture::{Value, application, container, volume_index, write_property_list};
+use app_fixture::volume_index;
 use domovoi_index::{Category, Enrichment, Index, IndexRoot, Installation, NodeId, OwnerEvidence};
 use domovoi_scanner::{ScanOptions, scan};
-use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat};
+use domovoi_testkit::{
+    ImageVolume, PropertyValue, TempTree, Visibility, VolumeFormat, app_container, application_bundle,
+    write_property_list,
+};
 
 const LIBRARY: &str = "Users/tester/Library";
 
@@ -40,34 +43,41 @@ fn library(root: &Path, relative: &str) -> std::path::PathBuf {
 fn exact_signals_bind_the_files_of_an_installed_application_to_its_bundle() {
     let tree = TempTree::new().expect("a temp tree is created");
     let root = tree.path();
-    let tiny = application(
+    let tiny = application_bundle(
         &root.join("Applications"),
         "Tiny",
         "com.domovoi.tiny",
         &["group.com.domovoi.tiny"],
-    );
-    application(&root.join("Users/tester/Downloads"), "Loose", "com.domovoi.loose", &[]);
-    container(&library(root, "Containers/com.domovoi.tiny"), "com.domovoi.tiny");
-    container(&library(root, "Containers/Renamed"), "com.domovoi.tiny");
+    )
+    .expect("the application is built");
+    application_bundle(&root.join("Users/tester/Downloads"), "Loose", "com.domovoi.loose", &[])
+        .expect("the application is built");
+    app_container(&library(root, "Containers/com.domovoi.tiny"), "com.domovoi.tiny").expect("the container is built");
+    app_container(&library(root, "Containers/Renamed"), "com.domovoi.tiny").expect("the container is built");
     fs::create_dir_all(library(root, "Containers/com.domovoi.loose")).expect("a container without metadata");
     fs::create_dir_all(library(root, "Group Containers/group.com.domovoi.tiny")).expect("a group container");
     write_property_list(
         &library(root, "LaunchAgents/com.domovoi.tiny.helper.plist"),
         &[
-            ("Label", Value::Text("com.domovoi.tiny.helper")),
-            ("AssociatedBundleIdentifiers", Value::Texts(&["com.domovoi.tiny"])),
+            ("Label", PropertyValue::Text("com.domovoi.tiny.helper")),
+            (
+                "AssociatedBundleIdentifiers",
+                PropertyValue::Texts(&["com.domovoi.tiny"]),
+            ),
         ],
-    );
+    )
+    .expect("the property list is written");
     let program = fs::canonicalize(&tiny)
         .expect("the bundle resolves")
         .join("Contents/MacOS/Tiny");
     write_property_list(
         &library(root, "LaunchAgents/agent.plist"),
         &[
-            ("Label", Value::Text("agent")),
-            ("Program", Value::Text(&program.to_string_lossy())),
+            ("Label", PropertyValue::Text("agent")),
+            ("Program", PropertyValue::Text(&program.to_string_lossy())),
         ],
-    );
+    )
+    .expect("the property list is written");
     fs::create_dir_all(library(root, "Application Support/Tiny")).expect("a folder named like the app");
     fs::create_dir_all(library(root, "Application Support/Gone")).expect("a folder named like no app");
     let index = volume_index(root);
@@ -134,14 +144,17 @@ fn removed_applications_leave_owners_only_by_exact_signals() {
     let tree = TempTree::new().expect("a temp tree is created");
     let root = tree.path();
     let applications = root.join("Applications");
-    application(&applications, "Tiny", "com.domovoi.tiny", &["group.com.domovoi.shared"]);
-    application(
+    application_bundle(&applications, "Tiny", "com.domovoi.tiny", &["group.com.domovoi.shared"])
+        .expect("the application is built");
+    application_bundle(
         &applications,
         "Other",
         "com.domovoi.other",
         &["group.com.domovoi.shared"],
-    );
-    container(&library(root, "Containers/com.example.renamed"), "com.domovoi.gone");
+    )
+    .expect("the application is built");
+    app_container(&library(root, "Containers/com.example.renamed"), "com.domovoi.gone")
+        .expect("the container is built");
     fs::create_dir_all(library(root, "Group Containers/ZYXWV98765.com.domovoi.gone"))
         .expect("a group of a removed team");
     fs::create_dir_all(library(root, "Group Containers/group.com.domovoi.shared")).expect("a shared group");
@@ -149,10 +162,14 @@ fn removed_applications_leave_owners_only_by_exact_signals() {
     write_property_list(
         &library(root, "LaunchAgents/com.domovoi.gone.helper.plist"),
         &[
-            ("Label", Value::Text("com.domovoi.gone.helper")),
-            ("Program", Value::Text("/Applications/Gone.app/Contents/MacOS/helper")),
+            ("Label", PropertyValue::Text("com.domovoi.gone.helper")),
+            (
+                "Program",
+                PropertyValue::Text("/Applications/Gone.app/Contents/MacOS/helper"),
+            ),
         ],
-    );
+    )
+    .expect("the property list is written");
     fs::create_dir_all(library(root, "Application Support/Gone")).expect("a folder named like the removed app");
     let index = volume_index(root);
 
@@ -203,7 +220,8 @@ fn removed_applications_leave_owners_only_by_exact_signals() {
 fn a_mounted_volume_is_indexed_relative_to_its_root() {
     let volume = ImageVolume::create(VolumeFormat::Apfs, Visibility::Hidden).expect("the image attaches");
     let root = fs::canonicalize(volume.mount_point()).expect("the mount point resolves");
-    container(&library(&root, "Containers/com.example.renamed"), "com.domovoi.gone");
+    app_container(&library(&root, "Containers/com.example.renamed"), "com.domovoi.gone")
+        .expect("the container is built");
     let kind = IndexRoot::for_path(&root).expect("root kind");
     assert_eq!(
         kind,

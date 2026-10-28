@@ -7,7 +7,7 @@ use domovoi_rules::{ConfigOverrides, rule_table};
 
 const DOCUMENT: &str = "../../docs/DOMOVOI.md";
 const SECTION: &str = "### 4.4";
-const STARTING_IDS: usize = 10;
+const STARTING_IDS: usize = 12;
 
 fn level_of(word: &str) -> SafetyLevel {
     match word {

@@ -287,6 +287,31 @@ pub fn rule_table(overrides: &ConfigOverrides) -> Vec<Rule> {
         )
         .owned_by("com.tinyspeck.slackmacgap"),
         Rule::new(
+            "apps.leftover-caches",
+            Safe,
+            &[
+                "~/Library/Caches/*",
+                "~/Library/HTTPStorages/*",
+                "~/Library/WebKit/*",
+                "~/Library/Saved Application State/*",
+            ],
+            "Кэш и сохранённые окна программы, которой больше нет на диске. Удаление ничего не сломает.",
+        )
+        .when(Condition::OwnerMissing),
+        Rule::new(
+            "apps.leftover-data",
+            CheckYourself,
+            &[
+                "~/Library/Application Support/*",
+                "~/Library/Containers/*",
+                "~/Library/Group Containers/*",
+                "~/Library/Preferences/*",
+                "~/Library/LaunchAgents/*",
+            ],
+            "Данные программы, которой больше нет на диске. Внутри могут быть настройки и документы — посмотрите перед удалением.",
+        )
+        .when(Condition::OwnerMissing),
+        Rule::new(
             "cache.app.generic",
             Safe,
             &["~/Library/Containers/*/Data/Library/Caches"],

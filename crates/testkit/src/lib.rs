@@ -1,8 +1,10 @@
+mod application_bundle;
 mod directory;
 mod fill;
 mod hf_server;
 mod image_backend;
 mod image_volume;
+mod property_list;
 mod recorded_request;
 mod server_behaviour;
 mod system_tool;
@@ -10,11 +12,13 @@ mod temp_tree;
 mod test_timeout;
 mod throttled_body;
 
+pub use application_bundle::{app_container, application_bundle};
 pub use directory::Directory;
 pub use fill::Fill;
 pub use hf_server::{CDN_ETAG, HfServer};
 pub use image_backend::ImageBackend;
 pub use image_volume::{ImageVolume, Visibility, VolumeFormat};
+pub use property_list::{PropertyValue, write_property_list};
 pub use recorded_request::RecordedRequest;
 pub use server_behaviour::ServerBehaviour;
 pub use temp_tree::TempTree;
