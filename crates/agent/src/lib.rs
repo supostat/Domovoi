@@ -5,6 +5,7 @@ mod agent_answer;
 mod agent_context;
 mod agent_error;
 mod agent_limits;
+mod card_focus;
 #[cfg(feature = "claude-code")]
 mod claude_answer;
 #[cfg(feature = "claude-code")]
@@ -43,6 +44,7 @@ pub use agent_answer::AgentAnswer;
 pub use agent_context::AgentContext;
 pub use agent_error::AgentError;
 pub use agent_limits::AgentLimits;
+pub use card_focus::CardFocus;
 #[cfg(feature = "claude-code")]
 pub use claude_answer::ClaudeAnswer;
 #[cfg(feature = "claude-code")]

@@ -84,6 +84,7 @@ fn the_overview_carries_the_focused_folder_its_largest_children_and_the_selected
     let focus = FocusContext {
         folder: Some(PathBuf::from(fixture.path("engine"))),
         selected: vec!["~/site/node_modules".to_owned()],
+        card: None,
     };
     let mut backend = loaded_fake(vec![final_answer("Ок.")]);
     ask(&mut backend, limits(), &with(&fixture, &[], &focus));

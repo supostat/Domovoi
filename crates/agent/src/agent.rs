@@ -62,8 +62,9 @@ impl<'a> Agent<'a> {
         let mut conversation =
             Conversation::opening(past_messages(context.history), question_message(&runner, question));
         let mut steps = Vec::new();
+        let first_step_calls_tool = self.first_step_calls_tool || context.focus.card.is_some();
         for step in 0..self.limits.max_steps {
-            let schema = self.schema_for(step);
+            let schema = self.schema_for(step, first_step_calls_tool);
             let prompt = conversation.render(self.template, &system, &mut *self.backend, &self.limits)?;
             let text = self.generate(prompt, &schema, cancel)?;
             match schema.parse(&text) {
@@ -86,10 +87,10 @@ impl<'a> Agent<'a> {
         unreachable!("the last step admits only a final answer")
     }
 
-    fn schema_for(&self, step: u32) -> ResponseSchema {
+    fn schema_for(&self, step: u32, first_step_calls_tool: bool) -> ResponseSchema {
         if step + 1 == self.limits.max_steps {
             ResponseSchema::answers_only()
-        } else if step == 0 && self.first_step_calls_tool {
+        } else if step == 0 && first_step_calls_tool {
             ResponseSchema::tool_calls_only()
         } else {
             ResponseSchema::answers_and_tool_calls()

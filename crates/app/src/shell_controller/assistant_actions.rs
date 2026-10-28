@@ -103,6 +103,7 @@ impl ShellController {
                     .filter(|card| card.selected && card.selectable())
                     .flat_map(|card| card.paths.iter().cloned())
                     .collect(),
+                card: None,
             };
             let session = state.session.take().expect("a question needs an open session");
             state.assistant.begin(session, question, focus, timer);

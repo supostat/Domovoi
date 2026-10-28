@@ -13,6 +13,7 @@ use crate::tool_outcome::ToolOutcome;
 const DEFAULT_LIMIT: usize = 10;
 const LARGEST_CHILDREN: usize = 15;
 const FOCUS_CHILDREN: usize = 10;
+const CARD_PATHS: usize = 10;
 const LARGEST_RULES: usize = 10;
 const FOUND_BY_RULE: usize = 5;
 const SECONDS_PER_DAY: u64 = 86_400;
@@ -62,6 +63,16 @@ impl<'a> ToolRunner<'a> {
         }
         if !focus.selected.is_empty() {
             overview["selected"] = json!(focus.selected);
+        }
+        if let Some(card) = &focus.card {
+            overview["card"] = json!({
+                "rule": card.rule,
+                "title": card.title,
+                "level": level_name(card.level),
+                "paths": card.paths.iter().take(CARD_PATHS).collect::<Vec<_>>(),
+                "paths_total": card.paths.len(),
+                "bytes": card.bytes
+            });
         }
         if let Some(last) = self.context.history.last().filter(|turn| !turn.paths.is_empty()) {
             overview["last_paths"] = json!(last.paths);
