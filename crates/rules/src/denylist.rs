@@ -49,7 +49,7 @@ const PROTECTED_DATA: [(&str, &str); 24] = [
     ("/.DocumentRevisions-V100", "служебные данные тома"),
     ("**/.Trashes", "служебные данные тома"),
 ];
-const TRASH: &str = "~/.Trash";
+const PROTECTED_EXCEPTIONS: [&str; 1] = ["~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads"];
 const OWN_DATA: [&str; 2] = [
     "~/Library/Application Support/com.domovoi.app",
     "~/Library/Caches/com.domovoi.app",
@@ -64,7 +64,7 @@ pub struct Denylist {
     read_only_mounts: Vec<PathBuf>,
     own_bundle: Option<PathBuf>,
     protected: Vec<(PathPattern, &'static str)>,
-    trash: PathPattern,
+    protected_exceptions: Vec<PathPattern>,
     own_data: Vec<PathPattern>,
 }
 
@@ -85,7 +85,7 @@ impl Denylist {
                 .iter()
                 .map(|(pattern, what)| (fold(pattern), *what))
                 .collect(),
-            trash: fold(TRASH),
+            protected_exceptions: PROTECTED_EXCEPTIONS.iter().map(|pattern| fold(pattern)).collect(),
             own_data: OWN_DATA.iter().map(|pattern| fold(pattern)).collect(),
         })
     }
@@ -149,30 +149,37 @@ impl Denylist {
                 _ => None,
             })
             .collect();
-        let mut prefix = Vec::with_capacity(components.len());
-        let has_sibling = |_: &str| false;
-        for component in components {
-            prefix.push(component);
-            if self.trash.matches(&prefix, has_sibling) {
-                return Some(DenyReason::Trash);
-            }
-            if self
-                .own_data
-                .iter()
-                .any(|pattern| pattern.matches(&prefix, has_sibling))
-            {
+        let protection_applies = !self.inside_protected_exception(&components);
+        for length in 1..=components.len() {
+            let prefix = &components[..length];
+            if self.own_data.iter().any(|pattern| pattern.matches(prefix, no_sibling)) {
                 return Some(DenyReason::OwnApplication);
+            }
+            if !protection_applies {
+                continue;
             }
             if let Some((_, what)) = self
                 .protected
                 .iter()
-                .find(|(pattern, _)| pattern.matches(&prefix, has_sibling))
+                .find(|(pattern, _)| pattern.matches(prefix, no_sibling))
             {
                 return Some(DenyReason::ProtectedData(what));
             }
         }
         None
     }
+
+    fn inside_protected_exception(&self, components: &[String]) -> bool {
+        (1..=components.len()).any(|length| {
+            self.protected_exceptions
+                .iter()
+                .any(|pattern| pattern.matches(&components[..length], no_sibling))
+        })
+    }
+}
+
+fn no_sibling(_: &str) -> bool {
+    false
 }
 
 fn parent_is_read_only(index: &Index, node: NodeId) -> bool {

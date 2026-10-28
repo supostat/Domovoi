@@ -147,7 +147,6 @@ pub const DENY_PARENT_NOT_WRITABLE: &str = "нет прав на папку";
 pub const DENY_PROTECTED_DATA: &str = "данные под защитой";
 pub const DENY_RUNNING_APPLICATION: &str = "приложение запущено";
 pub const DENY_OWN_APPLICATION: &str = "это сам Домовой";
-pub const DENY_TRASH: &str = "уже в Корзине macOS";
 pub const NO_RECOMMENDATIONS: &str = "Правилам здесь нечего предложить. Диск выглядит аккуратно.";
 
 pub const FIND_DUPLICATES: &str = "Искать дубликаты";
@@ -365,7 +364,7 @@ pub const INSTALL_NETWORK: &str = "загрузка прервалась";
 pub const INSTALL_REFUSED: &str = "источник отказал в загрузке";
 pub const INSTALL_DISK: &str = "файл не удалось записать";
 
-pub const RULE_TITLES: [(&str, &str); 44] = [
+pub const RULE_TITLES: [(&str, &str); 49] = [
     ("xcode.derived-data", "Xcode · DerivedData"),
     ("xcode.device-support", "iOS DeviceSupport"),
     ("xcode.simulators", "Симуляторы Xcode"),
@@ -410,6 +409,11 @@ pub const RULE_TITLES: [(&str, &str); 44] = [
     ("orbstack", "Данные OrbStack"),
     ("downloads.installers", "Установщики в Загрузках"),
     ("ios.backups", "Резервные копии iPhone и iPad"),
+    ("logs.crash-reports", "Отчёты о сбоях"),
+    ("logs.user", "Журналы программ"),
+    ("mail.downloads", "Вложения из Почты"),
+    ("trash.user", "Корзина"),
+    ("screenshots", "Снимки экрана"),
 ];
 
 pub fn rule_title(id: &str) -> Option<&'static str> {

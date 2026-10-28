@@ -7,8 +7,12 @@ use std::path::{Path, PathBuf};
 use domovoi_apfs_sys::{data_volume, volume_capabilities};
 use domovoi_index::{Enrichment, Index, InstalledApplications, SafetyLevel};
 use domovoi_rules::{CaseRule, ConfigOverrides, RuleSet, SimulatorRuntimes, rule_table};
+use domovoi_scanner::Node;
 use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat};
 use synthetic_tree::{data_volume_index, data_volume_index_with, directory, file, merge, path_tree};
+
+const SCREEN_CAPTURE: &str = "/Users/igor/Desktop/Shot 2026-10-28.png";
+const FILE_FIXTURE_EXTENSIONS: [&str; 3] = ["dmg", "pkg", "png"];
 
 struct OnlyOldDevicesMissing;
 
@@ -41,8 +45,9 @@ fn claimed(index: &Index, rules: &RuleSet) -> BTreeMap<PathBuf, &'static str> {
         .collect()
 }
 
-fn installed_container_owners() -> Enrichment {
+fn installed_owners_and_a_screen_capture() -> Enrichment {
     Enrichment {
+        screen_captures: vec![PathBuf::from(SCREEN_CAPTURE)],
         applications: InstalledApplications::new(HashMap::from(["com.docker.docker", "com.example.Notes"].map(
             |bundle_id| {
                 (
@@ -55,103 +60,123 @@ fn installed_container_owners() -> Enrichment {
     }
 }
 
-fn fixture_for_every_rule() -> (Vec<(&'static str, &'static str)>, Index) {
-    let fixtures = vec![
-        ("/Users/igor/Library/Developer/Xcode/DerivedData", "xcode.derived-data"),
-        (
-            "/Users/igor/Library/Developer/Xcode/iOS DeviceSupport",
-            "xcode.device-support",
-        ),
-        (
-            "/Users/igor/Library/Developer/CoreSimulator/Devices/OLD-DEVICE",
-            "xcode.simulators-unavailable",
-        ),
-        (
-            "/Users/igor/Library/Developer/CoreSimulator/Devices/CURRENT-DEVICE",
-            "xcode.simulators",
-        ),
-        (
-            "/Users/igor/Library/Developer/CoreSimulator/Caches/dyld",
-            "xcode.dyld-cache",
-        ),
-        ("/Users/igor/Library/Caches/com.apple.dt.Xcode", "xcode.caches"),
-        ("/Users/igor/Library/Developer/Xcode/Archives", "xcode.archives"),
-        (
-            "/Library/Developer/CoreSimulator/Volumes/iOS_23A343",
-            "xcode.simulator-runtimes",
-        ),
-        ("/Users/igor/Library/Containers/com.docker.docker/Data/vms", "docker.vm"),
-        ("/Users/igor/.orbstack", "orbstack"),
-        (
-            "/Users/igor/Library/Application Support/MobileSync/Backup/00008110",
-            "ios.backups",
-        ),
-        ("/Users/igor/Projects/engram/target", "cargo.target"),
-        ("/Users/igor/Projects/site/node_modules", "dev.deps"),
-        ("/Users/igor/Projects/tool/.zig-cache", "dev.deps"),
-        ("/Users/igor/Downloads/Figma.dmg", "downloads.installers"),
-        ("/Users/igor/Downloads/Driver.pkg", "downloads.installers"),
-        ("/Users/igor/Library/Caches/Homebrew", "cache.homebrew"),
-        ("/Users/igor/.npm/_cacache", "cache.npm"),
-        ("/Users/igor/Library/pnpm/store", "cache.pnpm-store"),
-        ("/Users/igor/Library/Caches/pnpm", "cache.pnpm-metadata"),
-        ("/Users/igor/Library/Caches/Yarn", "cache.yarn"),
-        ("/Users/igor/.yarn/berry/cache", "cache.yarn-berry"),
-        ("/Users/igor/.bun/install/cache", "cache.bun"),
-        ("/Users/igor/.cargo/registry", "cache.cargo-registry"),
-        ("/Users/igor/.cargo/git", "cache.cargo-git"),
-        ("/Users/igor/Library/Caches/pip", "cache.pip"),
-        ("/Users/igor/.cache/uv", "cache.uv"),
-        ("/Users/igor/Library/Caches/pypoetry/cache", "cache.poetry"),
-        ("/Users/igor/Library/Caches/pypoetry/virtualenvs", "cache.poetry-venvs"),
-        ("/Users/igor/.gradle/caches", "cache.gradle"),
-        ("/Users/igor/.m2/repository", "cache.maven"),
-        ("/Users/igor/Library/Caches/CocoaPods", "cache.cocoapods"),
-        ("/Users/igor/.cocoapods/repos", "cache.cocoapods-specs"),
-        ("/Users/igor/Library/Caches/org.swift.swiftpm", "cache.swiftpm"),
-        ("/Users/igor/Library/Caches/go-build", "cache.go-build"),
-        ("/Users/igor/go/pkg/mod", "cache.go-mod"),
-        ("/Users/igor/Library/Caches/composer", "cache.composer"),
-        ("/Users/igor/.local/share/NuGet/http-cache", "cache.nuget-http"),
-        ("/Users/igor/.nuget/packages", "cache.nuget-packages"),
-        ("/Users/igor/Library/Caches/org.carthage.CarthageKit", "cache.carthage"),
-        ("/Users/igor/Library/Caches/Google/Chrome", "cache.chrome"),
-        ("/Users/igor/Library/Application Support/Slack/Cache", "cache.slack"),
-        (
-            "/Users/igor/Library/Containers/com.example.Notes/Data/Library/Caches",
-            "cache.app.generic",
-        ),
-        ("/Users/igor/Library/Caches/viewer-thumbnails", "caches.user"),
-        ("/Users/igor/Library/Caches/com.example.gone", "apps.leftover-caches"),
-        ("/Users/igor/Library/Containers/com.example.gone", "apps.leftover-data"),
-    ];
-    let mut roots = Vec::new();
-    for (path, _) in &fixtures {
-        let leaf_name = Path::new(path)
-            .file_name()
-            .expect("fixture has a name")
-            .to_string_lossy()
-            .into_owned();
-        let parent = Path::new(path)
-            .parent()
-            .expect("fixture has a parent")
-            .to_string_lossy()
-            .into_owned();
-        let mut leaf = directory(&leaf_name, vec![file("payload")]);
-        let installer = Path::new(&leaf_name)
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("dmg") || extension.eq_ignore_ascii_case("pkg"));
-        if installer {
-            leaf = file(&leaf_name);
-        }
-        roots.push(path_tree(&parent, leaf));
+const RULE_FIXTURES: &[(&str, &str)] = &[
+    ("/Users/igor/Library/Developer/Xcode/DerivedData", "xcode.derived-data"),
+    (
+        "/Users/igor/Library/Developer/Xcode/iOS DeviceSupport",
+        "xcode.device-support",
+    ),
+    (
+        "/Users/igor/Library/Developer/CoreSimulator/Devices/OLD-DEVICE",
+        "xcode.simulators-unavailable",
+    ),
+    (
+        "/Users/igor/Library/Developer/CoreSimulator/Devices/CURRENT-DEVICE",
+        "xcode.simulators",
+    ),
+    (
+        "/Users/igor/Library/Developer/CoreSimulator/Caches/dyld",
+        "xcode.dyld-cache",
+    ),
+    ("/Users/igor/Library/Caches/com.apple.dt.Xcode", "xcode.caches"),
+    ("/Users/igor/Library/Developer/Xcode/Archives", "xcode.archives"),
+    (
+        "/Library/Developer/CoreSimulator/Volumes/iOS_23A343",
+        "xcode.simulator-runtimes",
+    ),
+    ("/Users/igor/Library/Containers/com.docker.docker/Data/vms", "docker.vm"),
+    ("/Users/igor/.orbstack", "orbstack"),
+    (
+        "/Users/igor/Library/Application Support/MobileSync/Backup/00008110",
+        "ios.backups",
+    ),
+    ("/Users/igor/Projects/engram/target", "cargo.target"),
+    ("/Users/igor/Projects/site/node_modules", "dev.deps"),
+    ("/Users/igor/Projects/tool/.zig-cache", "dev.deps"),
+    ("/Users/igor/Downloads/Figma.dmg", "downloads.installers"),
+    ("/Users/igor/Downloads/Driver.pkg", "downloads.installers"),
+    (
+        "/Users/igor/Library/Logs/DiagnosticReports/Tool-2026-10-28.ips",
+        "logs.crash-reports",
+    ),
+    (
+        "/Library/Logs/DiagnosticReports/Kernel-2026-10-28.panic",
+        "logs.crash-reports",
+    ),
+    ("/Users/igor/Library/Logs/Homebrew", "logs.user"),
+    (
+        "/Users/igor/Library/Containers/com.apple.mail/Data/Library/Mail Downloads/1A2B",
+        "mail.downloads",
+    ),
+    ("/Users/igor/.Trash/old-project", "trash.user"),
+    (SCREEN_CAPTURE, "screenshots"),
+    ("/Users/igor/Library/Caches/Homebrew", "cache.homebrew"),
+    ("/Users/igor/.npm/_cacache", "cache.npm"),
+    ("/Users/igor/Library/pnpm/store", "cache.pnpm-store"),
+    ("/Users/igor/Library/Caches/pnpm", "cache.pnpm-metadata"),
+    ("/Users/igor/Library/Caches/Yarn", "cache.yarn"),
+    ("/Users/igor/.yarn/berry/cache", "cache.yarn-berry"),
+    ("/Users/igor/.bun/install/cache", "cache.bun"),
+    ("/Users/igor/.cargo/registry", "cache.cargo-registry"),
+    ("/Users/igor/.cargo/git", "cache.cargo-git"),
+    ("/Users/igor/Library/Caches/pip", "cache.pip"),
+    ("/Users/igor/.cache/uv", "cache.uv"),
+    ("/Users/igor/Library/Caches/pypoetry/cache", "cache.poetry"),
+    ("/Users/igor/Library/Caches/pypoetry/virtualenvs", "cache.poetry-venvs"),
+    ("/Users/igor/.gradle/caches", "cache.gradle"),
+    ("/Users/igor/.m2/repository", "cache.maven"),
+    ("/Users/igor/Library/Caches/CocoaPods", "cache.cocoapods"),
+    ("/Users/igor/.cocoapods/repos", "cache.cocoapods-specs"),
+    ("/Users/igor/Library/Caches/org.swift.swiftpm", "cache.swiftpm"),
+    ("/Users/igor/Library/Caches/go-build", "cache.go-build"),
+    ("/Users/igor/go/pkg/mod", "cache.go-mod"),
+    ("/Users/igor/Library/Caches/composer", "cache.composer"),
+    ("/Users/igor/.local/share/NuGet/http-cache", "cache.nuget-http"),
+    ("/Users/igor/.nuget/packages", "cache.nuget-packages"),
+    ("/Users/igor/Library/Caches/org.carthage.CarthageKit", "cache.carthage"),
+    ("/Users/igor/Library/Caches/Google/Chrome", "cache.chrome"),
+    ("/Users/igor/Library/Application Support/Slack/Cache", "cache.slack"),
+    (
+        "/Users/igor/Library/Containers/com.example.Notes/Data/Library/Caches",
+        "cache.app.generic",
+    ),
+    ("/Users/igor/Library/Caches/viewer-thumbnails", "caches.user"),
+    ("/Users/igor/Library/Caches/com.example.gone", "apps.leftover-caches"),
+    ("/Users/igor/Library/Containers/com.example.gone", "apps.leftover-data"),
+];
+
+fn fixture_leaf(path: &str) -> Node {
+    let leaf_name = Path::new(path)
+        .file_name()
+        .expect("fixture has a name")
+        .to_string_lossy()
+        .into_owned();
+    let single_file = Path::new(&leaf_name).extension().is_some_and(|extension| {
+        FILE_FIXTURE_EXTENSIONS
+            .iter()
+            .any(|known| extension.eq_ignore_ascii_case(known))
+    });
+    if single_file {
+        file(&leaf_name)
+    } else {
+        directory(&leaf_name, vec![file("payload")])
     }
+}
+
+fn fixture_for_every_rule() -> (Vec<(&'static str, &'static str)>, Index) {
+    let mut roots: Vec<Node> = RULE_FIXTURES
+        .iter()
+        .map(|(path, _)| {
+            let parent = Path::new(path).parent().expect("fixture has a parent");
+            path_tree(&parent.to_string_lossy(), fixture_leaf(path))
+        })
+        .collect();
     roots.push(path_tree("/Users/igor/Projects/engram", file("Cargo.toml")));
     roots.push(path_tree("/Users/igor/Projects/site", file("package.json")));
     roots.push(path_tree("/Users/igor/Projects/tool", file("build.zig")));
     (
-        fixtures,
-        data_volume_index_with(merge(roots), &installed_container_owners()),
+        RULE_FIXTURES.to_vec(),
+        data_volume_index_with(merge(roots), &installed_owners_and_a_screen_capture()),
     )
 }
 

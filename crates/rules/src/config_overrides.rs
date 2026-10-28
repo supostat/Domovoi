@@ -12,6 +12,7 @@ const CARGO_BUILD_TABLE: &str = "[build]";
 pub struct ConfigOverrides {
     pub pnpm_store: Option<PathBuf>,
     pub cargo_target: Option<PathBuf>,
+    pub screenshot_location: Option<PathBuf>,
 }
 
 impl ConfigOverrides {
@@ -25,7 +26,16 @@ impl ConfigOverrides {
         Ok(Self {
             pnpm_store,
             cargo_target,
+            screenshot_location: None,
         })
+    }
+
+    #[must_use]
+    pub fn with_screenshot_location(self, screenshot_location: Option<PathBuf>) -> Self {
+        Self {
+            screenshot_location,
+            ..self
+        }
     }
 }
 
@@ -57,7 +67,7 @@ fn value_of(text: &str, key: &str, table: Option<&str>) -> Option<String> {
     None
 }
 
-fn expand_home(value: &str, home: &Path) -> PathBuf {
+pub(crate) fn expand_home(value: &str, home: &Path) -> PathBuf {
     match value.strip_prefix("~/") {
         Some(rest) => home.join(rest),
         None => PathBuf::from(value),

@@ -184,11 +184,6 @@ fn the_collection_list_and_the_card_question_speak_plainly() {
         strings::TRAY_NOTE,
         "Удаление необратимо: файлы не попадают в Корзину macOS. Перед стартом Домовой спросит ещё раз."
     );
-    assert_eq!(
-        strings::DENY_TRASH,
-        "уже в Корзине macOS",
-        "the refusal names the macOS Trash, not the collection list"
-    );
 }
 
 #[test]

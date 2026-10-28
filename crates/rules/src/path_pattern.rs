@@ -41,14 +41,13 @@ impl PathPattern {
     }
 
     pub(crate) fn absolute(path: &Path) -> Self {
-        Self::Anchored(
-            path.components()
-                .filter_map(|component| match component {
-                    Component::Normal(name) => Some(Segment::Exact(name.to_string_lossy().into_owned())),
-                    _ => None,
-                })
-                .collect(),
-        )
+        Self::Anchored(exact_segments(path))
+    }
+
+    pub(crate) fn children_of(folder: &Path) -> Self {
+        let mut segments = exact_segments(folder);
+        segments.push(Segment::Any);
+        Self::Anchored(segments)
     }
 
     pub(crate) fn folded(&self, case: CaseRule) -> Self {
@@ -106,6 +105,15 @@ impl PathPattern {
             }
         }
     }
+}
+
+fn exact_segments(path: &Path) -> Vec<Segment> {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(name) => Some(Segment::Exact(name.to_string_lossy().into_owned())),
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]

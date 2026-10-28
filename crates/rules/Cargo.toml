@@ -13,8 +13,9 @@ domovoi-apfs-sys.workspace = true
 domovoi-index.workspace = true
 domovoi-scanner.workspace = true
 libc.workspace = true
+objc2.workspace = true
 objc2-app-kit = { workspace = true, features = ["NSRunningApplication", "NSWorkspace"] }
-objc2-foundation = { workspace = true, features = ["NSArray", "NSEnumerator", "NSString"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSEnumerator", "NSString", "NSUserDefaults"] }
 rkyv.workspace = true
 
 [dev-dependencies]

@@ -27,6 +27,16 @@ pub fn rule_table(overrides: &ConfigOverrides) -> Vec<Rule> {
     if let Some(store) = &overrides.pnpm_store {
         pnpm_store = pnpm_store.also_at(store);
     }
+    let mut screenshots = Rule::new(
+        "screenshots",
+        CheckYourself,
+        &["~/Desktop/*", "~/Documents/*", "~/Downloads/*", "~/Pictures/*"],
+        "Снимок экрана. Нужен ли он ещё, решаете вы.",
+    )
+    .when(Condition::ScreenCapture);
+    if let Some(location) = &overrides.screenshot_location {
+        screenshots = screenshots.also_inside(location);
+    }
     vec![
         Rule::new(
             "xcode.derived-data",
@@ -129,6 +139,35 @@ pub fn rule_table(overrides: &ConfigOverrides) -> Vec<Rule> {
             &["~/Downloads/*.dmg", "~/Downloads/*.pkg"],
             "Установщик из Загрузок. Если программа понадобится снова, его придётся скачать заново.",
         ),
+        Rule::new(
+            "logs.crash-reports",
+            Recoverable,
+            &["~/Library/Logs/DiagnosticReports/*", "/Library/Logs/DiagnosticReports/*"],
+            "Отчёты о сбоях программ и системы. Нужны, чтобы разобраться в повторяющемся сбое; после удаления их не вернуть.",
+        ),
+        Rule::new(
+            "logs.user",
+            Safe,
+            &["~/Library/Logs/*"],
+            "Журналы программ. Программы начнут новые, их работа не пострадает; пропадёт только история.",
+        ),
+        Rule::new(
+            "mail.downloads",
+            Recoverable,
+            &[
+                "~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads/*",
+                "~/Library/Mail Downloads/*",
+            ],
+            "Копии вложений, которые вы открывали из Почты. Письма и вложения в них не пострадают; \
+             правки, сделанные прямо в открытом вложении, пропадут.",
+        ),
+        Rule::new(
+            "trash.user",
+            CheckYourself,
+            &["~/.Trash/*"],
+            "Файлы, которые вы уже удалили в Finder. После очистки вернуть их из Корзины будет нельзя.",
+        ),
+        screenshots,
         Rule::new(
             "cache.homebrew",
             Safe,

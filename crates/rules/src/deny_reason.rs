@@ -10,5 +10,4 @@ pub enum DenyReason {
     ProtectedData(&'static str),
     RunningApplication(PathBuf),
     OwnApplication,
-    Trash,
 }

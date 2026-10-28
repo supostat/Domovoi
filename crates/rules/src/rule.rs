@@ -4,10 +4,13 @@ use domovoi_index::SafetyLevel;
 
 use crate::path_pattern::PathPattern;
 
+const ANY_CHILD: &str = "*";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Condition {
     SimulatorRuntimeMissing,
     OwnerMissing,
+    ScreenCapture,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -54,6 +57,12 @@ impl Rule {
     pub(crate) fn also_at(mut self, path: &Path) -> Self {
         self.patterns.push(PathPattern::absolute(path));
         self.paths.push(path.to_string_lossy().into_owned());
+        self
+    }
+
+    pub(crate) fn also_inside(mut self, folder: &Path) -> Self {
+        self.patterns.push(PathPattern::children_of(folder));
+        self.paths.push(folder.join(ANY_CHILD).to_string_lossy().into_owned());
         self
     }
 

@@ -123,6 +123,14 @@ fn personal_and_system_data_is_denied_by_location() {
                 path_tree("Pictures/Photos Library.photoslibrary", file("database")),
                 path_tree(".Trash", file("old")),
                 path_tree("Library/Caches/com.example.viewer", file("blob")),
+                path_tree(
+                    "Library/Containers/com.apple.mail/Data/Library/Mail Downloads/1A2B",
+                    file("invoice.pdf"),
+                ),
+                path_tree(
+                    "Library/Containers/com.apple.mail/Data/Library/Mail/V10",
+                    file("letter"),
+                ),
             ]),
         )],
     )]);
@@ -148,6 +156,28 @@ fn personal_and_system_data_is_denied_by_location() {
         reason("Users/igor/Pictures/Photos Library.photoslibrary"),
         Some(DenyReason::ProtectedData(_))
     ));
-    assert_eq!(reason("Users/igor/.Trash/old"), Some(DenyReason::Trash));
+    assert_eq!(reason("Users/igor/.Trash/old"), None);
     assert_eq!(reason("Users/igor/Library/Caches/com.example.viewer"), None);
+    assert_eq!(
+        reason("Users/igor/Library/Containers/com.apple.mail/Data/Library/Mail Downloads/1A2B"),
+        None
+    );
+    assert!(matches!(
+        reason("Users/igor/Library/Containers/com.apple.mail/Data/Library/Mail/V10"),
+        Some(DenyReason::ProtectedData(_))
+    ));
+    assert!(matches!(
+        reason("Users/igor/Library/Containers/com.apple.mail"),
+        Some(DenyReason::ProtectedData(_))
+    ));
+}
+
+#[test]
+fn trashes_of_volumes_stay_denied() {
+    let index = data_volume_index(vec![path_tree(".Trashes/501", file("old"))]);
+    let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
+    assert!(matches!(
+        denylist.verdict(&index, at(&index, ".Trashes/501/old")),
+        Some(DenyReason::ProtectedData(_))
+    ));
 }

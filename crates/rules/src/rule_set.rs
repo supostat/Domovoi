@@ -5,7 +5,7 @@ use std::io;
 use std::path::Path;
 
 use domovoi_apfs_sys::volume_capabilities;
-use domovoi_index::{App, Index, NodeId, SafetyLevel, SafetyLevels};
+use domovoi_index::{App, Badges, Index, NodeId, NodeKind, SafetyLevel, SafetyLevels};
 
 use crate::claim_frame::ClaimFrame;
 use crate::claim_scope::ClaimScope;
@@ -232,6 +232,10 @@ impl RuleSet {
                 .ownership(node)
                 .and_then(|ownership| index.app(ownership.app))
                 .is_some_and(App::is_leftover),
+            Some(Condition::ScreenCapture) => {
+                let record = index.node(node);
+                record.kind == NodeKind::File && record.badges.contains(Badges::SCREEN_CAPTURE)
+            }
         }
     }
 }
