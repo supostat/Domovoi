@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 
-use domovoi_index::{Enrichment, Index, Installation, InstalledApplications, NodeId, Timestamp};
+use domovoi_index::{Enrichment, Index, Installation, InstalledApplications, NodeId, OwnerEvidence, Timestamp};
 use synthetic_tree::{data_volume, directory, file, opened_file};
 
 fn at(index: &Index, relative: &str) -> NodeId {
@@ -59,6 +59,13 @@ fn containers_without_an_application_are_leftovers() {
         .node(at(&index, "Users/igor/Library/Preferences/com.fake.app.plist"))
         .app;
     assert_eq!(preferences, fake, "preferences of the same bundle share one owner");
+    let fake_container = at(&index, "Users/igor/Library/Containers/com.fake.app");
+    let ownership = index
+        .ownership(at(&index, "Users/igor/Library/Containers/com.fake.app/cache.db"))
+        .expect("the file has an owner");
+    assert_eq!(ownership.evidence, OwnerEvidence::BundleIdName);
+    assert_eq!(ownership.root, fake_container);
+    assert_eq!(index.owned_roots(fake).len(), 2, "the container and the preferences");
 
     let notes = index
         .node(at(&index, "Users/igor/Library/Containers/com.apple.Notes"))

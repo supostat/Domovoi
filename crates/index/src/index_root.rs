@@ -3,7 +3,7 @@ use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path, PathBuf};
 
-use domovoi_apfs_sys::{data_volume, firmlinks};
+use domovoi_apfs_sys::{data_volume, firmlinks, mounted_volumes};
 
 const SERVICE_PREFIX: &str = "/System/Volumes/Data";
 const SYSTEM_ROOT: &str = "/";
@@ -17,6 +17,7 @@ pub struct FirmlinkPair {
 #[derive(Clone, Debug, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub enum IndexRoot {
     DataVolume { firmlinks: Vec<FirmlinkPair> },
+    Volume { path: String },
     Plain { path: String },
 }
 
@@ -32,6 +33,10 @@ impl IndexRoot {
                 })
                 .collect();
             Ok(Self::DataVolume { firmlinks })
+        } else if root != Path::new(SYSTEM_ROOT) && is_mount_point(&root)? {
+            Ok(Self::Volume {
+                path: root.to_string_lossy().into_owned(),
+            })
         } else {
             Ok(Self::Plain {
                 path: root.to_string_lossy().into_owned(),
@@ -42,13 +47,13 @@ impl IndexRoot {
     pub(crate) fn scan_path(&self) -> PathBuf {
         match self {
             Self::DataVolume { .. } => PathBuf::from(SERVICE_PREFIX),
-            Self::Plain { path } => PathBuf::from(path),
+            Self::Volume { path } | Self::Plain { path } => PathBuf::from(path),
         }
     }
 
     pub(crate) fn root_components(&self) -> Vec<String> {
         match self {
-            Self::DataVolume { .. } => Vec::new(),
+            Self::DataVolume { .. } | Self::Volume { .. } => Vec::new(),
             Self::Plain { path } => normal_components(Path::new(path)),
         }
     }
@@ -61,13 +66,13 @@ impl IndexRoot {
                     .next()
                     .is_some_and(|first| first.as_os_str().as_bytes() == top_level_name)
             }),
-            Self::Plain { .. } => false,
+            Self::Volume { .. } | Self::Plain { .. } => false,
         }
     }
 
     pub(crate) fn canonical(&self, relative: &Path) -> PathBuf {
         match self {
-            Self::Plain { path } => Path::new(path).join(relative),
+            Self::Volume { path } | Self::Plain { path } => Path::new(path).join(relative),
             Self::DataVolume { firmlinks } => {
                 if relative.as_os_str().is_empty() {
                     return PathBuf::from(SYSTEM_ROOT);
@@ -88,7 +93,7 @@ impl IndexRoot {
 
     pub(crate) fn relative(&self, canonical: &Path) -> Option<PathBuf> {
         match self {
-            Self::Plain { path } => canonical.strip_prefix(path).ok().map(Path::to_path_buf),
+            Self::Volume { path } | Self::Plain { path } => canonical.strip_prefix(path).ok().map(Path::to_path_buf),
             Self::DataVolume { firmlinks } => {
                 if let Ok(service) = canonical.strip_prefix(SERVICE_PREFIX) {
                     return Some(service.to_path_buf());
@@ -105,6 +110,10 @@ impl IndexRoot {
             }
         }
     }
+}
+
+fn is_mount_point(path: &Path) -> io::Result<bool> {
+    Ok(mounted_volumes()?.iter().any(|volume| volume.mount_point == path))
 }
 
 fn normal_components(path: &Path) -> Vec<String> {

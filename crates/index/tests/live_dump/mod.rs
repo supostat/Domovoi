@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use domovoi_index::{Badges, Category, Index, NodeId, NodeKind, Reach, Timestamp};
+use domovoi_index::{Badges, Category, Index, Installation, NodeId, NodeKind, OwnerEvidence, Reach, Timestamp};
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Summary {
@@ -9,7 +9,7 @@ pub(crate) struct Summary {
     reach: Reach,
     category: Category,
     badges: Badges,
-    owner: Option<String>,
+    owner: Option<(String, Installation, Option<OwnerEvidence>)>,
     file_id: u64,
     allocated: u64,
     files: u32,
@@ -50,7 +50,9 @@ fn summary(index: &Index, id: NodeId) -> Summary {
         reach: node.reach,
         category: node.category,
         badges: node.badges,
-        owner: index.app(node.app).map(|app| app.bundle_id.clone()),
+        owner: index
+            .app(node.app)
+            .map(|app| (app.bundle_id.clone(), app.installation.clone(), node.owner_evidence)),
         file_id: node.file_id,
         allocated: node.allocated,
         files: node.files,

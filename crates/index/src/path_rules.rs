@@ -7,7 +7,11 @@ const ANY: &str = "*";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AppDataNaming {
     BundleId,
+    BundleIdOrName,
     Suffixed(&'static str),
+    Container,
+    GroupContainer,
+    LaunchdPlist,
 }
 
 #[derive(Debug)]
@@ -33,7 +37,7 @@ const fn app_data(components: &'static [&'static str], category: Category, namin
     }
 }
 
-pub(crate) const PATH_RULES: [PathRule; 39] = [
+pub(crate) const PATH_RULES: [PathRule; 42] = [
     rule(
         &[
             "Users",
@@ -57,18 +61,27 @@ pub(crate) const PATH_RULES: [PathRule; 39] = [
     app_data(
         &["Users", ANY, "Library", "Caches"],
         Category::Cache,
-        AppDataNaming::BundleId,
+        AppDataNaming::BundleIdOrName,
     ),
     app_data(
         &["Users", ANY, "Library", "Containers"],
         Category::Apps,
-        AppDataNaming::BundleId,
+        AppDataNaming::Container,
     ),
-    rule(&["Users", ANY, "Library", "Group Containers"], Category::Apps),
+    app_data(
+        &["Users", ANY, "Library", "Group Containers"],
+        Category::Apps,
+        AppDataNaming::GroupContainer,
+    ),
     app_data(
         &["Users", ANY, "Library", "Application Support"],
         Category::Apps,
-        AppDataNaming::BundleId,
+        AppDataNaming::BundleIdOrName,
+    ),
+    app_data(
+        &["Users", ANY, "Library", "LaunchAgents"],
+        Category::Apps,
+        AppDataNaming::LaunchdPlist,
     ),
     app_data(
         &["Users", ANY, "Library", "Saved Application State"],
@@ -108,6 +121,16 @@ pub(crate) const PATH_RULES: [PathRule; 39] = [
     rule(&["Applications"], Category::Apps),
     rule(&["Library", "Caches"], Category::Cache),
     rule(&["Library", "Developer"], Category::Dev),
+    app_data(
+        &["Library", "LaunchAgents"],
+        Category::System,
+        AppDataNaming::LaunchdPlist,
+    ),
+    app_data(
+        &["Library", "LaunchDaemons"],
+        Category::System,
+        AppDataNaming::LaunchdPlist,
+    ),
     rule(&["Library"], Category::System),
     rule(&["System", "Library", "Caches"], Category::Cache),
     rule(&["System"], Category::System),

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use crate::app::Installation;
 use crate::ffi::{application_path, spotlight_applications};
+use crate::installed_bundle::InstalledBundle;
 
 const SYSTEM_BUNDLE_PREFIX: &str = "com.apple.";
 
@@ -21,16 +22,22 @@ impl InstalledApplications {
         Ok(Self::new(spotlight_applications()?.into_iter().collect()))
     }
 
-    pub fn resolve(&self, bundle_id: &str) -> Installation {
+    pub fn resolve(&self, bundle_id: &str, bundles: &[InstalledBundle]) -> Installation {
         if bundle_id.starts_with(SYSTEM_BUNDLE_PREFIX) {
             return Installation::System;
         }
-        let owner = self
-            .by_bundle_id
+        let owner = bundles
             .iter()
-            .filter(|(known, _)| is_same_or_nested(bundle_id, known))
-            .max_by_key(|(known, _)| known.len())
-            .map(|(_, path)| path.clone())
+            .filter(|bundle| is_same_or_nested(bundle_id, &bundle.bundle_id))
+            .max_by_key(|bundle| bundle.bundle_id.len())
+            .map(|bundle| PathBuf::from(&bundle.path))
+            .or_else(|| {
+                self.by_bundle_id
+                    .iter()
+                    .filter(|(known, _)| is_same_or_nested(bundle_id, known))
+                    .max_by_key(|(known, _)| known.len())
+                    .map(|(_, path)| path.clone())
+            })
             .or_else(|| application_path(bundle_id));
         match owner {
             Some(path) => Installation::Installed {
@@ -65,12 +72,12 @@ mod tests {
             )]),
         };
         assert_eq!(
-            applications.resolve("com.tinyspeck.slackmacgap.SlackShare"),
+            applications.resolve("com.tinyspeck.slackmacgap.SlackShare", &[]),
             Installation::Installed {
                 bundle_path: "/Applications/Slack.app".to_owned()
             }
         );
-        assert_eq!(applications.resolve("com.apple.Notes"), Installation::System);
-        assert_eq!(applications.resolve("com.fake.app"), Installation::Missing);
+        assert_eq!(applications.resolve("com.apple.Notes", &[]), Installation::System);
+        assert_eq!(applications.resolve("com.fake.app", &[]), Installation::Missing);
     }
 }

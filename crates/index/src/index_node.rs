@@ -5,6 +5,7 @@ use crate::last_opened_source::LastOpenedSource;
 use crate::name_table::NameId;
 use crate::node_id::NodeId;
 use crate::node_kind::NodeKind;
+use crate::owner_evidence::OwnerEvidence;
 use crate::reach::Reach;
 use crate::timestamp::Timestamp;
 
@@ -19,6 +20,7 @@ pub struct IndexNode {
     pub category: Category,
     pub badges: Badges,
     pub last_opened_source: LastOpenedSource,
+    pub owner_evidence: Option<OwnerEvidence>,
     pub flags: u32,
     pub real_dev: u32,
     pub link_count: u32,

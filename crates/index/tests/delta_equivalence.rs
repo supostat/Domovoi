@@ -1,10 +1,12 @@
+mod app_fixture;
 mod live_dump;
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use domovoi_index::{Category, ChangedPath, Enrichment, Index, IndexRoot, StaleDelta};
+use app_fixture::{application, volume_index};
+use domovoi_index::{Category, ChangedPath, Enrichment, Index, IndexRoot, Installation, StaleDelta};
 use domovoi_scanner::{ScanOptions, scan};
 use domovoi_testkit::{Fill, TempTree};
 
@@ -56,8 +58,11 @@ fn apply(index: &mut Index, changed: &[(&str, bool)]) {
 }
 
 fn assert_matches_a_fresh_build(index: &Index, root: &Path) {
-    let fresh = index_of(root);
-    let (delta, full) = (live_dump::dump(index), live_dump::dump(&fresh));
+    assert_matches(index, &index_of(root));
+}
+
+fn assert_matches(index: &Index, fresh: &Index) {
+    let (delta, full) = (live_dump::dump(index), live_dump::dump(fresh));
     for (path, expected) in &full {
         assert_eq!(delta.get(path), Some(expected), "{} after the delta", path.display());
     }
@@ -222,4 +227,33 @@ fn a_request_made_before_another_change_is_refused() {
         Err(StaleDelta)
     );
     assert_matches_a_fresh_build(&index, tree.path());
+}
+
+#[test]
+fn a_bundle_that_appears_and_vanishes_moves_its_files_between_installed_and_leftover() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.path().to_path_buf();
+    fs::create_dir_all(under(&root, "Applications")).expect("the applications folder is created");
+    fs::create_dir_all(under(&root, "Users/tester/Library/Containers/com.domovoi.tiny/Data"))
+        .expect("a container is created");
+    let mut index = volume_index(&root);
+    let installation = |index: &Index| {
+        let container = index
+            .find(&change(index, "Users/tester/Library/Containers/com.domovoi.tiny", false).path)
+            .expect("the container is indexed");
+        index
+            .app(index.node(container).app)
+            .expect("the container has an owner")
+            .installation
+            .clone()
+    };
+    assert_eq!(installation(&index), Installation::Missing);
+    application(&under(&root, "Applications"), "Tiny", "com.domovoi.tiny", &[]);
+    apply(&mut index, &[("Applications", false)]);
+    assert!(matches!(installation(&index), Installation::Installed { .. }));
+    assert_matches(&index, &volume_index(&root));
+    fs::remove_dir_all(under(&root, "Applications/Tiny.app")).expect("the bundle is removed");
+    apply(&mut index, &[("Applications", false)]);
+    assert_eq!(installation(&index), Installation::Missing);
+    assert_matches(&index, &volume_index(&root));
 }

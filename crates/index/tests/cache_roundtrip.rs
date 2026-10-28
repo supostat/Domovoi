@@ -1,10 +1,14 @@
+mod app_fixture;
 mod synthetic_tree;
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use domovoi_index::{CacheError, CacheHeader, ChangedPath, Enrichment, Index, IndexRoot, open_cache, write_cache};
+use app_fixture::{application, container, volume_index};
+use domovoi_index::{
+    CacheError, CacheHeader, ChangedPath, Enrichment, Index, IndexRoot, OwnerEvidence, open_cache, write_cache,
+};
 use domovoi_scanner::{Node, ScanOptions, scan};
 use domovoi_testkit::{Fill, TempTree};
 use synthetic_tree::{data_volume, directory, file, opened_file};
@@ -191,4 +195,38 @@ fn a_cache_written_after_a_delta_opens_with_the_same_live_tree_and_takes_new_del
     assert!(cached.compact_garbage());
     assert_eq!(cached.node(cached.root()).files, 3);
     assert!(!cached.compact_garbage());
+}
+
+#[test]
+fn bundles_and_owner_evidence_survive_the_cache() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.path().join("volume");
+    application(
+        &root.join("Applications"),
+        "Tiny",
+        "com.domovoi.tiny",
+        &["group.com.domovoi.tiny"],
+    );
+    container(
+        &root.join("Users/tester/Library/Containers/com.domovoi.tiny"),
+        "com.domovoi.tiny",
+    );
+    let index = volume_index(&root);
+    let path = tree.path().join("scan.cache");
+    write_cache(&path, &header("1.0"), LAST_EVENT, &index).expect("cache is written");
+    let cached = open_cache(&path, &header("1.0")).expect("cache opens").index;
+    assert_eq!(cached, index);
+    assert_eq!(cached.bundles().len(), 1);
+    assert_eq!(cached.bundles()[0].app_groups, ["group.com.domovoi.tiny"]);
+    let container = cached
+        .find(
+            &cached
+                .path(cached.root())
+                .join("Users/tester/Library/Containers/com.domovoi.tiny"),
+        )
+        .expect("the container is cached");
+    assert_eq!(
+        cached.ownership(container).map(|ownership| ownership.evidence),
+        Some(OwnerEvidence::ContainerMetadata)
+    );
 }

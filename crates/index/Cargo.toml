@@ -14,9 +14,10 @@ domovoi-scanner.workspace = true
 libc.workspace = true
 objc2.workspace = true
 objc2-app-kit = { workspace = true, features = ["NSWorkspace"] }
-objc2-core-foundation = { workspace = true, features = ["CFArray", "CFDate", "CFString"] }
+objc2-core-foundation = { workspace = true, features = ["CFArray", "CFDate", "CFDictionary", "CFString", "CFURL"] }
 objc2-core-services = { workspace = true, features = ["MDItem", "MDQuery", "Metadata"] }
-objc2-foundation = { workspace = true, features = ["NSArray", "NSData", "NSDictionary", "NSError", "NSPropertyList", "NSString", "NSURL", "NSValue"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSError", "NSPropertyList", "NSString", "NSURL", "NSValue"] }
+objc2-security = { workspace = true, features = ["CSCommon", "SecBase", "SecCode", "SecStaticCode"] }
 objc2-uniform-type-identifiers = { workspace = true, features = ["UTType", "UTCoreTypes"] }
 rkyv.workspace = true
 

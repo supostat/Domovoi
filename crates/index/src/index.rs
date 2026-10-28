@@ -14,11 +14,12 @@ use crate::enrichment::Enrichment;
 use crate::file_types::FileTypes;
 use crate::index_node::IndexNode;
 use crate::index_root::IndexRoot;
+use crate::installed_bundle::InstalledBundle;
 use crate::last_opened_source::LastOpenedSource;
 use crate::name_table::{NameId, NameInterner, NameTable};
 use crate::node_id::NodeId;
 use crate::node_kind::NodeKind;
-use crate::path_rules::{AppDataNaming, RuleProgress};
+use crate::path_rules::RuleProgress;
 use crate::reach::Reach;
 use crate::timestamp::Timestamp;
 
@@ -52,6 +53,7 @@ pub struct Index {
     pub(crate) names: NameTable,
     pub(crate) root: IndexRoot,
     pub(crate) apps: Vec<App>,
+    pub(crate) bundles: Vec<InstalledBundle>,
     #[rkyv(with = rkyv::with::Skip)]
     pub(crate) generation: u64,
     #[rkyv(with = rkyv::with::Skip)]
@@ -64,7 +66,11 @@ pub struct Index {
 
 impl PartialEq for Index {
     fn eq(&self, other: &Self) -> bool {
-        self.nodes == other.nodes && self.names == other.names && self.root == other.root && self.apps == other.apps
+        self.nodes == other.nodes
+            && self.names == other.names
+            && self.root == other.root
+            && self.apps == other.apps
+            && self.bundles == other.bundles
     }
 }
 
@@ -80,6 +86,7 @@ impl Index {
             names: interner.finish(),
             root,
             apps: Vec::new(),
+            bundles: Vec::new(),
             generation: next_generation(),
             copy_groups: CopyGroups::default(),
             hidden_folders: 0,
@@ -168,6 +175,10 @@ impl Index {
         &self.apps
     }
 
+    pub fn bundles(&self) -> &[InstalledBundle] {
+        &self.bundles
+    }
+
     pub fn generation(&self) -> u64 {
         self.generation
     }
@@ -233,6 +244,8 @@ impl Index {
     pub(crate) fn derive(&mut self, enrichment: &Enrichment) {
         let live = self.subtree(self.root());
         self.apply_spotlight_dates(enrichment);
+        let previous = std::mem::take(&mut self.bundles);
+        self.bundles = self.discover_bundles(&previous, &[]);
         self.assign_categories_and_owners(&live, enrichment);
         self.mark_models(enrichment);
         let counted = self.choose_canonical_copies(&live);
@@ -304,7 +317,7 @@ impl Index {
         }
     }
 
-    fn assign_categories_and_owners(&mut self, live: &[NodeId], enrichment: &Enrichment) {
+    pub(crate) fn assign_categories_and_owners(&mut self, live: &[NodeId], enrichment: &Enrichment) {
         let count = self.nodes.len();
         let mut progress = vec![RuleProgress::default(); count];
         let mut depth = vec![0_usize; count];
@@ -341,10 +354,13 @@ impl Index {
         let app_data = parent_progress
             .completed(parent_depth)
             .and_then(|parent_rule| parent_rule.app_data);
-        self.nodes[index].app = match app_data.and_then(|naming| bundle_id(&name, naming)) {
-            Some(bundle_id) => self.owner_of(bundle_id, enrichment),
-            None => self.nodes[parent].app,
-        };
+        if let Some((bundle_id, evidence)) = app_data.and_then(|naming| self.claimed_owner(id, &name, naming)) {
+            self.nodes[index].app = self.owner_of(bundle_id, enrichment);
+            self.nodes[index].owner_evidence = Some(evidence);
+        } else {
+            self.nodes[index].app = self.nodes[parent].app;
+            self.nodes[index].owner_evidence = self.nodes[parent].owner_evidence;
+        }
         progress
     }
 
@@ -368,7 +384,7 @@ impl Index {
         if let Some(position) = self.apps.iter().position(|app| app.bundle_id == bundle_id) {
             return AppId(u32::try_from(position).expect("app count fits in u32"));
         }
-        let installation = enrichment.applications.resolve(&bundle_id);
+        let installation = enrichment.applications.resolve(&bundle_id, &self.bundles);
         let last_opened = application_last_opened(&installation, enrichment);
         self.apps.push(App {
             bundle_id,
@@ -498,22 +514,6 @@ pub(crate) fn totals(node: &IndexNode) -> (u64, u32, Timestamp, Timestamp, u32) 
     )
 }
 
-fn bundle_id(name: &OsStr, naming: AppDataNaming) -> Option<String> {
-    let name = name.to_str()?;
-    let candidate = match naming {
-        AppDataNaming::BundleId => name,
-        AppDataNaming::Suffixed(suffix) => name.strip_suffix(suffix)?,
-    };
-    let looks_like_bundle_id = candidate.split('.').count() >= 2
-        && candidate.split('.').all(|segment| {
-            !segment.is_empty()
-                && segment
-                    .chars()
-                    .all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '_')
-        });
-    looks_like_bundle_id.then(|| candidate.to_owned())
-}
-
 fn application_last_opened(installation: &crate::app::Installation, enrichment: &Enrichment) -> Timestamp {
     let crate::app::Installation::Installed { bundle_path } = installation else {
         return Timestamp::UNKNOWN;
@@ -588,6 +588,7 @@ pub(crate) fn record(source: &Node, parent: NodeId, name: NameId) -> IndexNode {
         files: 0,
         flags_in_subtree: 0,
         app: AppId::NONE,
+        owner_evidence: None,
         file_id: attributes.map_or(0, |attributes| attributes.file_id),
         link_id: attributes.and_then(|attributes| attributes.link_id).unwrap_or(0),
         clone_id: attributes.and_then(|attributes| attributes.clone_id).unwrap_or(0),

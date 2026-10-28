@@ -1,12 +1,12 @@
 use std::ffi::c_void;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::ptr;
+use std::ptr::{self, NonNull};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
-use objc2_core_foundation::{CFArray, CFDate, CFRetained, CFString, CFType};
+use objc2_core_foundation::{CFArray, CFDate, CFDictionary, CFRetained, CFString, CFType, CFURL};
 use objc2_core_services::{
     MDItem, MDQuery, MDQueryOptionFlags, kMDItemCFBundleIdentifier, kMDItemLastUsedDate, kMDItemPath,
     kMDQueryScopeComputer,
@@ -15,12 +15,21 @@ use objc2_foundation::{
     NSArray, NSData, NSDictionary, NSNumber, NSPropertyListReadOptions, NSPropertyListSerialization, NSString, NSURL,
     NSURLVolumeAvailableCapacityForImportantUsageKey,
 };
+use objc2_security::{
+    SecCSFlags, SecCode, SecStaticCode, kSecCSSigningInformation, kSecCodeInfoEntitlementsDict,
+    kSecCodeInfoTeamIdentifier,
+};
 use objc2_uniform_type_identifiers::{
     UTType, UTTypeApplicationBundle, UTTypeArchive, UTTypeAudiovisualContent, UTTypeCompositeContent, UTTypeData,
     UTTypeDirectory, UTTypeDiskImage, UTTypeImage, UTTypePDF, UTTypeSourceCode, UTTypeText,
 };
 
+use crate::code_signing::CodeSigning;
+use crate::property_list::{dictionary, text, texts};
+
 const SECONDS_FROM_UNIX_TO_CORE_FOUNDATION_EPOCH: f64 = 978_307_200.0;
+const SECURITY_SUCCESS: i32 = 0;
+const APPLICATION_GROUPS_ENTITLEMENT: &str = "com.apple.security.application-groups";
 const SYNCHRONOUS: objc2_core_foundation::CFOptionFlags =
     MDQueryOptionFlags::Synchronous.0 as objc2_core_foundation::CFOptionFlags;
 const LAST_USED_QUERY: &str = "kMDItemLastUsedDate == \"*\"";
@@ -174,4 +183,40 @@ pub(crate) fn property_list_dictionary(path: &Path) -> Option<Retained<NSDiction
     }
     .ok()?;
     plist.downcast::<NSDictionary<AnyObject, AnyObject>>().ok()
+}
+
+pub(crate) fn code_signing(bundle: &Path) -> Option<CodeSigning> {
+    let url = CFURL::from_directory_path(bundle)?;
+    let mut code: *const SecStaticCode = ptr::null();
+    let created = unsafe { SecStaticCode::create_with_path(&url, SecCSFlags::DefaultFlags, NonNull::from(&mut code)) };
+    if created != SECURITY_SUCCESS {
+        return None;
+    }
+    let code = unsafe { CFRetained::from_raw(NonNull::new(code.cast_mut())?) };
+    let mut information: *const CFDictionary = ptr::null();
+    let copied = unsafe {
+        SecCode::copy_signing_information(
+            &code,
+            SecCSFlags(kSecCSSigningInformation),
+            NonNull::from(&mut information),
+        )
+    };
+    if copied != SECURITY_SUCCESS {
+        return None;
+    }
+    let information: Retained<NSDictionary<AnyObject, AnyObject>> =
+        unsafe { Retained::from_raw(information.cast_mut().cast())? };
+    let team_key = unsafe { bridged(kSecCodeInfoTeamIdentifier) };
+    let entitlements_key = unsafe { bridged(kSecCodeInfoEntitlementsDict) };
+    let app_groups = dictionary(&information, entitlements_key).map_or_else(Vec::new, |entitlements| {
+        texts(&entitlements, &NSString::from_str(APPLICATION_GROUPS_ENTITLEMENT))
+    });
+    Some(CodeSigning {
+        team_id: text(&information, team_key),
+        app_groups,
+    })
+}
+
+unsafe fn bridged(key: &'static CFString) -> &'static NSString {
+    unsafe { &*ptr::from_ref(key).cast::<NSString>() }
 }

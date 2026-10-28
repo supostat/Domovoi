@@ -12,7 +12,7 @@ use rkyv::rancor;
 use crate::index::Index;
 
 const MAGIC: [u8; 8] = *b"DOMOVOI\0";
-const FORMAT_VERSION: u32 = 2;
+const FORMAT_VERSION: u32 = 3;
 const CACHE_DIRECTORY: &str = "Library/Caches/com.domovoi.app";
 const TEMPORARY_SUFFIX: &str = "partial";
 

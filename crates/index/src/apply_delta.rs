@@ -17,6 +17,7 @@ use crate::enrichment::Enrichment;
 use crate::file_types::FileTypes;
 use crate::index::{Index, add_child_totals, append_children, record, totals};
 use crate::index_node::IndexNode;
+use crate::installed_bundle::InstalledBundle;
 use crate::kept_child::KeptChild;
 use crate::last_opened_source::LastOpenedSource;
 use crate::listed_entry::ListedEntry;
@@ -69,8 +70,15 @@ impl Index {
             .collect();
         let mut spliced = Vec::with_capacity(listings.len());
         let mut regrouped = HashSet::new();
+        let mut changed_bundles = Vec::new();
+        let mut bundles_moved = false;
         for listing in &listings {
+            let directory_path = self.path(listing.directory);
+            if self.bundles.iter().any(|bundle| bundle.contains(&directory_path)) {
+                changed_bundles.push(directory_path);
+            }
             let splice = self.splice(listing);
+            bundles_moved |= self.moves_bundles(&splice);
             self.categorize_splice(&splice, enrichment);
             self.mark_models(enrichment);
             self.apply_spotlight_dates_to(&splice.added, &spotlight);
@@ -87,6 +95,9 @@ impl Index {
                 appeared: splice.appeared,
                 vanished: splice.vanished,
             });
+        }
+        if bundles_moved || !changed_bundles.is_empty() {
+            self.reassess_bundles(&changed_bundles, enrichment);
         }
         if !spliced.is_empty() {
             self.advance_generation();
@@ -210,6 +221,25 @@ impl Index {
             appeared,
             vanished,
         }
+    }
+
+    fn moves_bundles(&self, splice: &Splice) -> bool {
+        splice
+            .added
+            .iter()
+            .chain(&splice.removed)
+            .any(|id| self.node(*id).kind == NodeKind::Directory && InstalledBundle::is_bundle_name(self.name(*id)))
+    }
+
+    fn reassess_bundles(&mut self, changed: &[PathBuf], enrichment: &Enrichment) {
+        let discovered = self.discover_bundles(&self.bundles, changed);
+        if discovered == self.bundles {
+            return;
+        }
+        self.bundles = discovered;
+        let live = self.subtree(self.root());
+        self.assign_categories_and_owners(&live, enrichment);
+        self.mark_models(enrichment);
     }
 
     fn name_changes(&self, directory: NodeId, placements: &[Placement<'_>]) -> (Vec<OsString>, Vec<OsString>) {
@@ -367,6 +397,7 @@ fn kept_record(previous: &IndexNode, fresh: &IndexNode) -> IndexNode {
         child_count: previous.child_count,
         category: previous.category,
         app: previous.app,
+        owner_evidence: previous.owner_evidence,
         badges,
         shares_with: previous.shares_with,
         last_opened: previous.last_opened,
