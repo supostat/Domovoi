@@ -30,6 +30,16 @@ impl SafetyBadge {
     }
 }
 
+impl From<SafetyBadge> for SafetyLevel {
+    fn from(badge: SafetyBadge) -> Self {
+        match badge {
+            SafetyBadge::Safe => Self::Safe,
+            SafetyBadge::Recoverable => Self::Recoverable,
+            SafetyBadge::CheckYourself => Self::CheckYourself,
+        }
+    }
+}
+
 impl From<SafetyLevel> for SafetyBadge {
     fn from(level: SafetyLevel) -> Self {
         match level {

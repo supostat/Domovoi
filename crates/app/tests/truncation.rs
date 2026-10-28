@@ -359,10 +359,14 @@ fn recommendation_card(checks: &mut Checks, marker: MainThreadMarker) {
         targets: Vec::new(),
     };
     let actions = ShellActions::new(marker);
-    let view = RecommendationCard::build(marker, &card, 0, CARD_WIDTH, &palette(), &actions);
+    let view = RecommendationCard::build(marker, &card, 0, CARD_WIDTH, &palette(), &actions, true);
     checks.expect(
         view.title.maximumNumberOfLines() == TITLE_LINES,
         "card title keeps at most two lines",
+    );
+    checks.expect(
+        view.ask.frame().size.width <= CARD_WIDTH && view.ask.title().to_string() == strings::ASK_DOMOVOI,
+        "card ask button shows its whole title inside the card",
     );
     checks.expect(
         view.title.frame().size.height < 3.0 * view.title.font().expect("the title has a font").pointSize(),

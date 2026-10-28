@@ -11,7 +11,8 @@ use domovoi_downloader::{Catalog, ModelStore};
 use domovoi_dups::SearchError;
 use domovoi_index::Reclaimable;
 use domovoi_render::{
-    DiagramChange, DiagramGraphics, DiagramObserver, DiagramRenderer, DiagramState, DiagramView, GlyphAtlas, NodeOrigin,
+    DiagramChange, DiagramGraphics, DiagramMode, DiagramObserver, DiagramRenderer, DiagramState, DiagramView,
+    GlyphAtlas, NodeOrigin,
 };
 use domovoi_scanner::ScanError;
 use domovoi_theme::{Palette, format_count, format_size, reduce_motion};
@@ -687,6 +688,24 @@ impl ShellController {
         }
         if let Some(diagram) = self.state.borrow().views.as_ref().and_then(ScreenViews::diagram) {
             diagram.update_state(|diagram| diagram.set_focus(node, Instant::now()));
+        }
+        self.show_current();
+    }
+
+    fn open_settings(&self) {
+        self.state.borrow_mut().settings_opened = true;
+        let url = NSURL::URLWithString(&NSString::from_str(FDA_SETTINGS_URL)).expect("the settings URL is valid");
+        NSWorkspace::sharedWorkspace().openURL(&url);
+    }
+
+    fn change_mode(&self, mode: DiagramMode) {
+        remember_mode(mode);
+        {
+            let mut state = self.state.borrow_mut();
+            state.mode = mode;
+            if let Some(diagram) = state.views.as_ref().and_then(ScreenViews::diagram) {
+                diagram.update_state(|diagram| diagram.set_mode(mode));
+            }
         }
         self.show_current();
     }
@@ -1372,12 +1391,7 @@ impl ShellController {
 impl ActionHandler for ShellController {
     fn perform(&self, action: ShellAction) {
         match action {
-            ShellAction::OpenSettings => {
-                self.state.borrow_mut().settings_opened = true;
-                let url =
-                    NSURL::URLWithString(&NSString::from_str(FDA_SETTINGS_URL)).expect("the settings URL is valid");
-                NSWorkspace::sharedWorkspace().openURL(&url);
-            }
+            ShellAction::OpenSettings => self.open_settings(),
             ShellAction::ScanWithoutAccess => {
                 self.state.borrow_mut().scan_without_access = true;
                 let session = self.state.borrow_mut().session.take();
@@ -1393,17 +1407,7 @@ impl ActionHandler for ShellController {
                     job.stop();
                 }
             }
-            ShellAction::ChangeMode(mode) => {
-                remember_mode(mode);
-                {
-                    let mut state = self.state.borrow_mut();
-                    state.mode = mode;
-                    if let Some(diagram) = state.views.as_ref().and_then(ScreenViews::diagram) {
-                        diagram.update_state(|diagram| diagram.set_mode(mode));
-                    }
-                }
-                self.show_current();
-            }
+            ShellAction::ChangeMode(mode) => self.change_mode(mode),
             ShellAction::ToggleSmallGroups => self.toggle_small_groups(),
             ShellAction::Focus(node) => self.focus_on(node),
             ShellAction::ShowInFinder(node) => self.show_in_finder(node),
@@ -1455,6 +1459,7 @@ impl ActionHandler for ShellController {
             }
             ShellAction::CloseTray => self.close_tray(),
             ShellAction::AskAssistant => self.ask_assistant(),
+            ShellAction::AskAboutCard(position) => self.ask_about_card(position),
             ShellAction::StopAnswer => self.stop_answer(),
             ShellAction::AddAnswerToTray(position) => self.add_answer_to_tray(position),
             ShellAction::ToggleAssistant => self.toggle_assistant(),

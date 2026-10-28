@@ -14,6 +14,10 @@ impl Availability {
         !matches!(self, Self::Off | Self::NoModel)
     }
 
+    pub fn answers_now(self) -> bool {
+        matches!(self, Self::Loading | Self::Answering)
+    }
+
     pub fn accepts_questions(self) -> bool {
         matches!(self, Self::Unloaded | Self::Ready)
     }

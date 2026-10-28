@@ -113,7 +113,7 @@ impl RecommendationsScreen {
                 accent_button: None,
             },
         };
-        screen.show(model);
+        screen.show(model, asks_about_cards(data));
         let send_frame = screen.send.frame();
         screen.probes.accent_button = Some([
             WindowFrame::pane_origin_x() + send_frame.origin.x,
@@ -126,7 +126,7 @@ impl RecommendationsScreen {
 
     pub fn update(&self, data: &ShellData) {
         self.frame.update(data, Section::Recommendations);
-        self.show(&data.care.recommendations);
+        self.show(&data.care.recommendations, asks_about_cards(data));
     }
 
     pub fn show_selection(&self, model: &RecommendationsModel) {
@@ -134,7 +134,7 @@ impl RecommendationsScreen {
         self.send.setEnabled(model.selected_total() > 0);
     }
 
-    fn show(&self, model: &RecommendationsModel) {
+    fn show(&self, model: &RecommendationsModel, ask_enabled: bool) {
         let head = NSSize::new(WindowFrame::pane_size().width, HEAD_HEIGHT);
         retext(&self.total, &model.total_line());
         let total_size = self.total.frame().size;
@@ -152,11 +152,15 @@ impl RecommendationsScreen {
         );
         self.show_selection(model);
         if let Some((collection, source)) = &self.collection
-            && source.show(&model.cards)
+            && source.show(&model.cards, ask_enabled)
         {
             collection.reloadData();
         }
     }
+}
+
+fn asks_about_cards(data: &ShellData) -> bool {
+    !data.ai.chat.availability.answers_now()
 }
 
 fn send_title(model: &RecommendationsModel) -> String {
@@ -179,6 +183,7 @@ fn cards(
             actions: actions.retain(),
             heights: RefCell::new(None),
             measurements: Cell::new(0),
+            ask_enabled: Cell::new(true),
         },
     );
     let layout = CardsLayout::new(marker);

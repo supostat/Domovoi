@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use domovoi_agent::FocusContext;
+use domovoi_agent::{CardFocus, FocusContext};
 use objc2::{MainThreadOnly, sel};
 use objc2_app_kit::{
     NSAlert, NSAlertFirstButtonReturn, NSControlStateValueOff, NSControlStateValueOn, NSMenu, NSMenuItem,
@@ -13,12 +13,13 @@ use super::ShellController;
 #[cfg(feature = "claude-code")]
 use crate::assistant_provider::AssistantProvider;
 use crate::assistant_settings::AssistantSettings;
+use crate::card_question::card_focus;
 use crate::chat_entry::ChatEntry;
 use crate::install_error_text::install_error_text;
 use crate::screen_views::ScreenViews;
 use crate::section::Section;
 use crate::stage::Stage;
-use crate::strings::{CANCEL, SOURCE_HINT, SOURCE_PROMPT, SOURCE_SAVE};
+use crate::strings::{CANCEL, CARD_QUESTION, SOURCE_HINT, SOURCE_PROMPT, SOURCE_SAVE};
 use crate::unload_delay::UnloadDelay;
 
 const LIBRARY_TICK: f64 = 1.0;
@@ -80,19 +81,42 @@ impl ShellController {
                 _ => return,
             }
         };
-        let ready = {
-            let state = self.state.borrow();
-            state.stage == Stage::Main && state.session.is_some() && state.assistant.availability().accepts_questions()
-        };
-        if question.is_empty() || !ready {
+        if question.is_empty() || !self.accepts_question() {
             return;
         }
+        if let Some(ScreenViews::Assistant(screen)) = &self.state.borrow().views {
+            screen.clear_draft();
+        }
+        self.ask(question, None);
+    }
+
+    pub(super) fn ask_about_card(&self, position: usize) {
+        let card = self
+            .state
+            .borrow()
+            .care()
+            .recommendations
+            .cards
+            .get(position)
+            .map(card_focus);
+        let Some(card) = card else {
+            return;
+        };
+        self.navigate(Section::Assistant);
+        if self.accepts_question() {
+            self.ask(CARD_QUESTION.to_owned(), Some(card));
+        }
+    }
+
+    fn accepts_question(&self) -> bool {
+        let state = self.state.borrow();
+        state.stage == Stage::Main && state.session.is_some() && state.assistant.availability().accepts_questions()
+    }
+
+    fn ask(&self, question: String, card: Option<CardFocus>) {
         let timer = self.repeating(ASK_TICK, ShellController::ask_tick);
         {
             let mut state = self.state.borrow_mut();
-            if let Some(ScreenViews::Assistant(screen)) = &state.views {
-                screen.clear_draft();
-            }
             let focus = FocusContext {
                 folder: state.focus_path.clone(),
                 selected: state
@@ -103,7 +127,7 @@ impl ShellController {
                     .filter(|card| card.selected && card.selectable())
                     .flat_map(|card| card.paths.iter().cloned())
                     .collect(),
-                card: None,
+                card,
             };
             let session = state.session.take().expect("a question needs an open session");
             state.assistant.begin(session, question, focus, timer);

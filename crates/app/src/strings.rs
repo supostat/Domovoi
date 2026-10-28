@@ -121,6 +121,9 @@ pub const SPLIT_SAFE: &str = "безопасно";
 pub const SPLIT_RECOVERABLE: &str = "восстановимо";
 pub const SPLIT_CHECK_YOURSELF: &str = "проверьте";
 pub const TO_TRAY: &str = "Отметить к удалению";
+pub const ASK_DOMOVOI: &str = "Спросить Домового";
+pub const CARD_QUESTION: &str =
+    "Разбери эту карточку: что лежит по её путям, почему она в рекомендациях, можно ли удалять и что останется занято.";
 pub const RULE_PROVENANCE: &str = "правило";
 pub const MODEL_HYPOTHESIS: &str = "гипотеза модели";
 pub const HELD_PREFIX: &str = "Останется занято:";

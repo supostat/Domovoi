@@ -14,4 +14,5 @@ pub struct CardsModel {
     pub actions: Retained<ShellActions>,
     pub heights: RefCell<Option<(f64, Vec<f64>)>>,
     pub measurements: Cell<usize>,
+    pub ask_enabled: Cell<bool>,
 }

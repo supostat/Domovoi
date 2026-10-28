@@ -34,6 +34,7 @@ pub enum ShellAction {
     StopDelete,
     CloseTray,
     AskAssistant,
+    AskAboutCard(usize),
     StopAnswer,
     AddAnswerToTray(usize),
     ToggleAssistant,
@@ -63,6 +64,7 @@ impl ShellAction {
                 | Self::ToggleDuplicateSearch
                 | Self::ApplyDuplicates
                 | Self::AskAssistant
+                | Self::AskAboutCard(_)
                 | Self::ExportCsv
         )
     }

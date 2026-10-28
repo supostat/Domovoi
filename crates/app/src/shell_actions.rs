@@ -124,6 +124,11 @@ define_class!(
             self.dispatch(ShellAction::AskAssistant);
         }
 
+        #[unsafe(method(askAboutCard:))]
+        fn ask_about_card(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::AskAboutCard(tag_of(sender)));
+        }
+
         #[unsafe(method(stopAnswer:))]
         fn stop_answer(&self, _sender: Option<&AnyObject>) {
             self.dispatch(ShellAction::StopAnswer);

@@ -3,6 +3,7 @@ use objc2::{MainThreadMarker, sel};
 use objc2_app_kit::{NSAccessibility, NSColor, NSFont, NSLineBreakMode, NSTextField};
 use objc2_foundation::{NSInteger, NSPoint, NSRect, NSSize, NSString};
 
+use crate::button_style::ButtonStyle;
 use crate::card_model::CardModel;
 use crate::check_box::{CheckBox, SIDE};
 use crate::fill_view::{FillStyle, FillView};
@@ -11,8 +12,10 @@ use crate::pill_badge::pill_badge;
 use crate::provenance::Provenance;
 use crate::provenance_tag::provenance_tag;
 use crate::shell_actions::ShellActions;
+use crate::shell_button::ShellButton;
 use crate::shell_palette::ShellPalette;
 use crate::stacked_column::StackedColumn;
+use crate::strings::ASK_DOMOVOI;
 use crate::ui_font::{interface_font, mono_font};
 
 const PADDING_X: f64 = 18.0;
@@ -26,6 +29,8 @@ const LINE_GAP: f64 = 4.0;
 const TAGS_GAP: f64 = 10.0;
 const TAG_SPACING: f64 = 6.0;
 const CHECK_OFFSET: f64 = 3.0;
+const ASK_GAP: f64 = 12.0;
+const ASK_HEIGHT: f64 = 26.0;
 
 #[derive(Debug)]
 pub struct RecommendationCard {
@@ -34,6 +39,7 @@ pub struct RecommendationCard {
     pub title: Retained<NSTextField>,
     pub path: Retained<NSTextField>,
     pub amount: Retained<NSTextField>,
+    pub ask: Retained<ShellButton>,
     pub height: f64,
 }
 
@@ -45,6 +51,7 @@ impl RecommendationCard {
         width: f64,
         palette: &ShellPalette,
         actions: &ShellActions,
+        ask_enabled: bool,
     ) -> Self {
         let tokens = palette.tokens;
         let hypothesis = matches!(card.provenance, Provenance::Hypothesis);
@@ -85,6 +92,12 @@ impl RecommendationCard {
         let content_width = (width - content_x - COLUMN_GAP - amount_size.width - PADDING_X).max(0.0);
         let mut column = StackedColumn::new(content_x, content_width, PADDING_Y);
         let (title, path) = content(marker, card, &mut column, palette);
+        let ask = ask_button(marker, position, ask_enabled, palette, actions);
+        column.skip(ASK_GAP);
+        let ask_size = ask.frame().size;
+        let x = column.x;
+        column.push_beside(ask.clone().into_super().into_super().into_super(), x, ask_size);
+        column.skip(ask_size.height);
         let height = column.top + PADDING_Y;
         view.setFrameSize(NSSize::new(width, height));
         column.place_into(&view, height);
@@ -101,9 +114,36 @@ impl RecommendationCard {
             title,
             path,
             amount,
+            ask,
             height,
         }
     }
+}
+
+fn ask_button(
+    marker: MainThreadMarker,
+    position: usize,
+    enabled: bool,
+    palette: &ShellPalette,
+    actions: &ShellActions,
+) -> Retained<ShellButton> {
+    let tokens = palette.tokens;
+    let button = ShellButton::new(
+        marker,
+        ASK_DOMOVOI,
+        NSPoint::ZERO,
+        ASK_HEIGHT,
+        ButtonStyle {
+            fill: None,
+            border: Some(palette.line()),
+            text: tokens.text.ns_color(),
+            font: interface_font(12.0, 600.0),
+        },
+    );
+    button.setTag(NSInteger::try_from(position).expect("cards are few"));
+    button.on_click(actions, sel!(askAboutCard:));
+    button.setEnabled(enabled);
+    button
 }
 
 fn content(

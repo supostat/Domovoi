@@ -186,6 +186,7 @@ select.sel{font:500 13px var(--f-ui);padding:7px 10px;border-radius:7px;backgrou
 .rec .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .rec .amt{font:600 17px/1.2 var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .rec.hyp{border-style:dashed;border-color:var(--wax)}
+.rec .ask{margin-top:12px}
 
 /* прогресс */
 .prog{height:8px;border-radius:4px;background:var(--line-soft);overflow:hidden}
@@ -641,7 +642,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">04</span><h4>Рекомендации</h4><p>Сначала итог, потом детали. Безопасное отмечено заранее, остальное — по выбору.</p></div>
+    <div class="screen-cap"><span class="n">04</span><h4>Рекомендации</h4><p>Сначала итог, потом детали. Безопасное отмечено заранее, остальное — по выбору. «Спросить Домового» на карточке открывает разговор, где Домовой разбирает именно её.</p></div>
     <div class="mock"><div class="win">
       <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Рекомендации</div></div>
       <div class="win-body fixed">
@@ -1113,9 +1114,9 @@ const RULES=[
 RULES.forEach(r=>{r.size=r.nodes.reduce((s,n)=>s+BY[n].size,0);r.cat=BY[r.nodes[0]].cat;});
 const SL={safe:['b-safe','Безопасно'],recover:['b-recover','Восстановимо'],check:['b-check','Проверьте сами']};
 function recCard(r,checked){const d=document.createElement('div');d.className='rec';
-  d.innerHTML=`<input type="checkbox" ${checked?'checked':''} aria-label="Выбрать ${r.t}"><div style="min-width:0"><h5>${r.t}</h5><div class="path">${r.p}</div><p class="why">${r.why}</p><div class="tags"><span class="badge ${SL[r.s][0]}">${SL[r.s][1]}</span><span class="prov">правило · ${r.id}</span></div></div><div class="amt">${fmt(r.size)}</div>`;return d;}
+  d.innerHTML=`<input type="checkbox" ${checked?'checked':''} aria-label="Выбрать ${r.t}"><div style="min-width:0"><h5>${r.t}</h5><div class="path">${r.p}</div><p class="why">${r.why}</p><div class="tags"><span class="badge ${SL[r.s][0]}">${SL[r.s][1]}</span><span class="prov">правило · ${r.id}</span></div><button class="btn sm ask">Спросить Домового</button></div><div class="amt">${fmt(r.size)}</div>`;return d;}
 function hypCard(){const n=BY['com.tinyapp.helper'];const d=document.createElement('div');d.className='rec hyp';
-  d.innerHTML=`<input type="checkbox" aria-label="Выбрать com.tinyapp.helper"><div style="min-width:0"><h5>com.tinyapp.helper</h5><div class="path">~/Library/Application Support/com.tinyapp.helper</div><p class="why">Похоже на остаток удалённого приложения TinyApp. Последнее обращение 14 месяцев назад.</p><div class="tags"><span class="badge b-check">Проверьте сами</span><span class="prov model">гипотеза модели</span></div></div><div class="amt">${fmt(n.size)}</div>`;return d;}
+  d.innerHTML=`<input type="checkbox" aria-label="Выбрать com.tinyapp.helper"><div style="min-width:0"><h5>com.tinyapp.helper</h5><div class="path">~/Library/Application Support/com.tinyapp.helper</div><p class="why">Похоже на остаток удалённого приложения TinyApp. Последнее обращение 14 месяцев назад.</p><div class="tags"><span class="badge b-check">Проверьте сами</span><span class="prov model">гипотеза модели</span></div><button class="btn sm ask">Спросить Домового</button></div><div class="amt">${fmt(n.size)}</div>`;return d;}
 $('#sample-recs').append(recCard(RULES[0],true),hypCard());
 
 const recHost=$('#recs');

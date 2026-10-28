@@ -46,6 +46,7 @@ define_class!(
                 self.card_width(collection),
                 &model.palette,
                 &model.actions,
+                model.ask_enabled.get(),
             );
             host.addSubview(&card.view);
             item
@@ -79,13 +80,17 @@ impl CardsSource {
         self.ivars().measurements.get()
     }
 
-    pub(crate) fn show(&self, cards: &[CardModel]) -> bool {
+    pub(crate) fn show(&self, cards: &[CardModel], ask_enabled: bool) -> bool {
         let model = self.ivars();
-        if model.cards.borrow().as_slice() == cards {
+        let same_cards = model.cards.borrow().as_slice() == cards;
+        if same_cards && model.ask_enabled.get() == ask_enabled {
             return false;
         }
-        model.cards.replace(cards.to_vec());
-        model.heights.replace(None);
+        model.ask_enabled.set(ask_enabled);
+        if !same_cards {
+            model.cards.replace(cards.to_vec());
+            model.heights.replace(None);
+        }
         true
     }
 
@@ -112,7 +117,16 @@ impl CardsSource {
             .iter()
             .enumerate()
             .map(|(position, card)| {
-                RecommendationCard::build(marker, card, position, width, &model.palette, &model.actions).height
+                RecommendationCard::build(
+                    marker,
+                    card,
+                    position,
+                    width,
+                    &model.palette,
+                    &model.actions,
+                    model.ask_enabled.get(),
+                )
+                .height
             })
             .collect();
         *cached = Some((width, heights.clone()));
