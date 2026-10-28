@@ -33,6 +33,7 @@ const APPLICATION_GROUPS_ENTITLEMENT: &str = "com.apple.security.application-gro
 const SYNCHRONOUS: objc2_core_foundation::CFOptionFlags =
     MDQueryOptionFlags::Synchronous.0 as objc2_core_foundation::CFOptionFlags;
 const LAST_USED_QUERY: &str = "kMDItemLastUsedDate == \"*\"";
+const SCREEN_CAPTURE_QUERY: &str = "kMDItemIsScreenCapture == 1";
 const APPLICATION_QUERY: &str =
     "kMDItemCFBundleIdentifier == \"*\" && kMDItemContentType == \"com.apple.application-bundle\"";
 
@@ -77,6 +78,13 @@ pub(crate) fn spotlight_last_used() -> io::Result<Vec<(PathBuf, SystemTime)>> {
             let date = row.values[0].as_deref().and_then(date_value)?;
             Some((row.path?, date))
         })
+        .collect())
+}
+
+pub(crate) fn spotlight_screen_captures() -> io::Result<Vec<PathBuf>> {
+    Ok(run_query(SCREEN_CAPTURE_QUERY, &[])?
+        .into_iter()
+        .filter_map(|row| row.path)
         .collect())
 }
 

@@ -6,6 +6,7 @@ impl Badges {
     pub const CLONE: Self = Self(1 << 1);
     pub const CLONE_CANONICAL: Self = Self(1 << 2);
     pub const COMPRESSED: Self = Self(1 << 3);
+    pub const SCREEN_CAPTURE: Self = Self(1 << 4);
 
     pub fn contains(self, badge: Self) -> bool {
         self.0 & badge.0 == badge.0

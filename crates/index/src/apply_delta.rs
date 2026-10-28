@@ -68,6 +68,7 @@ impl Index {
             .iter()
             .map(|(path, date)| (path.as_path(), *date))
             .collect();
+        let screen_captures: HashSet<&Path> = enrichment.screen_captures.iter().map(PathBuf::as_path).collect();
         let mut spliced = Vec::with_capacity(listings.len());
         let mut regrouped = HashSet::new();
         let mut changed_bundles = Vec::new();
@@ -82,6 +83,7 @@ impl Index {
             self.categorize_splice(&splice, enrichment);
             self.mark_models(enrichment);
             self.apply_spotlight_dates_to(&splice.added, &spotlight);
+            self.apply_screen_captures_to(&splice.added, &screen_captures);
             let counted = self.regroup(&splice.removed, &splice.added);
             self.reaggregate(&splice, &counted);
             self.hidden_folders =
@@ -323,6 +325,20 @@ impl Index {
                 let node = &mut self.nodes[id.index()];
                 node.last_opened = Timestamp::from_system_time(*date);
                 node.last_opened_source = LastOpenedSource::SpotlightIndex;
+            }
+        }
+    }
+
+    fn apply_screen_captures_to(&mut self, added: &[NodeId], screen_captures: &HashSet<&Path>) {
+        if screen_captures.is_empty() {
+            return;
+        }
+        for id in added {
+            if self.node(*id).kind != NodeKind::File {
+                continue;
+            }
+            if screen_captures.contains(self.path(*id).as_path()) {
+                self.nodes[id.index()].badges.insert(Badges::SCREEN_CAPTURE);
             }
         }
     }

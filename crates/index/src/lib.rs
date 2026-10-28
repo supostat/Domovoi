@@ -57,7 +57,7 @@ pub use delta_applied::DeltaApplied;
 pub use delta_request::DeltaRequest;
 pub use delta_target::DeltaTarget;
 pub use directory_listing::DirectoryListing;
-pub use enrichment::Enrichment;
+pub use enrichment::{Enrichment, query_screen_captures};
 pub use index::Index;
 pub use index_node::IndexNode;
 pub use index_root::{FirmlinkPair, IndexRoot};

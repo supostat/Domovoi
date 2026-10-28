@@ -248,6 +248,7 @@ impl Index {
     pub(crate) fn derive(&mut self, enrichment: &Enrichment) {
         let live = self.subtree(self.root());
         self.apply_spotlight_dates(enrichment);
+        self.apply_screen_captures(enrichment);
         let previous = std::mem::take(&mut self.bundles);
         self.bundles = self.discover_bundles(&previous, &[]);
         self.assign_categories_and_owners(&live, enrichment);
@@ -317,6 +318,18 @@ impl Index {
             if node.kind == NodeKind::Directory {
                 node.last_opened = Timestamp::from_system_time(*date);
                 node.last_opened_source = LastOpenedSource::SpotlightIndex;
+            }
+        }
+    }
+
+    pub(crate) fn apply_screen_captures(&mut self, enrichment: &Enrichment) {
+        for path in &enrichment.screen_captures {
+            let Some(id) = self.find(path) else {
+                continue;
+            };
+            let node = &mut self.nodes[id.index()];
+            if node.kind == NodeKind::File {
+                node.badges.insert(Badges::SCREEN_CAPTURE);
             }
         }
     }
