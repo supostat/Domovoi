@@ -58,7 +58,7 @@ fn a_delete_job_removes_the_taken_tray_and_reports_its_progress() {
     let mut seen = Vec::new();
     while !job.is_finished() {
         assert!(Instant::now() < deadline, "the delete did not finish in time");
-        seen.push(job.progress().done);
+        seen.push(job.progress().files_done);
         thread::sleep(POLL);
     }
     let last = job.progress();
@@ -68,8 +68,12 @@ fn a_delete_job_removes_the_taken_tray_and_reports_its_progress() {
         seen.windows(2).all(|pair| pair[0] <= pair[1]),
         "progress only grows: {seen:?}"
     );
-    assert_eq!(last.done, last.total, "progress reaches the total");
-    assert_eq!(last.total, FOLDER_FILES + 2);
+    assert_eq!(last.files_done, last.files_total, "progress reaches the total");
+    assert_eq!(
+        last.files_total,
+        FOLDER_FILES + 1,
+        "the files of the folder and the archive, counted by the index"
+    );
     assert_eq!(report.deleted, subjects);
     assert_eq!(
         report.freed_bytes,

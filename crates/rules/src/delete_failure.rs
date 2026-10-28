@@ -1,8 +1,6 @@
 use std::io;
 
-const NO_PERMISSION: isize = 513;
-const READ_ONLY_VOLUME: isize = 642;
-const NO_SUCH_FILE: isize = 4;
+use domovoi_apfs_sys::AccessError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeleteFailure {
@@ -14,15 +12,6 @@ pub enum DeleteFailure {
 }
 
 impl DeleteFailure {
-    pub(crate) fn from_cocoa(code: isize, description: String) -> Self {
-        match code {
-            NO_PERMISSION => Self::NoPermission,
-            READ_ONLY_VOLUME => Self::ReadOnlyVolume,
-            NO_SUCH_FILE => Self::Missing,
-            code => Self::Other { code, description },
-        }
-    }
-
     pub(crate) fn from_io(error: &io::Error) -> Self {
         match error.raw_os_error() {
             Some(libc::ENOENT) => Self::Missing,
@@ -32,6 +21,14 @@ impl DeleteFailure {
                 code: code.map_or(0, |code| isize::try_from(code).expect("an errno fits in isize")),
                 description: error.to_string(),
             },
+        }
+    }
+
+    pub(crate) fn from_access(error: &AccessError) -> Self {
+        match error {
+            AccessError::Tcc | AccessError::Unix => Self::NoPermission,
+            AccessError::Missing => Self::Missing,
+            AccessError::Other(error) => Self::from_io(error),
         }
     }
 }

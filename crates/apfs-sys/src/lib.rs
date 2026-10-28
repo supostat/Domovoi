@@ -26,6 +26,7 @@ mod stream_identity;
 pub mod sys;
 mod syscall;
 mod timestamp;
+mod unlink_at;
 mod volume;
 mod volume_capabilities;
 
@@ -51,5 +52,6 @@ pub use processes::{pids_with_open, process_path, running_bundle_roots};
 pub use snapshot::{Snapshot, snapshots};
 pub use snapshot_class::{SnapshotClass, time_machine_stamp};
 pub use stream_identity::{StreamIdentity, stream_identity};
+pub use unlink_at::unlink_at;
 pub use volume::{data_volume, volume_used, volume_uuid};
 pub use volume_capabilities::{VolumeCapabilities, volume_capabilities};

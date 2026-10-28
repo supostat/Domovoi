@@ -188,6 +188,7 @@ impl ModelStore {
             physical: path.to_path_buf(),
             link_id: link_id(path)?,
             measured_bytes: 0,
+            indexed_files: 1,
             rule_id: None,
         };
         let report = delete(vec![subject], &CancelToken::default(), &|_| {});

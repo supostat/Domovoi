@@ -64,6 +64,7 @@ impl Tray {
                 physical: item.physical,
                 link_id: index.node(item.node).link_id,
                 measured_bytes: size.bytes,
+                indexed_files: u64::from(index.node(item.node).files),
                 rule_id: item.rule_id,
             });
         }

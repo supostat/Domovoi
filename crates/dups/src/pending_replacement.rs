@@ -20,6 +20,7 @@ impl PendingReplacement {
             physical: PathBuf::from(&self.temporary),
             link_id: self.link_id,
             measured_bytes: self.alloc_size,
+            indexed_files: 1,
             rule_id: None,
         }
     }

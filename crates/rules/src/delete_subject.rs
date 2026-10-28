@@ -6,5 +6,6 @@ pub struct DeleteSubject {
     pub physical: PathBuf,
     pub link_id: u64,
     pub measured_bytes: u64,
+    pub indexed_files: u64,
     pub rule_id: Option<String>,
 }

@@ -99,11 +99,13 @@ const STALE_STATEMENTS: [StaleStatement; 17] = [
     },
 ];
 
-const REMOVAL_CALLS: [&str; 5] = [
+const REMOVAL_CALLS: [&str; 7] = [
     "remove_file(",
     "remove_dir(",
     "remove_dir_all(",
     "unlink(",
+    "unlinkat(",
+    "unlink_at(",
     "removeItem",
 ];
 const TEST_MODULE: &str = "#[cfg(test)]";
@@ -111,6 +113,7 @@ const TEST_DIRECTORY: &str = "tests";
 const TEST_SUPPORT_CRATE: &str = "testkit";
 const THIS_CHECK: &str = "xtask/src/check_sources.rs";
 const DELETE_MODULE: &str = "rules/src/delete_run.rs";
+const UNLINK_MODULE: &str = "apfs-sys/src/unlink_at.rs";
 const MCP_SOCKET_MODULE: &str = "agent/src/private_socket.rs";
 
 pub(crate) fn run() -> io::Result<Vec<Finding>> {
@@ -140,7 +143,7 @@ fn removal_findings(path: &Path, content: &str) -> Vec<Finding> {
     let in_tests = path
         .components()
         .any(|component| component.as_os_str() == TEST_DIRECTORY);
-    let removes_own_files = [THIS_CHECK, DELETE_MODULE, MCP_SOCKET_MODULE]
+    let removes_own_files = [THIS_CHECK, DELETE_MODULE, UNLINK_MODULE, MCP_SOCKET_MODULE]
         .iter()
         .any(|module| path.ends_with(module));
     if in_tests || removes_own_files {
@@ -191,6 +194,22 @@ mod tests {
         let elsewhere = removal_findings(Path::new("crates/rules/src/tray.rs"), REMOVAL);
         assert_eq!(elsewhere.len(), 1, "a removal outside the delete run is a finding");
         assert_eq!(elsewhere[0].line, 1);
+    }
+
+    #[test]
+    fn check_sources_lets_only_the_delete_run_call_the_unlink_wrapper() {
+        let call = "    unlink_at(directory, name, 0)?;\n";
+        let wrapper = "    check(unsafe { libc::unlinkat(directory.as_raw_fd(), name.as_ptr(), flags) })\n";
+        assert!(removal_findings(Path::new("crates/rules/src/delete_run.rs"), call).is_empty());
+        assert!(removal_findings(Path::new("crates/apfs-sys/src/unlink_at.rs"), wrapper).is_empty());
+        assert_eq!(
+            removal_findings(Path::new("crates/dups/src/clone_journal.rs"), call).len(),
+            1
+        );
+        assert_eq!(
+            removal_findings(Path::new("crates/scanner/src/scan.rs"), wrapper).len(),
+            1
+        );
     }
 
     #[test]

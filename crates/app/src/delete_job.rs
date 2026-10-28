@@ -50,7 +50,7 @@ impl DeleteJob {
 
 fn keep_furthest(latest: &Mutex<DeleteProgress>, step: DeleteProgress) {
     let mut latest = latest.lock().expect("the progress is not poisoned");
-    if (step.done, step.subjects_done) >= (latest.done, latest.subjects_done) {
+    if (step.files_done, step.subjects_done) >= (latest.files_done, latest.subjects_done) {
         *latest = step;
     }
 }

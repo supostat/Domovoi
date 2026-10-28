@@ -7,6 +7,7 @@ use domovoi_testkit::{Fill, TempTree};
 
 const VOLUME_SERVICE_FOLDER: &str = ".Trashes";
 const INSTALLER_RULE: &str = "downloads.installers";
+const BUILD_FILES: u64 = 3;
 
 fn index_of(root: &Path) -> Index {
     let report = scan(root, &ScanOptions::default()).expect("tree scans");
@@ -58,6 +59,7 @@ fn taking_the_tray_separates_denied_items_from_subjects() {
             physical: index.physical_path(report),
             link_id: index.node(report).link_id,
             measured_bytes: sizes[0].bytes,
+            indexed_files: 1,
             rule_id: Some(INSTALLER_RULE.to_owned()),
         }]
     );
@@ -96,5 +98,29 @@ fn taken_subjects_delete_while_denied_items_stay() {
     assert!(
         tree.path().join(VOLUME_SERVICE_FOLDER).join("leftover").exists(),
         "a denied item is never touched: {refusals:?}"
+    );
+}
+
+#[test]
+fn a_taken_folder_carries_the_number_of_its_files_from_the_index() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.root().expect("root opens");
+    let build = root.directory("target").expect("directory is created");
+    let nested = build.directory("debug").expect("directory is created");
+    build.file("cache.bin", 1_024, Fill::Byte(4)).expect("file is written");
+    for name in ["app", "app.d"] {
+        nested.file(name, 2_048, Fill::Noise(2)).expect("file is written");
+    }
+    let index = index_of(tree.path());
+    let mut tray = Tray::default();
+    tray.add(&index, child(&index, "target"), None);
+    let sizes = measured(&index, &tray);
+    let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
+
+    let (subjects, _) = tray.take_for_delete(&index, &denylist, &sizes);
+
+    assert_eq!(
+        subjects[0].indexed_files, BUILD_FILES,
+        "the files of the subtree, the folders are not counted"
     );
 }
