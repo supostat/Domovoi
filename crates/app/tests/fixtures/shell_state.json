@@ -570,8 +570,8 @@
     "bytes": 41800000000
   },
   "tray_deleting": {
-    "done": 1200,
-    "total": 3400
+    "files_done": 1200,
+    "files_total": 3400
   },
   "ai": {
     "chat": {

@@ -7,6 +7,7 @@ use domovoi_app::strings;
 use domovoi_downloader::{Catalog, CatalogEntry, ModelStore};
 use domovoi_render::BgraImage;
 use domovoi_testkit::{CDN_ETAG, HfServer, ImageVolume, ServerBehaviour, TempTree, Visibility, VolumeFormat};
+use domovoi_theme::{NO_BREAK_SPACE, group_thousands};
 use serde_json::{Value, json};
 
 const BUNDLED_EXECUTABLE: &str = "../../target/bundle/DOMOVOI.app/Contents/MacOS/domovoi";
@@ -361,6 +362,26 @@ fn assert_delete_and_clone(report: &Value, mount_point: &Path) {
         "the safe recommendations are deleted: {deleted:#}"
     );
     assert_eq!(deleted["freed"].as_u64(), Some(expected), "{deleted:#}");
+    let files_total = deleted["files_total"].as_u64().expect("the file total is reported");
+    assert!(files_total > 0, "the taken items hold files: {deleted:#}");
+    assert_eq!(
+        deleted["files_done"].as_u64(),
+        Some(files_total),
+        "the count reaches the total from the index: {deleted:#}"
+    );
+    let line = deleted["deleting_line"].as_str().expect("the sheet line is reported");
+    let total = group_thousands(files_total);
+    assert!(
+        ["файлов", "файла"]
+            .iter()
+            .any(|word| line.ends_with(&format!("{total}{NO_BREAK_SPACE}{word}"))),
+        "the sheet line ends with the file total: {line}"
+    );
+    assert_eq!(
+        deleted["deleting_share"].as_f64(),
+        Some(1.0),
+        "the bar is full once the delete is done: {deleted:#}"
+    );
     assert_eq!(deleted["failures"], json!([]), "{deleted:#}");
     assert_eq!(
         deleted["paths_left"], 0,

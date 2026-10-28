@@ -3,15 +3,16 @@ use objc2::rc::Retained;
 use objc2::runtime::Sel;
 use objc2::{MainThreadMarker, sel};
 use objc2_app_kit::{NSLineBreakMode, NSView};
-use objc2_foundation::{NSPoint, NSRect, NSSize};
+use objc2_foundation::{NSPoint, NSSize};
 
 use crate::assembled_view::{Parts, assemble};
 use crate::button_kind::ButtonKind;
-use crate::fill_view::{FillStyle, FillView};
+use crate::fill_view::FillStyle;
 use crate::label::label;
 use crate::model_card_model::ModelCardModel;
 use crate::model_card_state::ModelCardState;
 use crate::pill_badge::pill_badge;
+use crate::progress_bar::{PROGRESS_HEIGHT, progress_bar};
 use crate::shell_actions::ShellActions;
 use crate::shell_button::ShellButton;
 use crate::shell_palette::ShellPalette;
@@ -25,7 +26,6 @@ const PADDING: NSSize = NSSize::new(18.0, 16.0);
 const ROW_GAP: f64 = 10.0;
 const BUTTON_GAP: f64 = 8.0;
 const BUTTON_HEIGHT: f64 = 26.0;
-const PROGRESS_HEIGHT: f64 = 8.0;
 const META_GAP: f64 = 12.0;
 
 type ButtonSpec = (String, ButtonKind, Sel);
@@ -88,7 +88,7 @@ pub(crate) fn model_card_view(
     let mut top = head_height + ROW_GAP;
     if let Some(share) = card.share() {
         parts.push((
-            progress(marker, inner, share, palette),
+            progress_bar(marker, inner, share, palette),
             NSPoint::new(0.0, top),
             NSSize::new(inner, PROGRESS_HEIGHT),
         ));
@@ -222,29 +222,4 @@ fn meta_row(
     for (view, origin, size) in placed {
         parts.push((view, NSPoint::new(origin.x, top + (height - size.height) / 2.0), size));
     }
-}
-
-fn progress(marker: MainThreadMarker, width: f64, share: f64, palette: &ShellPalette) -> Retained<NSView> {
-    let track = FillView::new(
-        marker,
-        NSRect::new(NSPoint::ZERO, NSSize::new(width, PROGRESS_HEIGHT)),
-        FillStyle {
-            fill: Some(palette.line_soft()),
-            border: None,
-            radius: PROGRESS_HEIGHT / 2.0,
-            dashed: false,
-        },
-    );
-    let fill = FillView::new(
-        marker,
-        NSRect::new(NSPoint::ZERO, NSSize::new((width * share).round(), PROGRESS_HEIGHT)),
-        FillStyle {
-            fill: Some(palette.tokens.wax.ns_color()),
-            border: None,
-            radius: PROGRESS_HEIGHT / 2.0,
-            dashed: false,
-        },
-    );
-    track.addSubview(&fill);
-    track.into_super()
 }

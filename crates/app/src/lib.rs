@@ -126,6 +126,7 @@ mod preview_source;
 mod preview_table;
 mod preview_targets;
 mod probes;
+mod progress_bar;
 mod properties_panel;
 mod property_labels;
 mod provenance;

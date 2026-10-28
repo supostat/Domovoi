@@ -33,6 +33,7 @@ use crate::chat_model::ChatModel;
 use crate::csv_export::csv_lines;
 use crate::delete_job::DeleteJob;
 use crate::delete_outcome::DeleteOutcome;
+use crate::delete_status::DeleteStatus;
 use crate::disk_overview::DiskOverview;
 use crate::disk_probe::DiskProbe;
 use crate::duplicate_summary::DuplicateSummary;
@@ -355,6 +356,8 @@ impl EndToEnd {
         while !job.is_finished() {
             thread::sleep(SCAN_POLL);
         }
+        let last = DeleteStatus::from(job.progress());
+        let sheet = measured.with_deleting(last);
         let report = job.finish();
         let outcome = DeleteOutcome::from_report(&report, &refusals);
         self.session_mut()
@@ -367,6 +370,10 @@ impl EndToEnd {
             "step": "delete_recommendations",
             "expected": expected,
             "measured_files": measured_files,
+            "files_done": last.files_done,
+            "files_total": last.files_total,
+            "deleting_line": sheet.deleting_line(),
+            "deleting_share": sheet.deleting_share(),
             "deleted": outcome.objects,
             "freed": outcome.freed,
             "failures": outcome.failures,

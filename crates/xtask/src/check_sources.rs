@@ -11,7 +11,7 @@ struct StaleStatement {
     why: &'static str,
 }
 
-const STALE_STATEMENTS: [StaleStatement; 17] = [
+const STALE_STATEMENTS: [StaleStatement; 20] = [
     StaleStatement {
         relative_path: "design/domovoi-design-book.html",
         text: "Решение открыто",
@@ -40,7 +40,12 @@ const STALE_STATEMENTS: [StaleStatement; 17] = [
     StaleStatement {
         relative_path: "docs/DOMOVOI.md",
         text: "trashItem",
-        why: "deletion goes through NSFileManager removeItem, not trashItem",
+        why: "deletion walks each item by descriptors with unlinkat, not trashItem",
+    },
+    StaleStatement {
+        relative_path: "docs/DOMOVOI.md",
+        text: "removeItem",
+        why: "deletion walks each item by descriptors with unlinkat and counts files, not NSFileManager removeItem",
     },
     StaleStatement {
         relative_path: "docs/DOMOVOI.md",
@@ -66,6 +71,16 @@ const STALE_STATEMENTS: [StaleStatement; 17] = [
         relative_path: "docs/DOMOVOI.md",
         text: "в корзину",
         why: "the collection list before permanent deletion is called «К удалению», nothing comes back from it",
+    },
+    StaleStatement {
+        relative_path: "design/domovoi-design-book.html",
+        text: "removeItem",
+        why: "deletion walks each item by descriptors with unlinkat and counts files, not NSFileManager removeItem",
+    },
+    StaleStatement {
+        relative_path: "design/domovoi-design-book.html",
+        text: "«Удаляю: N из M»",
+        why: "the delete sheet counts files under a bar: «Удаляю: N из M файлов»",
     },
     StaleStatement {
         relative_path: "design/domovoi-design-book.html",

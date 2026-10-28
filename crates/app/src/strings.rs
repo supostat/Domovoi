@@ -223,9 +223,9 @@ pub const DELETED: &str = "Удалено:";
 pub const FREED: &str = "освобождено";
 pub const NOT_DELETED: &str = "Не удалено:";
 pub const DELETE_UNITS: PluralForms = PluralForms {
-    one: "элемента",
-    few: "элементов",
-    many: "элементов",
+    one: "файла",
+    few: "файлов",
+    many: "файлов",
 };
 pub const OBJECTS: PluralForms = PluralForms {
     one: "объект",

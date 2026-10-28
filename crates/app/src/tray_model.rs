@@ -102,9 +102,19 @@ impl TrayModel {
         self.deleting.map(|status| {
             format!(
                 "{DELETING} {} {OF} {}",
-                group_thousands(status.done as u64),
-                format_count(status.total as u64, &DELETE_UNITS)
+                group_thousands(status.files_done as u64),
+                format_count(status.files_total as u64, &DELETE_UNITS)
             )
+        })
+    }
+
+    pub fn deleting_share(&self) -> Option<f64> {
+        self.deleting.map(|status| {
+            if status.files_total == 0 {
+                0.0
+            } else {
+                status.files_done as f64 / status.files_total as f64
+            }
         })
     }
 

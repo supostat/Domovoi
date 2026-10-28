@@ -11,6 +11,7 @@ use crate::field_ornament::{FieldOrnament, OrnamentInk};
 use crate::fill_view::{FillStyle, FillView};
 use crate::label::{label, measure_label};
 use crate::probes::Probes;
+use crate::progress_bar::{PROGRESS_HEIGHT, progress_bar};
 use crate::shell_actions::ShellActions;
 use crate::shell_button::ShellButton;
 use crate::shell_layout::NARROW_WINDOW;
@@ -75,7 +76,14 @@ impl TrayScreen {
             confirmation(&mut column, model);
             if let Some(deleting) = model.deleting_line() {
                 column.paragraph(&deleting, &interface_font(13.5, 600.0), &tokens.text.ns_color());
-                column.top += SECTION_GAP;
+                column.top += GAP;
+                let share = model.deleting_share().expect("a delete in progress has a share");
+                column.add(
+                    progress_bar(marker, column.width, share, palette),
+                    MARGIN,
+                    NSSize::new(column.width, PROGRESS_HEIGHT),
+                );
+                column.top += PROGRESS_HEIGHT + SECTION_GAP;
                 column.buttons(&[(STOP, sel!(stopDelete:), true)])
             } else {
                 column.buttons(&[(CANCEL, sel!(closeTray:), false), (DELETE, sel!(deleteTray:), true)])

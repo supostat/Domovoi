@@ -22,11 +22,7 @@ impl DeleteRun {
     }
 
     pub(crate) fn status(&self) -> DeleteStatus {
-        let progress = self.job().progress();
-        DeleteStatus {
-            done: progress.files_done,
-            total: progress.files_total,
-        }
+        self.job().progress().into()
     }
 
     pub(crate) fn is_finished(&self) -> bool {

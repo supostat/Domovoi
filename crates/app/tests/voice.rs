@@ -97,12 +97,12 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
     };
     assert_eq!(spoken(&outcome.line()), "Удалено: 12 объектов, освобождено 80,8 ГБ");
     let deleting = TrayModel::default().with_deleting(DeleteStatus {
-        done: 1_200,
-        total: 3_400,
+        files_done: 1_200,
+        files_total: 3_400,
     });
     assert_eq!(
         deleting.deleting_line().map(|line| spoken(&line)).as_deref(),
-        Some("Удаляю: 1 200 из 3 400 элементов")
+        Some("Удаляю: 1 200 из 3 400 файлов")
     );
     let measuring = TrayModel::default().with_progress(MeasureProgress {
         files: 182_340,
