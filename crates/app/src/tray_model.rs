@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use domovoi_index::{Index, Reclaimable};
-use domovoi_rules::Tray;
+use domovoi_rules::{Tray, TrayItem};
 use domovoi_theme::{format_count, group_thousands};
 use serde::Deserialize;
 
@@ -9,9 +9,12 @@ use crate::delete_outcome::DeleteOutcome;
 use crate::delete_status::DeleteStatus;
 use crate::held_line::held_line;
 use crate::measure_progress::MeasureProgress;
-use crate::strings::{DELETE_UNITS, DELETING, FILES, OF, REFINING_SIZE, rule_title};
+use crate::owner_reason::removal_phrase;
+use crate::strings::{AND_MORE, DELETE_UNITS, DELETING, FILES, OF, REFINING_SIZE, WITH_ITS_FILES, rule_title};
 use crate::tilde::tilde;
 use crate::tray_row::TrayRow;
+
+const APP_FILE_LINES: usize = 6;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,33 +47,40 @@ impl TrayModel {
     }
 
     pub fn measured(index: &Index, tray: &Tray, sizes: &[Reclaimable]) -> Self {
-        let mut rows: Vec<(Option<String>, TrayRow)> = Vec::new();
+        let mut rows: Vec<(Option<RowGroup>, TrayRow)> = Vec::new();
         let mut held = Reclaimable::default();
         for (item, reclaimable) in tray.items().iter().zip(sizes.iter().copied()) {
             held += reclaimable;
             let size = reclaimable.bytes;
-            let category = index.node(item.node).category;
-            match rows
+            let group = RowGroup::of(item);
+            let detail = item
+                .reason
+                .map(|reason| format!("{} · {}", tilde(&item.path), removal_phrase(reason)));
+            if let Some((_, row)) = rows
                 .iter_mut()
-                .find(|(rule, _)| item.rule_id.is_some() && *rule == item.rule_id)
+                .find(|(existing, _)| group.is_some() && *existing == group)
             {
-                Some((_, row)) => row.size += size,
-                None => rows.push((
-                    item.rule_id.clone(),
-                    TrayRow {
-                        category,
-                        title: item
-                            .rule_id
-                            .as_deref()
-                            .and_then(rule_title)
-                            .map_or_else(|| file_name(&item.path), str::to_owned),
-                        size,
-                    },
-                )),
+                row.size += size;
+                row.details.extend(detail);
+            } else {
+                let row = TrayRow {
+                    category: index.node(item.node).category,
+                    title: row_title(tray, item),
+                    size,
+                    details: detail.into_iter().collect(),
+                    unmarked: unmarked_paths(tray, item),
+                };
+                rows.push((group, row));
             }
         }
         Self {
-            rows: rows.into_iter().map(|(_, row)| row).collect(),
+            rows: rows
+                .into_iter()
+                .map(|(_, mut row)| {
+                    shorten_details(&mut row.details);
+                    row
+                })
+                .collect(),
             held_by_snapshots: held.held_by_snapshots,
             held_by_clones: held.held_by_clones,
             held_by_hard_links: held.held_by_hard_links,
@@ -132,6 +142,57 @@ impl TrayModel {
 
     pub fn held_line(&self) -> Option<String> {
         held_line(self.held_by_snapshots, self.held_by_clones, self.held_by_hard_links)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum RowGroup {
+    Rule(String),
+    Application(String),
+}
+
+impl RowGroup {
+    fn of(item: &TrayItem) -> Option<Self> {
+        match (&item.application, &item.rule_id) {
+            (Some(application), _) => Some(Self::Application(application.clone())),
+            (None, Some(rule)) => Some(Self::Rule(rule.clone())),
+            (None, None) => None,
+        }
+    }
+}
+
+fn row_title(tray: &Tray, item: &TrayItem) -> String {
+    if let Some(application) = &item.application {
+        let name = tray
+            .applications()
+            .iter()
+            .find(|known| &known.bundle_id == application)
+            .map_or(application.as_str(), |known| known.name.as_str());
+        return format!("{name} {WITH_ITS_FILES}");
+    }
+    item.rule_id
+        .as_deref()
+        .and_then(rule_title)
+        .map_or_else(|| file_name(&item.path), str::to_owned)
+}
+
+fn unmarked_paths(tray: &Tray, item: &TrayItem) -> Vec<String> {
+    let Some(application) = &item.application else {
+        return Vec::new();
+    };
+    tray.applications()
+        .iter()
+        .find(|known| &known.bundle_id == application)
+        .map_or_else(Vec::new, |known| {
+            known.name_only.iter().map(|path| tilde(path)).collect()
+        })
+}
+
+fn shorten_details(details: &mut Vec<String>) {
+    if details.len() > APP_FILE_LINES {
+        let hidden = details.len() - APP_FILE_LINES;
+        details.truncate(APP_FILE_LINES);
+        details.push(format!("{AND_MORE} {hidden}"));
     }
 }
 

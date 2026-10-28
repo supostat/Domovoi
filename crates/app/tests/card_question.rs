@@ -116,6 +116,7 @@ fn a_hypothesis_card_has_no_rule_and_asks_to_be_checked() {
     let card = CardModel {
         title: "com.tinyapp.helper".to_owned(),
         paths: vec!["~/Library/Application Support/com.tinyapp.helper".to_owned()],
+        path_reasons: Vec::new(),
         explanation: "Похоже на остаток удалённого приложения".to_owned(),
         level: SafetyBadge::CheckYourself,
         provenance: Provenance::Hypothesis,

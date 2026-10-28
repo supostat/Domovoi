@@ -10,4 +10,8 @@ pub struct TrayRow {
     pub category: Category,
     pub title: String,
     pub size: u64,
+    #[serde(default)]
+    pub details: Vec<String>,
+    #[serde(default)]
+    pub unmarked: Vec<String>,
 }

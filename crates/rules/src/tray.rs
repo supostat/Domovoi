@@ -2,9 +2,11 @@ use std::path::PathBuf;
 
 use domovoi_index::{Index, NodeId, Reclaimable};
 
+use crate::app_removal::{AppRemoval, RemovalReason};
 use crate::delete_refusal::DeleteRefusal;
 use crate::delete_subject::DeleteSubject;
 use crate::denylist::Denylist;
+use crate::tray_application::TrayApplication;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TrayItem {
@@ -12,15 +14,42 @@ pub struct TrayItem {
     pub path: PathBuf,
     pub physical: PathBuf,
     pub rule_id: Option<String>,
+    pub reason: Option<RemovalReason>,
+    pub application: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Tray {
     items: Vec<TrayItem>,
+    applications: Vec<TrayApplication>,
 }
 
 impl Tray {
     pub fn add(&mut self, index: &Index, node: NodeId, rule_id: Option<&str>) {
+        self.insert(index, node, rule_id.map(str::to_owned), None, None);
+    }
+
+    pub fn add_application(&mut self, index: &Index, removal: &AppRemoval) {
+        for (node, reason) in &removal.items {
+            self.insert(index, *node, None, Some(*reason), Some(removal.bundle_id.clone()));
+        }
+        self.applications
+            .retain(|application| application.bundle_id != removal.bundle_id);
+        self.applications.push(TrayApplication {
+            bundle_id: removal.bundle_id.clone(),
+            name: removal.name.clone(),
+            name_only: removal.name_only.iter().map(|node| index.path(*node)).collect(),
+        });
+    }
+
+    fn insert(
+        &mut self,
+        index: &Index,
+        node: NodeId,
+        rule_id: Option<String>,
+        reason: Option<RemovalReason>,
+        application: Option<String>,
+    ) {
         let path = index.path(node);
         if self.items.iter().any(|item| path.starts_with(&item.path)) {
             return;
@@ -30,16 +59,28 @@ impl Tray {
             node,
             physical: index.physical_path(node),
             path,
-            rule_id: rule_id.map(str::to_owned),
+            rule_id,
+            reason,
+            application,
         });
     }
 
     pub fn remove(&mut self, node: NodeId) {
         self.items.retain(|item| item.node != node);
+        let items = &self.items;
+        self.applications.retain(|application| {
+            items
+                .iter()
+                .any(|item| item.application.as_deref() == Some(application.bundle_id.as_str()))
+        });
     }
 
     pub fn items(&self) -> &[TrayItem] {
         &self.items
+    }
+
+    pub fn applications(&self) -> &[TrayApplication] {
+        &self.applications
     }
 
     pub fn take_for_delete(
@@ -51,6 +92,7 @@ impl Tray {
         assert_eq!(sizes.len(), self.items.len(), "every item of the tray is measured");
         let mut subjects = Vec::with_capacity(self.items.len());
         let mut refusals = Vec::new();
+        self.applications.clear();
         for (item, size) in std::mem::take(&mut self.items).into_iter().zip(sizes) {
             if let Some(reason) = denylist.verdict(index, item.node) {
                 refusals.push(DeleteRefusal {

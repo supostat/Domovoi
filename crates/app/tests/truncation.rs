@@ -4,7 +4,7 @@ use std::process::ExitCode;
 use domovoi_app::{
     Breadcrumbs, CardModel, Crumb, HoverPanel, HoverTip, LevelRow, LevelRowView, MainScreen, MemberModel, Provenance,
     RecommendationCard, SafetyBadge, ScanningScreen, Screen, Section, ShellActions, ShellFixture, ShellPalette,
-    SidebarEntry, SidebarItemView, development_fonts, member_row, strings,
+    SidebarEntry, SidebarItemView, TrayModel, TrayRow, TrayScreen, development_fonts, member_row, strings,
 };
 use domovoi_index::Category;
 use domovoi_render::{DiagramMode, register_fonts};
@@ -68,6 +68,19 @@ impl Checks {
         self.expect(
             shown + 0.5 >= needed,
             format!("{element}: {shown} pt shown of {needed} pt"),
+        );
+    }
+
+    fn wraps_whole(&mut self, field: &NSTextField, element: &str) {
+        let shown = field.frame().size;
+        let wrap_width = field.preferredMaxLayoutWidth();
+        let needed = field.fittingSize().height;
+        self.expect(
+            wrap_width > 0.0 && wrap_width <= shown.width + 0.5 && shown.height + 0.5 >= needed,
+            format!(
+                "{element}: wraps at {wrap_width} pt in {} pt, {} pt tall of {needed} pt",
+                shown.width, shown.height
+            ),
         );
     }
 
@@ -344,6 +357,10 @@ fn recommendation_card(checks: &mut Checks, marker: MainThreadMarker) {
     let card = CardModel {
         title: format!("{LONG_NAME} {LONG_NAME}"),
         paths: vec![LONG_PATH.to_owned(), LONG_PATH.to_owned()],
+        path_reasons: vec![
+            Some(LONG_NAME.to_owned()),
+            Some(strings::OWNER_CONTAINER_METADATA.to_owned()),
+        ],
         explanation: format!("{LONG_NAME}. {LONG_NAME}. {LONG_NAME}."),
         level: SafetyBadge::Safe,
         provenance: Provenance::Rule("cargo.target".to_owned()),
@@ -377,6 +394,34 @@ fn recommendation_card(checks: &mut Checks, marker: MainThreadMarker) {
     checks.mode(&view.path, NSLineBreakMode::ByTruncatingMiddle, "card path");
     checks.truncated_with_full_text(&view.path, &joined, "card path");
     checks.never_cut(&view.amount, "card amount");
+    let reasons = view.reasons.as_ref().expect("a card with reasons shows them");
+    checks.mode(reasons, NSLineBreakMode::ByWordWrapping, "card reasons");
+    checks.wraps_whole(reasons, "card reasons");
+}
+
+fn tray_application_group(checks: &mut Checks, marker: MainThreadMarker) {
+    let model = TrayModel {
+        rows: vec![TrayRow {
+            category: Category::Apps,
+            title: format!("{LONG_NAME} {}", strings::WITH_ITS_FILES),
+            size: 2_400_000_000,
+            details: vec![
+                format!("{LONG_PATH} · {}", strings::OWNER_CONTAINER_METADATA),
+                format!("{LONG_PATH} · {}", strings::OWNER_LAUNCHD),
+            ],
+            unmarked: vec![LONG_PATH.to_owned()],
+        }],
+        ..TrayModel::default()
+    };
+    let actions = ShellActions::new(marker);
+    let screen = TrayScreen::build(marker, &model, &palette(), &actions);
+    checks.expect(
+        screen.details.len() == 4,
+        "the group shows its files, the heading and the unmarked path",
+    );
+    for (position, field) in screen.details.iter().enumerate() {
+        checks.wraps_whole(field, &format!("tray detail {position}"));
+    }
 }
 
 fn duplicate_rows(checks: &mut Checks, marker: MainThreadMarker) {
@@ -411,6 +456,7 @@ fn main() -> ExitCode {
     hover(&mut checks, marker);
     recommendation_card(&mut checks, marker);
     duplicate_rows(&mut checks, marker);
+    tray_application_group(&mut checks, marker);
     if checks.failures.is_empty() {
         println!("truncation: {} checks passed", checks.count);
         ExitCode::SUCCESS

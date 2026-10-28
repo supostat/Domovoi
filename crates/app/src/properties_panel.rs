@@ -1,4 +1,5 @@
 use objc2::rc::Retained;
+use objc2::runtime::Sel;
 use objc2::{MainThreadMarker, sel};
 use objc2_app_kit::{NSPopover, NSPopoverBehavior, NSView, NSViewController};
 use objc2_foundation::{NSInteger, NSPoint, NSRect, NSRectEdge, NSSize};
@@ -10,7 +11,7 @@ use crate::property_labels::PropertyLabels;
 use crate::shell_actions::ShellActions;
 use crate::shell_button::ShellButton;
 use crate::shell_palette::ShellPalette;
-use crate::strings::SHOW_IN_FINDER;
+use crate::strings::{REMOVE_WITH_FILES, SHOW_IN_FINDER};
 use crate::ui_font::interface_font;
 
 const WIDTH: f64 = 340.0;
@@ -57,10 +58,30 @@ impl PropertiesPanel {
         let labels = PropertyLabels::new(marker, WIDTH - 2.0 * PADDING);
         labels.attach(&card);
         let has_path = facts.tip.path.is_some();
-        let below = if has_path { BUTTON_HEIGHT + BUTTON_GAP } else { 0.0 };
+        let removable = facts
+            .indexed
+            .as_ref()
+            .is_some_and(|indexed| indexed.removable_application);
+        let buttons: Vec<(&str, Sel)> = [
+            (has_path, SHOW_IN_FINDER, sel!(showNodeInFinder:)),
+            (removable, REMOVE_WITH_FILES, sel!(removeApplication:)),
+        ]
+        .into_iter()
+        .filter_map(|(shown, title, selector)| shown.then_some((title, selector)))
+        .collect();
+        let below = buttons.len() as f64 * (BUTTON_HEIGHT + BUTTON_GAP);
         let height = labels.lay_out(facts, tokens, WIDTH, PADDING, LINE_GAP, below);
-        if has_path {
-            card.addSubview(&finder_button(marker, facts.node, palette, actions));
+        let mut bottom = PADDING;
+        for (title, selector) in buttons.into_iter().rev() {
+            card.addSubview(&panel_button(
+                marker,
+                (title, selector),
+                facts.node,
+                bottom,
+                palette,
+                actions,
+            ));
+            bottom += BUTTON_HEIGHT + BUTTON_GAP;
         }
         card.setFrameSize(NSSize::new(WIDTH, height));
         self.controller.setView(&card);
@@ -70,16 +91,18 @@ impl PropertiesPanel {
     }
 }
 
-fn finder_button(
+fn panel_button(
     marker: MainThreadMarker,
+    (title, selector): (&str, Sel),
     node: usize,
+    bottom: f64,
     palette: &ShellPalette,
     actions: &ShellActions,
 ) -> Retained<ShellButton> {
-    let finder = ShellButton::new(
+    let button = ShellButton::new(
         marker,
-        SHOW_IN_FINDER,
-        NSPoint::new(PADDING, PADDING),
+        title,
+        NSPoint::new(PADDING, bottom),
         BUTTON_HEIGHT,
         ButtonStyle {
             fill: None,
@@ -88,7 +111,7 @@ fn finder_button(
             font: interface_font(12.5, 500.0),
         },
     );
-    finder.on_click(actions, sel!(showNodeInFinder:));
-    finder.setTag(NSInteger::try_from(node).expect("a node position fits a tag"));
-    finder
+    button.on_click(actions, selector);
+    button.setTag(NSInteger::try_from(node).expect("a node position fits a tag"));
+    button
 }

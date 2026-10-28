@@ -38,6 +38,7 @@ pub struct RecommendationCard {
     pub check: Retained<CheckBox>,
     pub title: Retained<NSTextField>,
     pub path: Retained<NSTextField>,
+    pub reasons: Option<Retained<NSTextField>>,
     pub amount: Retained<NSTextField>,
     pub ask: Retained<ShellButton>,
     pub height: f64,
@@ -91,7 +92,7 @@ impl RecommendationCard {
         let content_x = PADDING_X + SIDE + COLUMN_GAP;
         let content_width = (width - content_x - COLUMN_GAP - amount_size.width - PADDING_X).max(0.0);
         let mut column = StackedColumn::new(content_x, content_width, PADDING_Y);
-        let (title, path) = content(marker, card, &mut column, palette);
+        let (title, path, reasons) = content(marker, card, &mut column, palette);
         let ask = ask_button(marker, position, ask_enabled, palette, actions);
         column.skip(ASK_GAP);
         let ask_size = ask.frame().size;
@@ -113,6 +114,7 @@ impl RecommendationCard {
             check,
             title,
             path,
+            reasons,
             amount,
             ask,
             height,
@@ -151,7 +153,11 @@ fn content(
     card: &CardModel,
     column: &mut StackedColumn,
     palette: &ShellPalette,
-) -> (Retained<NSTextField>, Retained<NSTextField>) {
+) -> (
+    Retained<NSTextField>,
+    Retained<NSTextField>,
+    Option<Retained<NSTextField>>,
+) {
     let tokens = palette.tokens;
     let title = wrapped(
         marker,
@@ -182,6 +188,19 @@ fn content(
     column.skip(PATH_GAP);
     let path_height = path.fittingSize().height;
     column.push(path.clone().into_super().into_super(), path_height);
+    let reasons = card.reasons_line().map(|text| {
+        let reasons = wrapped(
+            marker,
+            &text,
+            &mono_font(11.5, 400.0),
+            &tokens.dim.ns_color(),
+            column.width,
+        );
+        let height = reasons.fittingSize().height;
+        column.skip(PATH_GAP);
+        column.push(reasons.clone().into_super().into_super(), height);
+        reasons
+    });
     column.skip(WHY_GAP);
     let why = wrapped(
         marker,
@@ -224,7 +243,7 @@ fn content(
     column.push_beside(badge.into_super(), x, badge_size);
     column.push_beside(tag.into_super(), x + badge_size.width + TAG_SPACING, tag_size);
     column.skip(badge_size.height.max(tag_size.height));
-    (title, path)
+    (title, path, reasons)
 }
 
 fn wrapped(marker: MainThreadMarker, text: &str, font: &NSFont, color: &NSColor, width: f64) -> Retained<NSTextField> {

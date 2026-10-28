@@ -3,7 +3,7 @@ use domovoi_theme::format_size;
 use objc2::rc::Retained;
 
 use objc2::{MainThreadMarker, sel};
-use objc2_app_kit::{NSAccessibility, NSLineBreakMode, NSView};
+use objc2_app_kit::{NSAccessibility, NSLineBreakMode, NSTextField, NSView};
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use crate::delete_outcome::DeleteOutcome;
@@ -17,7 +17,8 @@ use crate::shell_button::ShellButton;
 use crate::shell_layout::NARROW_WINDOW;
 use crate::shell_palette::ShellPalette;
 use crate::strings::{
-    CANCEL, CLOSE, DELETE, ESTIMATE_MARK, NOT_DELETED, STOP, TRAY, TRAY_EMPTY, TRAY_NOTE, WILL_DELETE,
+    CANCEL, CLOSE, DELETE, ESTIMATE_MARK, NOT_DELETED, NOT_MARKED_NAME_ONLY, STOP, TRAY, TRAY_EMPTY, TRAY_NOTE,
+    WILL_DELETE,
 };
 use crate::tray_column::{MARGIN, TrayColumn};
 use crate::tray_model::TrayModel;
@@ -29,12 +30,14 @@ const DOT: f64 = 10.0;
 const DOT_RADIUS: f64 = 3.0;
 const GAP: f64 = 12.0;
 const SECTION_GAP: f64 = 22.0;
+const DETAIL_GAP: f64 = 6.0;
 
 #[derive(Debug)]
 pub struct TrayScreen {
     pub root: Retained<FillView>,
     pub primary: Retained<ShellButton>,
     pub(crate) ornament: Option<Retained<FieldOrnament>>,
+    pub details: Vec<Retained<NSTextField>>,
     pub probes: Probes,
 }
 
@@ -64,6 +67,7 @@ impl TrayScreen {
         column.paragraph(TRAY, &interface_font(17.0, 600.0), &tokens.text.ns_color());
         column.top += GAP;
         let mut ornament = None;
+        let mut details = Vec::new();
         let primary = if let Some(outcome) = &model.deleted {
             let (primary, stitched) = deleted(&mut column, outcome);
             ornament = Some(stitched);
@@ -73,7 +77,7 @@ impl TrayScreen {
             column.top += SECTION_GAP;
             column.buttons(&[(CLOSE, sel!(closeTray:), true)])
         } else {
-            confirmation(&mut column, model);
+            details = confirmation(&mut column, model);
             if let Some(deleting) = model.deleting_line() {
                 column.paragraph(&deleting, &interface_font(13.5, 600.0), &tokens.text.ns_color());
                 column.top += GAP;
@@ -95,6 +99,7 @@ impl TrayScreen {
             root,
             primary,
             ornament,
+            details,
             probes: Probes {
                 window_background: [NARROW_WINDOW.width - 6.0, height - 6.0],
                 sidebar: None,
@@ -138,10 +143,12 @@ fn deleted(column: &mut TrayColumn<'_>, outcome: &DeleteOutcome) -> (Retained<Sh
     (primary, stitched)
 }
 
-fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) {
+fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) -> Vec<Retained<NSTextField>> {
     let tokens = column.palette.tokens;
+    let mut details = Vec::new();
     for row in &model.rows {
         tray_row(column, row);
+        details.extend(row_details(column, row));
     }
     column.top += GAP;
     let caption = measure_label(
@@ -186,6 +193,32 @@ fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) {
     }
     column.paragraph(TRAY_NOTE, &interface_font(13.0, 400.0), &tokens.dim.ns_color());
     column.top += SECTION_GAP;
+    details
+}
+
+fn row_details(column: &mut TrayColumn<'_>, row: &TrayRow) -> Vec<Retained<NSTextField>> {
+    if row.details.is_empty() && row.unmarked.is_empty() {
+        return Vec::new();
+    }
+    let tokens = column.palette.tokens;
+    let indent = DOT + GAP;
+    let path_font = mono_font(11.5, 400.0);
+    let dim = tokens.dim.ns_color();
+    let mut fields = Vec::new();
+    column.top += DETAIL_GAP;
+    for detail in &row.details {
+        fields.push(column.indented_line(detail, (&path_font, &dim), indent));
+    }
+    if !row.unmarked.is_empty() {
+        column.top += DETAIL_GAP;
+        let heading = interface_font(12.0, 600.0);
+        fields.push(column.indented_line(NOT_MARKED_NAME_ONLY, (&heading, &tokens.mute.ns_color()), indent));
+        for path in &row.unmarked {
+            fields.push(column.indented_line(path, (&path_font, &dim), indent));
+        }
+    }
+    column.top += DETAIL_GAP;
+    fields
 }
 
 fn tray_row(column: &mut TrayColumn<'_>, row: &TrayRow) {

@@ -1,7 +1,7 @@
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2::runtime::Sel;
-use objc2_app_kit::{NSColor, NSFont, NSLineBreakMode, NSView};
+use objc2_app_kit::{NSColor, NSFont, NSLineBreakMode, NSTextField, NSView};
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 use crate::button_style::ButtonStyle;
@@ -39,6 +39,24 @@ impl TrayColumn<'_> {
         let height = field.fittingSize().height;
         self.add(field.into_super().into_super(), MARGIN, NSSize::new(self.width, height));
         self.top += height;
+    }
+
+    pub(crate) fn indented_line(
+        &mut self,
+        text: &str,
+        (font, color): (&NSFont, &NSColor),
+        indent: f64,
+    ) -> Retained<NSTextField> {
+        let field = label(self.marker, text, font, color, NSLineBreakMode::ByWordWrapping);
+        field.setPreferredMaxLayoutWidth(self.width - indent);
+        let height = field.fittingSize().height;
+        self.add(
+            field.clone().into_super().into_super(),
+            MARGIN + indent,
+            NSSize::new(self.width - indent, height),
+        );
+        self.top += height;
+        field
     }
 
     pub(crate) fn buttons(&mut self, buttons: &[(&str, Sel, bool)]) -> Retained<ShellButton> {

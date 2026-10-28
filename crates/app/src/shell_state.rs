@@ -2,7 +2,7 @@ use std::io;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use domovoi_index::{Category, ModelEvent};
+use domovoi_index::{Category, ModelEvent, NodeId};
 use domovoi_render::{DiagramMode, NodeOrigin, ROOT, SmallGroups};
 use domovoi_theme::Palette;
 use objc2::rc::Retained;
@@ -21,6 +21,7 @@ use crate::duplicates_state::DuplicatesState;
 use crate::event_watch::EventWatch;
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::hover_tip::HoverTip;
+use crate::index_facts::is_bundle;
 use crate::recommendations_model::RecommendationsModel;
 use crate::scan_job::ScanJob;
 use crate::scan_stage::ScanStage;
@@ -183,6 +184,21 @@ impl ShellState {
     pub(crate) fn hover_tip(&self, node: usize) -> Option<HoverTip> {
         let data = self.data.as_ref()?;
         HoverTip::for_node(data, self.session.as_ref().and_then(Session::index), node)
+    }
+
+    pub(crate) fn indexed_node(&self, node: usize) -> Option<NodeId> {
+        match self.data.as_ref()?.tree.node(node).origin {
+            NodeOrigin::Indexed(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn offers_application_removal(&self, node: usize) -> bool {
+        let index = self.session.as_ref().and_then(Session::index);
+        match (self.indexed_node(node), index) {
+            (Some(id), Some(index)) => is_bundle(index, id),
+            _ => false,
+        }
     }
 
     pub(crate) fn offers_tmutil(&self, node: usize) -> bool {

@@ -222,6 +222,19 @@ pub const DELETING: &str = "Удаляю:";
 pub const DELETED: &str = "Удалено:";
 pub const FREED: &str = "освобождено";
 pub const NOT_DELETED: &str = "Не удалено:";
+pub const REMOVE_WITH_FILES: &str = "Удалить вместе с файлами";
+pub const WITH_ITS_FILES: &str = "и его файлы";
+pub const AND_MORE: &str = "и ещё";
+pub const NOT_MARKED_NAME_ONLY: &str = "Не отмечено — совпадает только имя";
+pub const OWNER: &str = "Владелец:";
+pub const OWNER_REMOVED: &str = "приложение удалено";
+pub const REMOVAL_BUNDLE: &str = "само приложение";
+pub const OWNER_BUNDLE_ID_NAME: &str = "папка названа его bundle id";
+pub const OWNER_CONTAINER_METADATA: &str = "метаданные контейнера";
+pub const OWNER_APP_GROUP: &str = "группа из подписи приложения";
+pub const OWNER_TEAM_PREFIX: &str = "Team ID разработчика в имени группы";
+pub const OWNER_LAUNCHD: &str = "задание launchd указывает на приложение";
+pub const OWNER_NAME_ONLY: &str = "совпадает только имя — проверьте сами";
 pub const DELETE_UNITS: PluralForms = PluralForms {
     one: "файла",
     few: "файлов",

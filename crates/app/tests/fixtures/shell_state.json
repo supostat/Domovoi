@@ -466,6 +466,24 @@
      },
      "amount": 7200000000,
      "selected": true
+    },
+    {
+     "title": "Данные удалённых программ",
+     "paths": [
+      "~/Library/Containers/com.oldapp.Viewer",
+      "~/Library/Group Containers/ABCDE12345.com.oldapp"
+     ],
+     "path_reasons": [
+      "метаданные контейнера",
+      "Team ID разработчика в имени группы"
+     ],
+     "explanation": "Данные программы, которой больше нет на диске. Внутри могут быть настройки и документы — посмотрите перед удалением.",
+     "level": "check_yourself",
+     "provenance": {
+      "rule": "apps.leftover-data"
+     },
+     "amount": 3100000000,
+     "selected": false
     }
    ]
   },
@@ -559,6 +577,20 @@
      "category": "dev",
      "title": "node_modules и zig-cache",
      "size": 7200000000
+    },
+    {
+     "category": "apps",
+     "title": "TinyApp и его файлы",
+     "size": 1700000000,
+     "details": [
+      "/Applications/TinyApp.app · само приложение",
+      "~/Library/Containers/com.tinyapp.TinyApp · метаданные контейнера",
+      "~/Library/Group Containers/group.com.tinyapp · группа из подписи приложения",
+      "~/Library/LaunchAgents/com.tinyapp.helper.plist · задание launchd указывает на приложение"
+     ],
+     "unmarked": [
+      "~/Library/Application Support/TinyApp"
+     ]
     }
    ],
    "held_by_snapshots": 2400000000,

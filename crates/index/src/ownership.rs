@@ -1,4 +1,4 @@
-use crate::app::AppId;
+use crate::app::{AppId, Installation};
 use crate::index::Index;
 use crate::node_id::NodeId;
 use crate::owner_evidence::OwnerEvidence;
@@ -27,6 +27,22 @@ impl Index {
             root,
             evidence,
         })
+    }
+
+    pub fn owned_by_bundle(&self, bundle_path: &str) -> Vec<NodeId> {
+        let mut roots = Vec::new();
+        let mut pending = vec![self.root()];
+        while let Some(current) = pending.pop() {
+            let installed_here = self.app(self.node(current).app).is_some_and(
+                |app| matches!(&app.installation, Installation::Installed { bundle_path: path } if path == bundle_path),
+            );
+            if installed_here {
+                roots.push(current);
+                continue;
+            }
+            pending.extend(self.children(current));
+        }
+        roots
     }
 
     pub fn owned_roots(&self, app: AppId) -> Vec<NodeId> {

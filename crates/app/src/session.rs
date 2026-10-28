@@ -19,8 +19,8 @@ use domovoi_index::{
 };
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_rules::{
-    CaseRule, ConfigOverrides, DeleteRefusal, DeleteReport, DeleteSubject, Denylist, Recommendations, RuleSet, Tray,
-    running_bundle_ids,
+    AppRemoval, CaseRule, ConfigOverrides, DeleteRefusal, DeleteReport, DeleteSubject, Denylist, Recommendations,
+    RuleSet, Tray, running_bundle_ids,
 };
 use domovoi_scanner::{
     CancelToken, ScanError, ScanOptions, ScanProgress, Since, VolumeEvent, VolumeEventStream, current_event_id, scan,
@@ -321,6 +321,18 @@ impl Session {
             .as_ref()
             .expect("the tray collects nodes of a scanned volume");
         self.tray.add(index, node, rule_id);
+    }
+
+    pub fn add_application_to_tray(&mut self, bundle: NodeId) -> bool {
+        let index = self
+            .index
+            .as_ref()
+            .expect("the tray collects nodes of a scanned volume");
+        let Some(removal) = AppRemoval::of(index, bundle) else {
+            return false;
+        };
+        self.tray.add_application(index, &removal);
+        true
     }
 
     pub fn remove_from_tray(&mut self, node: NodeId) {

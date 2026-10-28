@@ -2,13 +2,14 @@ use std::collections::BTreeSet;
 use std::time::SystemTime;
 
 use domovoi_index::{Index, LastOpenedSource, NodeId};
-use domovoi_rules::{HypothesisCard, Recommendations, RuleCard, RuleSet};
+use domovoi_rules::{Condition, HypothesisCard, Recommendations, RuleCard, RuleSet};
 use domovoi_theme::{DateSource, format_age, format_count, format_size};
 use serde::Deserialize;
 
 use crate::application_name::running_application_name;
 use crate::card_model::CardModel;
 use crate::deny_reason_text::deny_reason_text;
+use crate::owner_reason::evidence_phrase;
 use crate::provenance::Provenance;
 use crate::safety_badge::SafetyBadge;
 use crate::strings::{
@@ -85,6 +86,18 @@ fn rule_card(index: &Index, rules: &RuleSet, card: &RuleCard) -> CardModel {
             .expect("every rule of the table has a title")
             .to_owned(),
         paths: card.items.iter().map(|item| tilde(&index.path(item.node))).collect(),
+        path_reasons: if rule.condition == Some(Condition::OwnerMissing) {
+            card.items
+                .iter()
+                .map(|item| {
+                    index
+                        .ownership(item.node)
+                        .map(|ownership| evidence_phrase(ownership.evidence).to_owned())
+                })
+                .collect()
+        } else {
+            Vec::new()
+        },
         explanation: rule.explanation.to_owned(),
         level: SafetyBadge::from(rule.level),
         provenance: Provenance::Rule(rule.id.to_owned()),
@@ -119,6 +132,7 @@ fn hypothesis_card(index: &Index, card: &HypothesisCard, now: SystemTime) -> Car
             |name| name.to_string_lossy().into_owned(),
         ),
         paths: vec![tilde(&card.hypothesis.path)],
+        path_reasons: Vec::new(),
         explanation: card.hypothesis.explanation.clone(),
         level: SafetyBadge::from(card.level()),
         provenance: Provenance::Hypothesis,

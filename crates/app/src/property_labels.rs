@@ -18,6 +18,7 @@ pub(crate) struct PropertyLabels {
     created: Retained<NSTextField>,
     modified: Retained<NSTextField>,
     inside: Retained<NSTextField>,
+    owner: Retained<NSTextField>,
     note: Retained<NSTextField>,
 }
 
@@ -29,6 +30,8 @@ impl PropertyLabels {
         };
         let note = plain(12.0, 400.0, NSLineBreakMode::ByWordWrapping);
         note.setPreferredMaxLayoutWidth(width);
+        let wrapped_owner = plain(12.0, 400.0, NSLineBreakMode::ByWordWrapping);
+        wrapped_owner.setPreferredMaxLayoutWidth(width);
         Self {
             name: plain(13.0, 600.0, NSLineBreakMode::ByTruncatingTail),
             size: label(marker, "", &mono_font(12.0, 500.0), &color, NSLineBreakMode::ByClipping),
@@ -43,6 +46,7 @@ impl PropertyLabels {
             created: plain(12.0, 400.0, NSLineBreakMode::ByTruncatingTail),
             modified: plain(12.0, 400.0, NSLineBreakMode::ByTruncatingTail),
             inside: plain(12.0, 400.0, NSLineBreakMode::ByTruncatingTail),
+            owner: wrapped_owner,
             note,
         }
     }
@@ -73,6 +77,7 @@ impl PropertyLabels {
             (&*self.created, fact(|facts| facts.created.as_deref()), tokens.dim),
             (&*self.modified, fact(|facts| facts.modified.as_deref()), tokens.dim),
             (&*self.inside, fact(|facts| facts.inside.as_deref()), tokens.text),
+            (&*self.owner, fact(|facts| facts.owner.as_deref()), tokens.mute),
             (&*self.note, tip.note.as_deref().unwrap_or_default(), tokens.mute),
         ];
         FactRows {
@@ -85,7 +90,7 @@ impl PropertyLabels {
         .lay_out()
     }
 
-    fn fields(&self) -> [&NSTextField; 8] {
+    fn fields(&self) -> [&NSTextField; 9] {
         [
             &self.name,
             &self.size,
@@ -94,6 +99,7 @@ impl PropertyLabels {
             &self.created,
             &self.modified,
             &self.inside,
+            &self.owner,
             &self.note,
         ]
     }

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod app_removal;
 mod card_item;
 mod claim_frame;
 mod claim_ledger;
@@ -23,7 +24,9 @@ mod rule_table;
 mod running_applications;
 mod simulator_runtimes;
 mod tray;
+mod tray_application;
 
+pub use app_removal::{AppRemoval, RemovalReason};
 pub use card_item::CardItem;
 pub use config_overrides::ConfigOverrides;
 pub use delete_failure::DeleteFailure;
@@ -42,3 +45,4 @@ pub use rule_table::rule_table;
 pub use running_applications::running_bundle_ids;
 pub use simulator_runtimes::{InstalledSimulatorRuntimes, SimulatorRuntimes};
 pub use tray::{Tray, TrayItem};
+pub use tray_application::TrayApplication;

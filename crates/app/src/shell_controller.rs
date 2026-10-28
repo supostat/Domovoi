@@ -893,6 +893,22 @@ impl ShellController {
         self.show_tray(&model, false);
     }
 
+    fn remove_application(&self, node: usize) {
+        let added = {
+            let mut state = self.state.borrow_mut();
+            let Some(bundle) = state.indexed_node(node) else {
+                return;
+            };
+            let Some(session) = state.session.as_mut() else {
+                return;
+            };
+            session.add_application_to_tray(bundle)
+        };
+        if added {
+            self.open_tray();
+        }
+    }
+
     fn measured_tray(&self) -> TrayModel {
         let (items, estimate) = {
             let state = self.state.borrow();
@@ -1429,6 +1445,12 @@ impl ActionHandler for ShellController {
                 }
             }
             ShellAction::CopyTmutil => self.copy_tmutil(),
+            ShellAction::RemoveApplication(node) => self.remove_application(node),
+            ShellAction::RemoveClickedApplication => {
+                if let Some(node) = self.clicked_row() {
+                    self.remove_application(node);
+                }
+            }
             ShellAction::ExportCsv => self.export_csv(),
             ShellAction::TogglePreview => self.toggle_preview(),
             ShellAction::OpenClickedRow => {
@@ -1493,6 +1515,14 @@ impl ActionHandler for ShellController {
             ShellAction::CopyTmutil => self
                 .clicked_row()
                 .is_some_and(|node| self.state.borrow().offers_tmutil(node)),
+            ShellAction::RemoveApplication(node) => {
+                let state = self.state.borrow();
+                state.gate().allows(action) && state.offers_application_removal(node)
+            }
+            ShellAction::RemoveClickedApplication => self.clicked_row().is_some_and(|node| {
+                let state = self.state.borrow();
+                state.gate().allows(action) && state.offers_application_removal(node)
+            }),
             _ => self.state.borrow().gate().allows(action),
         }
     }

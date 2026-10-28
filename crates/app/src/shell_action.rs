@@ -20,6 +20,8 @@ pub enum ShellAction {
     ShowProperties(usize),
     ShowClickedRowProperties,
     CopyTmutil,
+    RemoveApplication(usize),
+    RemoveClickedApplication,
     ExportCsv,
     TogglePreview,
     Navigate(Section),
@@ -61,6 +63,8 @@ impl ShellAction {
                 | Self::SendCardsToTray
                 | Self::DeleteTray
                 | Self::AddAnswerToTray(_)
+                | Self::RemoveApplication(_)
+                | Self::RemoveClickedApplication
                 | Self::ToggleDuplicateSearch
                 | Self::ApplyDuplicates
                 | Self::AskAssistant

@@ -190,3 +190,34 @@ fn the_collection_list_and_the_card_question_speak_plainly() {
         "the refusal names the macOS Trash, not the collection list"
     );
 }
+
+#[test]
+fn application_removal_states_its_reasons_plainly() {
+    let phrases = [
+        strings::REMOVE_WITH_FILES,
+        strings::WITH_ITS_FILES,
+        strings::NOT_MARKED_NAME_ONLY,
+        strings::OWNER,
+        strings::OWNER_REMOVED,
+        strings::REMOVAL_BUNDLE,
+        strings::OWNER_BUNDLE_ID_NAME,
+        strings::OWNER_CONTAINER_METADATA,
+        strings::OWNER_APP_GROUP,
+        strings::OWNER_TEAM_PREFIX,
+        strings::OWNER_LAUNCHD,
+        strings::OWNER_NAME_ONLY,
+    ];
+    for phrase in phrases {
+        assert!(!phrase.contains('!'), "{phrase} raises its voice");
+        assert!(
+            !phrase.to_lowercase().contains("похоже"),
+            "{phrase} hedges like a hypothesis"
+        );
+    }
+    assert_eq!(strings::REMOVE_WITH_FILES, "Удалить вместе с файлами");
+    assert!(strings::OWNER_NAME_ONLY.ends_with("проверьте сами"));
+    assert_eq!(
+        strings::rule_title("apps.leftover-data"),
+        Some("Данные удалённых программ")
+    );
+}

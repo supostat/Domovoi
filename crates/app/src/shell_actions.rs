@@ -249,6 +249,16 @@ define_class!(
         fn copy_tmutil_for_clicked_row(&self, _sender: Option<&AnyObject>) {
             self.dispatch(ShellAction::CopyTmutil);
         }
+
+        #[unsafe(method(removeApplication:))]
+        fn remove_application(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::RemoveApplication(tag_of(sender)));
+        }
+
+        #[unsafe(method(removeClickedApplication:))]
+        fn remove_clicked_application(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::RemoveClickedApplication);
+        }
     }
 
     unsafe impl NSMenuItemValidation for ShellActions {
@@ -305,6 +315,10 @@ impl ShellActions {
             Some(ShellAction::ShowClickedRowProperties)
         } else if selector == sel!(copyTmutilForClickedRow:) {
             Some(ShellAction::CopyTmutil)
+        } else if selector == sel!(removeApplication:) {
+            node.map(ShellAction::RemoveApplication)
+        } else if selector == sel!(removeClickedApplication:) {
+            Some(ShellAction::RemoveClickedApplication)
         } else if selector == sel!(focusNode:) {
             node.map(ShellAction::Focus)
         } else if selector == sel!(selectUnloadDelay:) {
