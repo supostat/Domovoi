@@ -13,7 +13,7 @@ use domovoi_apfs_sys::SnapshotClass;
 use domovoi_downloader::{
     Catalog, CatalogEntry, DownloadOutcome, Downloader, ModelSource, ModelStore, Sha256Hasher, is_excluded_from_backup,
 };
-use domovoi_index::{ModelEvent, NodeId, Reclaimable};
+use domovoi_index::{ModelEvent, NodeId, Reclaimable, SpaceRecovery};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::Timeouts;
 use domovoi_render::{NodeOrigin, SunburstLayout};
@@ -44,6 +44,7 @@ use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
 use crate::preview_targets::PreviewTargets;
 use crate::provenance::Provenance;
+use crate::purge_job::{PurgeJob, available_capacity};
 use crate::question::Question;
 use crate::recommendations_model::RecommendationsModel;
 use crate::safety_badge::SafetyBadge;
@@ -221,6 +222,7 @@ impl EndToEnd {
             ScenarioStep::ExportCsv { path } => self.export_csv(path),
             ScenarioStep::HiddenSpace => self.hidden_space(),
             ScenarioStep::TmutilCommands => self.tmutil_commands(),
+            ScenarioStep::PurgeSpace { timeout_seconds } => self.purge_space(Duration::from_secs(*timeout_seconds)),
         }
     }
 
@@ -268,6 +270,28 @@ impl EndToEnd {
             "lines": commands.lines().count(),
             "time_machine": time_machine,
             "other": snapshots.len() - time_machine,
+        }))
+    }
+
+    fn purge_space(&self, timeout: Duration) -> Result<Value, String> {
+        let recovery = SpaceRecovery::load().ok_or("this macOS offers no disk-space recovery functions")?;
+        let job = PurgeJob::start(recovery, self.root.clone(), available_capacity, timeout);
+        while !job.is_finished() {
+            thread::sleep(SCAN_POLL);
+        }
+        let progress = job.progress();
+        let (report, error) = match job.finish() {
+            Ok(report) => (Some(report), None),
+            Err(error) => (None, Some(error.to_string())),
+        };
+        Ok(json!({
+            "step": "purge_space",
+            "estimate": report.map_or(progress.estimate, |report| report.estimate),
+            "freed": report.map(|report| report.freed),
+            "available_before": report.map(|report| report.available_before),
+            "available_after": report.map(|report| report.available_after),
+            "finish": report.map(|report| report.finish),
+            "error": error,
         }))
     }
 
@@ -770,5 +794,6 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::ExportCsv { .. } => "export_csv",
         ScenarioStep::HiddenSpace => "hidden_space",
         ScenarioStep::TmutilCommands => "tmutil_commands",
+        ScenarioStep::PurgeSpace { .. } => "purge_space",
     }
 }

@@ -67,4 +67,7 @@ pub enum ScenarioStep {
     },
     HiddenSpace,
     TmutilCommands,
+    PurgeSpace {
+        timeout_seconds: u64,
+    },
 }

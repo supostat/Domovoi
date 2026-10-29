@@ -57,6 +57,7 @@ const MAIL_DOWNLOADS: &str = "Containers/com.apple.mail/Data/Library/Mail Downlo
 const ATTACHMENT: &str = "6F1E2D3C-4B5A-4978-8695-A4B3C2D1E0F9";
 const TRASH: &str = "Users/tester/.Trash";
 const TRASHED: &str = "old.zip";
+const PURGE_TIMEOUT_SECONDS: u64 = 30;
 
 fn manifest_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
@@ -284,6 +285,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     assert_disk_update(&report);
     assert_interface_techniques(&report, &csv);
     assert_scanner_techniques(&report);
+    assert_space_release(&report);
     assert_model_and_answer(&report, &server);
     assert_snapshots(&report);
 }
@@ -342,6 +344,8 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
             {"step": "export_csv", "path": csv},
             {"step": "hidden_space"},
             {"step": "tmutil_commands"},
+            {"step": "purge_space", "timeout_seconds": PURGE_TIMEOUT_SECONDS},
+            {"step": "hidden_space"},
             {"step": "remove_application", "path": mount_point.join(TINY_BUNDLE)},
             {"step": "delete_recommendations", "level": "check_yourself"},
             {"step": "find_duplicates"},
@@ -717,6 +721,48 @@ fn assert_scanner_techniques(report: &Value) {
             .as_u64()
             .map(|all| all - commands["other"].as_u64().unwrap_or(0)),
         "{commands}"
+    );
+}
+
+fn assert_space_release(report: &Value) {
+    let release = step(report, "purge_space");
+    assert_eq!(
+        release["error"],
+        Value::Null,
+        "the release finishes without an error: {release:#}"
+    );
+    assert_eq!(
+        release["estimate"], 0,
+        "an image volume has nothing to recover: {release:#}"
+    );
+    assert_eq!(
+        release["freed"], 0,
+        "nothing is freed where nothing is held: {release:#}"
+    );
+    assert_eq!(
+        release["finish"], "completed",
+        "the mechanism reports its own completion: {release:#}"
+    );
+    let before = release["available_before"]
+        .as_u64()
+        .expect("the available space before the release is reported");
+    let after = release["available_after"]
+        .as_u64()
+        .expect("the available space after the release is reported");
+    assert!(
+        after >= before,
+        "the available space does not shrink from a release: {release:#}"
+    );
+    let hidden = steps(report, "hidden_space");
+    assert_eq!(
+        hidden.len(),
+        2,
+        "the hidden space is measured before and after the release: {report:#}"
+    );
+    assert_eq!(
+        hidden[1]["discrepancy"], false,
+        "the release leaves the volume consistent with the scan: {:#}",
+        hidden[1]
     );
 }
 

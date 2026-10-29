@@ -625,7 +625,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">03</span><h4>Главное окно</h4><p>Диаграмма, список уровня и список «К удалению». Сегменты кликабельны, мелкие объекты каталога собраны в один сегмент. Меню узла: Finder, Terminal, Свойства; вложенная папка с именем родителя подписана «Music ▸ Music». «Скрытое» делится на Purgeable (локальные бэкапы Time Machine, если они включены) и «Не удалось найти» со счётчиком домашних папок других пользователей; при снапшотах меню строки предлагает скопировать команду tmutil.</p></div>
+    <div class="screen-cap"><span class="n">03</span><h4>Главное окно</h4><p>Диаграмма, список уровня и список «К удалению». Сегменты кликабельны, мелкие объекты каталога собраны в один сегмент. Меню узла: Finder, Terminal, Свойства; вложенная папка с именем родителя подписана «Music ▸ Music». «Скрытое» делится на Purgeable (локальные бэкапы Time Machine, если они включены) и «Не удалось найти» со счётчиком домашних папок других пользователей; при снапшотах меню строки предлагает скопировать команду tmutil, при ненулевой оценке purgeable — «Освободить…», открывающий лист «Освобождение».</p></div>
     <div class="mock"><div class="win">
       <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Macintosh HD</div></div>
       <div class="win-body">
@@ -753,6 +753,15 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
         <div class="tray-total"><span style="color:var(--mute)">Будет удалено</span><b id="tray-sum"></b></div>
         <p style="color:var(--dim);font-size:13px;margin-top:10px">Удаление необратимо: файлы не попадают в Корзину macOS. Перед стартом Домовой спросит ещё раз.</p>
         <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost">Отмена</button><button class="btn primary">Удалить</button></div>
+      </div>
+    </div></div>
+    <div class="screen-cap"><h4>Освобождение</h4><p>Сестра списка «К удалению» для места, которое держит сама macOS. Лист на главном окне с теми же тремя состояниями. Подтверждение — «Можно освободить до X» и что уходит: локальные бэкапы Time Machine, если они объясняют purgeable, загруженные копии файлов iCloud, системные кэши; порядок выбирает macOS. Работа — «Освобождаю: X из Y», полоса растёт вместе со свободным местом, кнопка «Остановить». Итог — «Освобождено: X» и одна строка причины, если работа кончилась не сама. Открывается пунктом «Освободить…» на строке Purgeable.</p></div>
+    <div class="mock"><div class="win narrow">
+      <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Освобождение</div></div>
+      <div class="pane">
+        <div class="tray-total"><span style="color:var(--mute)">Можно освободить до</span><b>8,4 ГБ</b></div>
+        <p style="color:var(--dim);font-size:13px;margin-top:10px">Уйдут локальные бэкапы Time Machine, загруженные копии файлов iCloud и системные кэши. Что и в каком порядке — выбирает macOS.</p>
+        <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost">Отмена</button><button class="btn primary">Освободить</button></div>
       </div>
     </div></div>
   </div>
