@@ -1,3 +1,4 @@
+use std::ffi::CStr;
 use std::io;
 use std::mem;
 use std::num::NonZeroUsize;
@@ -15,12 +16,13 @@ use domovoi_dups::{
 };
 use domovoi_index::{
     CacheError, CacheHeader, ChangedPath, DeltaApplied, DirectoryListing, Enrichment, Index, IndexRoot, ModelEvent,
-    NodeId, Reclaimable, open_cache, write_cache,
+    NodeId, Reclaimable, open_cache, query_screen_captures, write_cache,
 };
 use domovoi_inference::{CancelFlag, InferenceBackend};
+use domovoi_log_sys::SystemLog;
 use domovoi_rules::{
     AppRemoval, CaseRule, ConfigOverrides, DeleteRefusal, DeleteReport, DeleteSubject, Denylist, Recommendations,
-    RuleSet, Tray, running_bundle_ids,
+    RuleSet, Tray, running_bundle_ids, screen_capture_location,
 };
 use domovoi_scanner::{
     CancelToken, ScanError, ScanOptions, ScanProgress, Since, VolumeEvent, VolumeEventStream, current_event_id, scan,
@@ -35,6 +37,9 @@ use crate::question::Question;
 use crate::remapping::Remapping;
 use crate::session_error::SessionError;
 use crate::session_paths::SessionPaths;
+
+const LOG_SUBSYSTEM: &CStr = c"com.domovoi.app";
+const LOG_CATEGORY: &CStr = c"session";
 
 #[derive(Debug)]
 pub struct Session {
@@ -63,7 +68,10 @@ impl Session {
             root: root.to_path_buf(),
             paths: paths.clone(),
             header: CacheHeader::current(root, app_version)?,
-            rules: RuleSet::for_volume(root, &ConfigOverrides::default())?,
+            rules: RuleSet::for_volume(
+                root,
+                &ConfigOverrides::read(&paths.home)?.with_screenshot_location(screen_capture_location(&paths.home)),
+            )?,
             denylist: Denylist::new(CaseRule::Insensitive)?,
             enrichment: Enrichment::default(),
             cloud_folders: CloudFolders::of_home(&paths.home),
@@ -137,6 +145,7 @@ impl Session {
         let report = scan(&self.root, &options)?;
         let root = IndexRoot::for_path(&self.root).map_err(ScanError::Root)?;
         self.last_event_id = started_at;
+        self.refresh_screen_captures();
         self.install(Index::build(&report, root, &self.enrichment))
             .map_err(SessionError::Io)?;
         self.persist().map_err(SessionError::Io)
@@ -185,6 +194,7 @@ impl Session {
             return Ok(EventEffect::Ignored);
         }
         let duplicate_paths = self.duplicate_paths();
+        self.refresh_screen_captures();
         let index = self.index.as_mut().expect("deltas apply to a scanned volume");
         let applied = index
             .apply_delta(&pending.request, listings, &self.enrichment)
@@ -369,6 +379,17 @@ impl Session {
         self.rescan_paths(&[copy_path])
             .map_err(|error| CloneReplaceError::Io(io::Error::other(error.to_string())))?;
         Ok(replaced)
+    }
+
+    fn refresh_screen_captures(&mut self) {
+        self.enrichment.screen_captures = match query_screen_captures() {
+            Ok(screen_captures) => screen_captures,
+            Err(error) => {
+                SystemLog::new(LOG_SUBSYSTEM, LOG_CATEGORY)
+                    .error(&format!("Spotlight did not list screen captures: {error}"));
+                Vec::new()
+            }
+        };
     }
 
     fn install(&mut self, index: Index) -> io::Result<()> {

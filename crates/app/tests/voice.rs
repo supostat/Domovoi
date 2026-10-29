@@ -82,6 +82,20 @@ fn every_rule_of_the_table_has_a_title() {
 }
 
 #[test]
+fn cleanup_cards_name_what_the_person_sees_in_finder() {
+    let titles = [
+        ("logs.crash-reports", "Отчёты о сбоях"),
+        ("logs.user", "Журналы программ"),
+        ("mail.downloads", "Вложения из Почты"),
+        ("trash.user", "Корзина"),
+        ("screenshots", "Снимки экрана"),
+    ];
+    for (rule, title) in titles {
+        assert_eq!(strings::rule_title(rule), Some(title), "{rule}");
+    }
+}
+
+#[test]
 fn section_viii_phrases_are_how_the_interface_speaks() {
     let total = RecommendationsModel {
         safe: 87_800_000_000,
