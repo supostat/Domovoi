@@ -48,6 +48,15 @@ const TINY_AGENT: &str = "LaunchAgents/com.domovoi.tiny.helper.plist";
 const NESTED_MUSIC: &str = "Music ▸ Music";
 const ANGLE_TOLERANCE: f64 = 1e-3;
 const CARD_RULE: &str = "cargo.target";
+const LOGS: &str = "Logs";
+const TOOL_LOGS: &str = "Logs/Tool";
+const USER_CRASH_REPORTS: &str = "Logs/DiagnosticReports";
+const SYSTEM_CRASH_REPORTS: &str = "Library/Logs/DiagnosticReports";
+const CRASH_REPORT: &str = "Tool.ips";
+const MAIL_DOWNLOADS: &str = "Containers/com.apple.mail/Data/Library/Mail Downloads";
+const ATTACHMENT: &str = "6F1E2D3C-4B5A-4978-8695-A4B3C2D1E0F9";
+const TRASH: &str = "Users/tester/.Trash";
+const TRASHED: &str = "old.zip";
 
 fn manifest_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
@@ -128,6 +137,25 @@ fn populate(root: &Path) {
     write(&root.join(MUSIC).join(MUSIC).join("song.mp3"), &noise(MEGABYTE, 7));
     write(&root.join(MUSIC).join("Podcasts/talk.mp3"), &noise(MEGABYTE / 2, 8));
     populate_applications(root);
+    populate_cleanup(root);
+}
+
+fn populate_cleanup(root: &Path) {
+    let library = root.join(LIBRARY);
+    write(&library.join(TOOL_LOGS).join("tool.log"), &noise(FRESH_FILE_BYTES, 12));
+    write(
+        &library.join(USER_CRASH_REPORTS).join(CRASH_REPORT),
+        &noise(FRESH_FILE_BYTES, 13),
+    );
+    write(
+        &root.join(SYSTEM_CRASH_REPORTS).join(CRASH_REPORT),
+        &noise(FRESH_FILE_BYTES, 14),
+    );
+    write(
+        &library.join(MAIL_DOWNLOADS).join(ATTACHMENT).join("invoice.pdf"),
+        &noise(FRESH_FILE_BYTES, 15),
+    );
+    write(&root.join(TRASH).join(TRASHED), &noise(FRESH_FILE_BYTES, 16));
 }
 
 fn populate_applications(root: &Path) {
@@ -296,6 +324,7 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
                 "max_tokens_per_step": RANDOM_MODEL_TOKENS_PER_STEP,
             },
             {"step": "delete_recommendations", "level": "safe"},
+            {"step": "delete_recommendations", "level": "recoverable"},
             {"step": "create_file", "path": next_to_deleted, "bytes": FRESH_FILE_BYTES},
             {
                 "step": "await_change",
@@ -314,6 +343,7 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
             {"step": "hidden_space"},
             {"step": "tmutil_commands"},
             {"step": "remove_application", "path": mount_point.join(TINY_BUNDLE)},
+            {"step": "delete_recommendations", "level": "check_yourself"},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
             {
@@ -384,12 +414,54 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
         "the rules find something to free before the delete: {recommendations:#}"
     );
     assert_eq!(
-        report["totals"]["safe"], 0,
-        "the safe recommendations are gone once deleted: {:#}",
-        report["totals"]
+        report["totals"],
+        json!({"safe": 0, "recoverable": 0, "check_yourself": 0}),
+        "the recommendations of every level are gone once deleted"
     );
     assert_delete_and_clone(report, mount_point);
     assert_application_removal(report, mount_point);
+    assert_cleanup_cards(report, mount_point);
+}
+
+fn delete_steps(report: &Value) -> [&Value; 3] {
+    steps(report, "delete_recommendations")
+        .try_into()
+        .unwrap_or_else(|deletes: Vec<&Value>| panic!("one delete per level: {deletes:#?}"))
+}
+
+fn assert_cleanup_cards(report: &Value, mount_point: &Path) {
+    let library = mount_point.join(LIBRARY);
+    let user_reports = library.join(USER_CRASH_REPORTS);
+    let system_reports = mount_point.join(SYSTEM_CRASH_REPORTS);
+    let mail_downloads = library.join(MAIL_DOWNLOADS);
+    let trash = mount_point.join(TRASH);
+    assert_eq!(card_paths(report, "logs.user"), [library.join(TOOL_LOGS)]);
+    let mut crash_reports = card_paths(report, "logs.crash-reports");
+    crash_reports.sort();
+    let mut expected_reports = vec![user_reports.join(CRASH_REPORT), system_reports.join(CRASH_REPORT)];
+    expected_reports.sort();
+    assert_eq!(
+        crash_reports, expected_reports,
+        "the reports go while their folders stay unclaimed"
+    );
+    assert_eq!(card_paths(report, "mail.downloads"), [mail_downloads.join(ATTACHMENT)]);
+    assert_eq!(card_paths(report, "trash.user"), [trash.join(TRASHED)]);
+    let [_, recoverable, check_yourself] = delete_steps(report);
+    for deleted in [recoverable, check_yourself] {
+        assert!(
+            deleted["deleted"].as_u64().is_some_and(|objects| objects > 0),
+            "{deleted:#}"
+        );
+        assert_eq!(deleted["failures"], json!([]), "{deleted:#}");
+        assert_eq!(deleted["paths_left"], 0, "{deleted:#}");
+    }
+    assert!(!mail_downloads.join(ATTACHMENT).exists(), "{recoverable:#}");
+    assert!(!user_reports.join(CRASH_REPORT).exists(), "{recoverable:#}");
+    assert!(!system_reports.join(CRASH_REPORT).exists(), "{recoverable:#}");
+    assert!(!trash.join(TRASHED).exists(), "{check_yourself:#}");
+    for folder in [&trash, &user_reports, &system_reports, &mail_downloads] {
+        assert!(folder.is_dir(), "{} stays", folder.display());
+    }
 }
 
 fn card_paths(report: &Value, rule: &str) -> Vec<PathBuf> {
@@ -466,7 +538,7 @@ fn assert_application_removal(report: &Value, mount_point: &Path) {
 }
 
 fn assert_delete_and_clone(report: &Value, mount_point: &Path) {
-    let deleted = step(report, "delete_recommendations");
+    let [deleted, _, _] = delete_steps(report);
     let expected = deleted["expected"].as_u64().expect("the tray total is reported");
     assert!(expected > 0, "{deleted:#}");
     assert!(
@@ -514,6 +586,12 @@ fn assert_delete_and_clone(report: &Value, mount_point: &Path) {
     assert!(!mount_point.join("Projects/engine/target").exists());
     assert!(!mount_point.join("Projects/site/node_modules").exists());
     assert!(mount_point.join("Projects/frozen/target/debug/frozen").exists());
+    let library = mount_point.join(LIBRARY);
+    assert!(
+        !library.join(TOOL_LOGS).exists(),
+        "the safe delete takes the program logs: {deleted:#}"
+    );
+    assert!(library.join(LOGS).is_dir(), "the logs folder itself stays");
     assert!(
         step(report, "find_duplicates")["groups"]
             .as_array()
