@@ -136,6 +136,10 @@ name = "smoke_inference_client"
 harness = false
 
 [[test]]
+name = "quit_job"
+harness = false
+
+[[test]]
 name = "claude_code"
 required-features = ["claude-code"]
 

@@ -89,6 +89,10 @@ impl PropertiesPanel {
         self.popover
             .showRelativeToRect_ofView_preferredEdge(rect, anchor, NSRectEdge::MinY);
     }
+
+    pub(crate) fn close(&self) {
+        self.popover.close();
+    }
 }
 
 fn panel_button(

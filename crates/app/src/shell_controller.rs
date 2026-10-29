@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::ffi::CStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,6 +11,7 @@ use block2::RcBlock;
 use domovoi_downloader::{Catalog, ModelStore};
 use domovoi_dups::SearchError;
 use domovoi_index::Reclaimable;
+use domovoi_log_sys::SystemLog;
 use domovoi_render::{
     DiagramChange, DiagramGraphics, DiagramMode, DiagramObserver, DiagramRenderer, DiagramState, DiagramView,
     GlyphAtlas, NodeOrigin,
@@ -20,8 +22,8 @@ use objc2::rc::{Retained, autoreleasepool};
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
     NSAlert, NSAlertFirstButtonReturn, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
-    NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSModalResponseOK, NSPasteboard,
-    NSPasteboardTypeString, NSSavePanel, NSView, NSWindow, NSWindowStyleMask, NSWorkspace,
+    NSApplication, NSApplicationTerminateReply, NSAutoresizingMaskOptions, NSBackingStoreType, NSModalResponseOK,
+    NSPasteboard, NSPasteboardTypeString, NSSavePanel, NSView, NSWindow, NSWindowStyleMask, NSWorkspace,
     NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification, NSWorkspaceOpenConfiguration,
 };
 use objc2_foundation::{
@@ -71,6 +73,7 @@ use crate::notification_center::ScanNotifier;
 use crate::preview_source::PreviewSource;
 use crate::preview_targets::PreviewTargets;
 use crate::properties_panel::PropertiesPanel;
+use crate::quit_job::QuitJob;
 use crate::recommendations_screen::RecommendationsScreen;
 use crate::scan_job::ScanJob;
 use crate::scan_notice::scan_finished_line;
@@ -110,6 +113,8 @@ const DISK_UTILITY_BUNDLE: &str = "com.apple.DiskUtility";
 const DELETE_TICK: f64 = 0.1;
 const ESCAPE: &str = "\u{1b}";
 const OPEN: &str = "/usr/bin/open";
+const LOG_SUBSYSTEM: &CStr = c"com.domovoi.app";
+const LOG_CATEGORY: &CStr = c"quit";
 
 mod assistant_actions;
 
@@ -215,7 +220,33 @@ impl ShellController {
         }
     }
 
+    pub(crate) fn should_terminate(&self) -> NSApplicationTerminateReply {
+        if self.state.borrow().quitting.is_some() {
+            return NSApplicationTerminateReply::TerminateCancel;
+        }
+        let Some(session) = self.state.borrow_mut().session.take() else {
+            return NSApplicationTerminateReply::TerminateNow;
+        };
+        self.hover.hide();
+        self.properties.close();
+        self.window.orderOut(None);
+        self.stop_background_work();
+        let marker = self.marker;
+        let saving = QuitJob::start(session, move |saved| {
+            if let Err(error) = saved {
+                SystemLog::new(LOG_SUBSYSTEM, LOG_CATEGORY).error(&format!("The scan cache was not saved: {error}"));
+            }
+            NSApplication::sharedApplication(marker).replyToApplicationShouldTerminate(true);
+        });
+        self.state.borrow_mut().quitting = Some(saving);
+        NSApplicationTerminateReply::TerminateLater
+    }
+
     pub(crate) fn application_will_terminate(&self) {
+        self.stop_background_work();
+    }
+
+    fn stop_background_work(&self) {
         self.dock.borrow_mut().clear();
         self.state.borrow_mut().assistant.shutdown();
         let mut state = self.state.borrow_mut();
@@ -228,11 +259,6 @@ impl ShellController {
         if let Some(run) = state.delete.take() {
             run.stop();
             run.finish();
-        }
-        if let Some(session) = state.session.as_mut()
-            && let Err(error) = session.persist()
-        {
-            eprintln!("domovoi: {error}");
         }
     }
 

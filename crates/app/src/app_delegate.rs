@@ -5,8 +5,8 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObjectProtocol};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSApplication, NSApplicationDelegate, NSControlStateValueOff, NSControlStateValueOn, NSMenuItem,
-    NSMenuItemValidation,
+    NSApplication, NSApplicationDelegate, NSApplicationTerminateReply, NSControlStateValueOff, NSControlStateValueOn,
+    NSMenuItem, NSMenuItemValidation,
 };
 use objc2_foundation::{NSNotification, NSObject};
 
@@ -107,6 +107,16 @@ define_class!(
             if let Some(controller) = self.ivars().controller.get() {
                 controller.application_became_active();
             }
+        }
+
+        #[unsafe(method(applicationShouldTerminate:))]
+        fn application_should_terminate(&self, _sender: &NSApplication) -> NSApplicationTerminateReply {
+            self.ivars()
+                .controller
+                .get()
+                .map_or(NSApplicationTerminateReply::TerminateNow, |controller| {
+                    controller.should_terminate()
+                })
         }
 
         #[unsafe(method(applicationWillTerminate:))]

@@ -22,6 +22,7 @@ use crate::event_watch::EventWatch;
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::hover_tip::HoverTip;
 use crate::index_facts::is_bundle;
+use crate::quit_job::QuitJob;
 use crate::recommendations_model::RecommendationsModel;
 use crate::scan_job::ScanJob;
 use crate::scan_stage::ScanStage;
@@ -65,6 +66,7 @@ pub(crate) struct ShellState {
     pub tray_measurement: Option<TrayMeasurement>,
     pub delete: Option<DeleteRun>,
     pub applying: Option<ApplyJob>,
+    pub quitting: Option<QuitJob>,
     pub settings_opened: bool,
     pub scan_without_access: bool,
     pub contrast_observer: Option<Retained<ProtocolObject<dyn NSObjectProtocol>>>,
@@ -102,6 +104,7 @@ impl ShellState {
             tray_measurement: None,
             delete: None,
             applying: None,
+            quitting: None,
             settings_opened: false,
             scan_without_access: false,
             contrast_observer: None,
