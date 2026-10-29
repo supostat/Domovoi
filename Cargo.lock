@@ -407,6 +407,8 @@ dependencies = [
 name = "domovoi-index"
 version = "0.1.0"
 dependencies = [
+ "block2",
+ "dispatch2",
  "domovoi-apfs-sys",
  "domovoi-scanner",
  "domovoi-testkit",

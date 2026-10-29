@@ -42,6 +42,8 @@ mod query;
 mod reach;
 mod reclaimable;
 mod safety_level;
+#[allow(unsafe_code)]
+mod space_recovery;
 mod spliced_directory;
 mod stale_delta;
 mod time_machine;
@@ -77,6 +79,7 @@ pub use query::Query;
 pub use reach::Reach;
 pub use reclaimable::{Reclaimable, measure_reclaimable};
 pub use safety_level::{SafetyLevel, SafetyLevels};
+pub use space_recovery::{RecoveryHandle, RecoveryOutcome, SpaceRecovery};
 pub use spliced_directory::SplicedDirectory;
 pub use stale_delta::StaleDelta;
 pub use time_machine::{TIME_MACHINE_PLIST, TimeMachineSettings};
