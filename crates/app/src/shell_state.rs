@@ -2,7 +2,7 @@ use std::io;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use domovoi_index::{Category, ModelEvent, NodeId};
+use domovoi_index::{Category, ModelEvent, NodeId, SpaceRecovery};
 use domovoi_render::{DiagramMode, NodeOrigin, ROOT, SmallGroups};
 use domovoi_theme::Palette;
 use objc2::rc::Retained;
@@ -22,6 +22,7 @@ use crate::event_watch::EventWatch;
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::hover_tip::HoverTip;
 use crate::index_facts::is_bundle;
+use crate::purge_sheet::PurgeSheet;
 use crate::quit_job::QuitJob;
 use crate::recommendations_model::RecommendationsModel;
 use crate::scan_job::ScanJob;
@@ -65,6 +66,8 @@ pub(crate) struct ShellState {
     pub tray: Option<TraySheet>,
     pub tray_measurement: Option<TrayMeasurement>,
     pub delete: Option<DeleteRun>,
+    pub recovery: Option<SpaceRecovery>,
+    pub purge: Option<PurgeSheet>,
     pub applying: Option<ApplyJob>,
     pub quitting: Option<QuitJob>,
     pub settings_opened: bool,
@@ -103,6 +106,8 @@ impl ShellState {
             tray: None,
             tray_measurement: None,
             delete: None,
+            recovery: SpaceRecovery::load(),
+            purge: None,
             applying: None,
             quitting: None,
             settings_opened: false,
@@ -116,7 +121,7 @@ impl ShellState {
     pub(crate) fn gate(&self) -> ShellGate {
         ShellGate {
             session_open: self.session.is_some(),
-            tray_open: self.tray.is_some(),
+            tray_open: self.tray.is_some() || self.purge.is_some(),
             searching: self.search.is_some(),
         }
     }
@@ -205,12 +210,22 @@ impl ShellState {
     }
 
     pub(crate) fn offers_tmutil(&self, node: usize) -> bool {
+        self.is_hidden_row(node) && !self.overview().volumes.snapshots.is_empty()
+    }
+
+    pub(crate) fn offers_purge(&self, node: usize) -> bool {
+        self.is_hidden_row(node)
+            && self.recovery.is_some()
+            && self.purge.is_none()
+            && self.overview().volumes.purgeable.value > 0
+    }
+
+    fn is_hidden_row(&self, node: usize) -> bool {
         let Some(data) = self.data.as_ref() else {
             return false;
         };
         let name = &data.tree.node(node).name;
-        let hidden_row = name == DIAGRAM.category_name(Category::Hidden) || name == PURGEABLE;
-        hidden_row && !self.overview().volumes.snapshots.is_empty()
+        name == DIAGRAM.category_name(Category::Hidden) || name == PURGEABLE
     }
 
     pub(crate) fn node_path(&self, node: usize) -> Option<PathBuf> {

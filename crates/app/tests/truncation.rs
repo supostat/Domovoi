@@ -2,9 +2,10 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use domovoi_app::{
-    Breadcrumbs, CardModel, Crumb, HoverPanel, HoverTip, LevelRow, LevelRowView, MainScreen, MemberModel, Provenance,
-    RecommendationCard, SafetyBadge, ScanningScreen, Screen, Section, ShellActions, ShellFixture, ShellPalette,
-    SidebarEntry, SidebarItemView, TrayModel, TrayRow, TrayScreen, development_fonts, member_row, strings,
+    Breadcrumbs, CardModel, Crumb, HoverPanel, HoverTip, LevelRow, LevelRowView, MainScreen, MemberModel,
+    NARROW_WINDOW, Provenance, PurgeFinish, PurgeModel, PurgeProgress, PurgeReport, PurgeScreen, RecommendationCard,
+    SafetyBadge, ScanningScreen, Screen, Section, ShellActions, ShellFixture, ShellPalette, SidebarEntry,
+    SidebarItemView, TrayModel, TrayRow, TrayScreen, development_fonts, member_row, strings,
 };
 use domovoi_index::Category;
 use domovoi_render::{DiagramMode, register_fonts};
@@ -30,6 +31,9 @@ const CRUMB_STEP: f64 = 10.0;
 const CRUMB_HEIGHT: f64 = 30.0;
 const ELLIPSIS: &str = "…";
 const IN_CLOUD_BYTES: u64 = 12_000_000_000;
+const PURGE_ESTIMATE: u64 = 8_400_000_000;
+const PURGE_FREED: u64 = 1_200_000_000;
+const PURGE_AVAILABLE: u64 = 10_000_000_000;
 const CRUMBS: [&str; 7] = [
     "Macintosh HD",
     "Пользователи · igor",
@@ -424,6 +428,59 @@ fn tray_application_group(checks: &mut Checks, marker: MainThreadMarker) {
     }
 }
 
+fn purge_sheet(checks: &mut Checks, marker: MainThreadMarker) {
+    let report = PurgeReport {
+        estimate: PURGE_ESTIMATE,
+        freed: PURGE_FREED,
+        available_before: PURGE_AVAILABLE,
+        available_after: PURGE_AVAILABLE + PURGE_FREED,
+        finish: PurgeFinish::TimedOut,
+    };
+    let states = [
+        (
+            "confirming",
+            PurgeModel::Confirming {
+                estimate: PURGE_ESTIMATE,
+                time_machine: true,
+            },
+            strings::PURGE_RELEASE,
+        ),
+        (
+            "releasing",
+            PurgeModel::Releasing(PurgeProgress {
+                estimate: PURGE_ESTIMATE,
+                freed: PURGE_FREED,
+            }),
+            strings::STOP,
+        ),
+        ("released", PurgeModel::Released(Ok(report)), strings::CLOSE),
+        (
+            "refused",
+            PurgeModel::Released(Err(LONG_PATH.to_owned())),
+            strings::CLOSE,
+        ),
+    ];
+    let actions = ShellActions::new(marker);
+    for (name, model, primary) in states {
+        let screen = PurgeScreen::build(marker, &model, &palette(), &actions);
+        let element = format!("purge sheet {name}");
+        let title = screen.primary.title().to_string();
+        checks.expect(title == primary, format!("{element}: primary button {title}"));
+        checks.expect(
+            screen.probes.accent_button.is_some(),
+            format!("{element}: the primary button is probed"),
+        );
+        checks.expect(
+            (screen.size().width - NARROW_WINDOW.width).abs() < 0.5,
+            format!("{element}: the sheet keeps the narrow width"),
+        );
+        checks.expect(!screen.lines.is_empty(), format!("{element}: the state speaks"));
+        for (position, line) in screen.lines.iter().enumerate() {
+            checks.wraps_whole(line, &format!("{element}, line {position}"));
+        }
+    }
+}
+
 fn duplicate_rows(checks: &mut Checks, marker: MainThreadMarker) {
     let member = MemberModel {
         path: LONG_PATH.to_owned(),
@@ -457,6 +514,7 @@ fn main() -> ExitCode {
     recommendation_card(&mut checks, marker);
     duplicate_rows(&mut checks, marker);
     tray_application_group(&mut checks, marker);
+    purge_sheet(&mut checks, marker);
     if checks.failures.is_empty() {
         println!("truncation: {} checks passed", checks.count);
         ExitCode::SUCCESS

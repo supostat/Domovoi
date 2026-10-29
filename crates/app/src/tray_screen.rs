@@ -7,7 +7,7 @@ use objc2_app_kit::{NSAccessibility, NSLineBreakMode, NSTextField, NSView};
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use crate::delete_outcome::DeleteOutcome;
-use crate::field_ornament::{FieldOrnament, OrnamentInk};
+use crate::field_ornament::FieldOrnament;
 use crate::fill_view::{FillStyle, FillView};
 use crate::label::{label, measure_label};
 use crate::probes::Probes;
@@ -20,7 +20,8 @@ use crate::strings::{
     CANCEL, CLOSE, DELETE, ESTIMATE_MARK, NOT_DELETED, NOT_MARKED_NAME_ONLY, STOP, TRAY, TRAY_EMPTY, TRAY_NOTE,
     WILL_DELETE,
 };
-use crate::tray_column::{MARGIN, TrayColumn};
+use crate::tray_button::TrayButton;
+use crate::tray_column::{GAP, MARGIN, SECTION_GAP, TrayColumn};
 use crate::tray_model::TrayModel;
 use crate::tray_row::TrayRow;
 use crate::ui_font::{interface_font, mono_font};
@@ -28,8 +29,6 @@ use crate::ui_font::{interface_font, mono_font};
 const ROW_HEIGHT: f64 = 40.0;
 const DOT: f64 = 10.0;
 const DOT_RADIUS: f64 = 3.0;
-const GAP: f64 = 12.0;
-const SECTION_GAP: f64 = 22.0;
 const DETAIL_GAP: f64 = 6.0;
 
 #[derive(Debug)]
@@ -75,7 +74,7 @@ impl TrayScreen {
         } else if model.rows.is_empty() {
             column.paragraph(TRAY_EMPTY, &interface_font(14.0, 400.0), &tokens.mute.ns_color());
             column.top += SECTION_GAP;
-            column.buttons(&[(CLOSE, sel!(closeTray:), true)])
+            column.buttons(&[(CLOSE, sel!(closeTray:), TrayButton::Primary)])
         } else {
             details = confirmation(&mut column, model);
             if let Some(deleting) = model.deleting_line() {
@@ -88,9 +87,12 @@ impl TrayScreen {
                     NSSize::new(column.width, PROGRESS_HEIGHT),
                 );
                 column.top += PROGRESS_HEIGHT + SECTION_GAP;
-                column.buttons(&[(STOP, sel!(stopDelete:), true)])
+                column.buttons(&[(STOP, sel!(stopDelete:), TrayButton::Primary)])
             } else {
-                column.buttons(&[(CANCEL, sel!(closeTray:), false), (DELETE, sel!(deleteTray:), true)])
+                column.buttons(&[
+                    (CANCEL, sel!(closeTray:), TrayButton::Secondary),
+                    (DELETE, sel!(deleteTray:), TrayButton::Primary),
+                ])
             }
         };
         let primary_frame = column.primary.expect("the primary button is placed");
@@ -115,21 +117,7 @@ impl TrayScreen {
 
 fn deleted(column: &mut TrayColumn<'_>, outcome: &DeleteOutcome) -> (Retained<ShellButton>, Retained<FieldOrnament>) {
     let tokens = column.palette.tokens;
-    let stitched = FieldOrnament::new(
-        column.marker,
-        NSRect::new(NSPoint::ZERO, NSSize::new(column.width, FieldOrnament::height())),
-        OrnamentInk {
-            outline: tokens.wax,
-            fill: tokens.berry,
-            center: tokens.text,
-        },
-    );
-    column.add(
-        stitched.clone().into_super(),
-        MARGIN,
-        NSSize::new(column.width, FieldOrnament::height()),
-    );
-    column.top += FieldOrnament::height() + SECTION_GAP;
+    let stitched = column.ornament();
     column.paragraph(&outcome.line(), &interface_font(22.0, 600.0), &tokens.text.ns_color());
     if !outcome.failures.is_empty() {
         column.top += GAP;
@@ -139,7 +127,7 @@ fn deleted(column: &mut TrayColumn<'_>, outcome: &DeleteOutcome) -> (Retained<Sh
         }
     }
     column.top += SECTION_GAP;
-    let primary = column.buttons(&[(CLOSE, sel!(closeTray:), true)]);
+    let primary = column.buttons(&[(CLOSE, sel!(closeTray:), TrayButton::Primary)]);
     (primary, stitched)
 }
 
@@ -151,38 +139,13 @@ fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) -> Vec<Retained<
         details.extend(row_details(column, row));
     }
     column.top += GAP;
-    let caption = measure_label(
-        column.marker,
-        WILL_DELETE,
-        &interface_font(13.5, 400.0),
-        &tokens.mute.ns_color(),
-    );
     let total_text = if model.measuring.is_some() {
         format!("{ESTIMATE_MARK} {}", format_size(model.total()))
     } else {
         format_size(model.total())
     };
-    let total = measure_label(
-        column.marker,
-        &total_text,
-        &mono_font(26.0, 600.0),
-        &tokens.wax.ns_color(),
-    );
-    let caption_size = caption.fittingSize();
-    let total_size = total.fittingSize();
-    let line = total_size.height.max(caption_size.height);
-    column.placed.push((
-        caption.into_super().into_super(),
-        MARGIN,
-        column.top + line - caption_size.height,
-        caption_size,
-    ));
-    column.add(
-        total.into_super().into_super(),
-        MARGIN + column.width - total_size.width,
-        total_size,
-    );
-    column.top += line + GAP;
+    column.figure(WILL_DELETE, &total_text);
+    column.top += GAP;
     if let Some(measuring) = model.measuring_line() {
         column.paragraph(&measuring, &interface_font(12.5, 400.0), &tokens.mute.ns_color());
         column.top += GAP / 2.0;

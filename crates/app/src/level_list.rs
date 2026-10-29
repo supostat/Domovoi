@@ -14,7 +14,7 @@ use crate::level_list_source::{LevelListModel, LevelListSource, ROW_HEIGHT};
 use crate::level_row::LevelRow;
 use crate::shell_actions::ShellActions;
 use crate::shell_palette::ShellPalette;
-use crate::strings::{COPY_TMUTIL, OPEN_IN_TERMINAL, PROPERTIES, REMOVE_WITH_FILES, SHOW_IN_FINDER};
+use crate::strings::{COPY_TMUTIL, OPEN_IN_TERMINAL, PROPERTIES, PURGE_SPACE, REMOVE_WITH_FILES, SHOW_IN_FINDER};
 
 #[derive(Debug)]
 pub struct LevelList {
@@ -42,6 +42,7 @@ impl LevelList {
             (OPEN_IN_TERMINAL, sel!(openClickedRowInTerminal:)),
             (PROPERTIES, sel!(showClickedRowProperties:)),
             (COPY_TMUTIL, sel!(copyTmutilForClickedRow:)),
+            (PURGE_SPACE, sel!(purgeSpaceForClickedRow:)),
             (REMOVE_WITH_FILES, sel!(removeClickedApplication:)),
         ];
         for (title, selector) in entries {

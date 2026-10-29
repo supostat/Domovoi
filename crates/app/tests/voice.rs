@@ -201,6 +201,42 @@ fn the_collection_list_and_the_card_question_speak_plainly() {
 }
 
 #[test]
+fn releasing_space_speaks_plainly_and_only_the_menu_item_opens_a_sheet() {
+    assert!(strings::PURGE_SPACE.ends_with('…'), "the menu item opens a sheet");
+    assert!(
+        !strings::PURGE_RELEASE.contains('…'),
+        "the sheet button starts the work"
+    );
+    assert_eq!(strings::PURGE_RELEASE, "Освободить");
+    assert_eq!(strings::PURGE_TITLE, "Освобождение");
+    assert_eq!(strings::PURGING, "Освобождаю:");
+    assert_eq!(strings::PURGED, "Освобождено:");
+    assert!(strings::PURGE_GOES_TIME_MACHINE.contains("Time Machine"));
+    assert!(!strings::PURGE_GOES_PLAIN.contains("Time Machine"));
+    let failed = strings::purge_failed_line("CoreServices refused the recovery with code 5");
+    let texts = [
+        strings::PURGE_SPACE,
+        strings::PURGE_TITLE,
+        strings::PURGE_RELEASE,
+        strings::PURGE_ESTIMATE,
+        strings::PURGE_GOES_TIME_MACHINE,
+        strings::PURGE_GOES_PLAIN,
+        strings::PURGING,
+        strings::PURGED,
+        strings::PURGE_STOPPED,
+        strings::PURGE_TIMED_OUT,
+        strings::PURGE_STALLED,
+        failed.as_str(),
+    ];
+    for text in texts {
+        assert!(!text.contains('!'), "{text:?} exclaims");
+        for phrase in FORBIDDEN {
+            assert!(!text.contains(phrase), "{text:?} uses the forbidden phrase {phrase:?}");
+        }
+    }
+}
+
+#[test]
 fn application_removal_states_its_reasons_plainly() {
     let phrases = [
         strings::REMOVE_WITH_FILES,

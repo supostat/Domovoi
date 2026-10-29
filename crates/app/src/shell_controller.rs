@@ -73,6 +73,12 @@ use crate::notification_center::ScanNotifier;
 use crate::preview_source::PreviewSource;
 use crate::preview_targets::PreviewTargets;
 use crate::properties_panel::PropertiesPanel;
+use crate::purge_job::{PURGE_TIMEOUT, PurgeJob, available_capacity};
+use crate::purge_model::PurgeModel;
+use crate::purge_progress::PurgeProgress;
+use crate::purge_run::{PURGE_TICK, PurgeRun};
+use crate::purge_screen::PurgeScreen;
+use crate::purge_sheet::PurgeSheet;
 use crate::quit_job::QuitJob;
 use crate::recommendations_screen::RecommendationsScreen;
 use crate::scan_job::ScanJob;
@@ -99,6 +105,7 @@ use crate::strings::{
 };
 use crate::tilde::tilde;
 use crate::tmutil_commands::tmutil_commands;
+use crate::tray_button::ESCAPE;
 use crate::tray_measurement::TrayMeasurement;
 use crate::tray_model::TrayModel;
 use crate::tray_screen::TrayScreen;
@@ -111,7 +118,6 @@ const MEASURE_TICK: f64 = 0.25;
 const TERMINAL_BUNDLE: &str = "com.apple.Terminal";
 const DISK_UTILITY_BUNDLE: &str = "com.apple.DiskUtility";
 const DELETE_TICK: f64 = 0.1;
-const ESCAPE: &str = "\u{1b}";
 const OPEN: &str = "/usr/bin/open";
 const LOG_SUBSYSTEM: &CStr = c"com.domovoi.app";
 const LOG_CATEGORY: &CStr = c"quit";
@@ -259,6 +265,13 @@ impl ShellController {
         if let Some(run) = state.delete.take() {
             run.stop();
             run.finish();
+        }
+        if let Some(run) = state.purge.as_mut().and_then(|sheet| sheet.run.take()) {
+            run.stop();
+            if let Err(error) = run.finish() {
+                SystemLog::new(LOG_SUBSYSTEM, LOG_CATEGORY)
+                    .error(&format!("The space release was not finished: {error}"));
+            }
         }
     }
 
@@ -997,18 +1010,7 @@ impl ShellController {
         let window = if let Some(sheet) = existing {
             sheet.window
         } else {
-            let window = unsafe {
-                NSWindow::initWithContentRect_styleMask_backing_defer(
-                    NSWindow::alloc(self.marker),
-                    NSRect::new(NSPoint::ZERO, screen.size()),
-                    NSWindowStyleMask::Titled,
-                    NSBackingStoreType::Buffered,
-                    false,
-                )
-            };
-            unsafe { window.setReleasedWhenClosed(false) };
-            self.window.beginSheet_completionHandler(&window, None);
-            window
+            self.begin_sheet(screen.size())
         };
         window.setContentSize(screen.size());
         window.setContentView(Some(&screen.root));
@@ -1020,6 +1022,21 @@ impl ShellController {
             screen,
             model: model.clone(),
         });
+    }
+
+    fn begin_sheet(&self, size: NSSize) -> Retained<NSWindow> {
+        let window = unsafe {
+            NSWindow::initWithContentRect_styleMask_backing_defer(
+                NSWindow::alloc(self.marker),
+                NSRect::new(NSPoint::ZERO, size),
+                NSWindowStyleMask::Titled,
+                NSBackingStoreType::Buffered,
+                false,
+            )
+        };
+        unsafe { window.setReleasedWhenClosed(false) };
+        self.window.beginSheet_completionHandler(&window, None);
+        window
     }
 
     fn refresh_tray(&self) {
@@ -1140,6 +1157,113 @@ impl ShellController {
             state.tray_measurement = None;
             state.tray.take()
         };
+        if let Some(sheet) = sheet {
+            self.window.endSheet(&sheet.window);
+            sheet.window.orderOut(None);
+        }
+        self.show_current();
+    }
+
+    fn purge_space(&self) {
+        let model = {
+            let state = self.state.borrow();
+            if state.purge.is_some() {
+                return;
+            }
+            let overview = state.overview();
+            PurgeModel::Confirming {
+                estimate: overview.volumes.purgeable.value,
+                time_machine: overview.time_machine.explains_purgeable(),
+            }
+        };
+        self.show_purge(model, false);
+    }
+
+    fn show_purge(&self, model: PurgeModel, stitch: bool) {
+        let palette = self.state.borrow().palette;
+        let screen = PurgeScreen::build(self.marker, &model, &palette, &self.actions);
+        let existing = self.state.borrow_mut().purge.take();
+        let (window, run) = match existing {
+            Some(sheet) => (sheet.window, sheet.run),
+            None => (self.begin_sheet(screen.size()), None),
+        };
+        window.setContentSize(screen.size());
+        window.setContentView(Some(&screen.root));
+        if stitch && let Some(ornament) = &screen.ornament {
+            ornament.stitch_once(reduce_motion());
+        }
+        self.state.borrow_mut().purge = Some(PurgeSheet { window, model, run });
+    }
+
+    fn release_purge(&self) {
+        let (recovery, estimate) = {
+            let state = self.state.borrow();
+            let sheet = state
+                .purge
+                .as_ref()
+                .expect("the release button belongs to the open sheet");
+            let recovery = state
+                .recovery
+                .expect("the sheet opens only with the recovery functions");
+            (recovery, sheet.model.estimate())
+        };
+        let timer = self.repeating(PURGE_TICK, ShellController::purge_tick);
+        let job = PurgeJob::start(
+            recovery,
+            PathBuf::from(SYSTEM_DATA_ROOT),
+            available_capacity,
+            PURGE_TIMEOUT,
+        );
+        {
+            let mut state = self.state.borrow_mut();
+            let sheet = state
+                .purge
+                .as_mut()
+                .expect("the release button belongs to the open sheet");
+            sheet.run = Some(PurgeRun::start(job, timer));
+        }
+        self.show_purge(PurgeModel::Releasing(PurgeProgress { estimate, freed: 0 }), false);
+    }
+
+    fn purge_tick(&self) {
+        let watched = {
+            let state = self.state.borrow();
+            state
+                .purge
+                .as_ref()
+                .and_then(|sheet| sheet.run.as_ref())
+                .map(|run| (run.progress(), run.is_finished()))
+        };
+        let Some((progress, finished)) = watched else {
+            return;
+        };
+        if !finished {
+            return self.show_purge(PurgeModel::Releasing(progress), false);
+        }
+        let run = self
+            .state
+            .borrow_mut()
+            .purge
+            .as_mut()
+            .and_then(|sheet| sheet.run.take())
+            .expect("a finished release is running");
+        let outcome = run.finish().map_err(|error| error.to_string());
+        match DiskOverview::measure(Path::new(SYSTEM_DATA_ROOT)) {
+            Ok(overview) => self.state.borrow_mut().overview = Some(overview),
+            Err(error) => return self.fail(&error.to_string()),
+        }
+        self.refresh();
+        self.show_purge(PurgeModel::Released(outcome), true);
+    }
+
+    fn stop_purge(&self) {
+        if let Some(run) = self.state.borrow().purge.as_ref().and_then(|sheet| sheet.run.as_ref()) {
+            run.stop();
+        }
+    }
+
+    fn close_purge(&self) {
+        let sheet = self.state.borrow_mut().purge.take();
         if let Some(sheet) = sheet {
             self.window.endSheet(&sheet.window);
             sheet.window.orderOut(None);
@@ -1506,6 +1630,10 @@ impl ActionHandler for ShellController {
                 }
             }
             ShellAction::CloseTray => self.close_tray(),
+            ShellAction::PurgeSpace => self.purge_space(),
+            ShellAction::ReleasePurge => self.release_purge(),
+            ShellAction::StopPurge => self.stop_purge(),
+            ShellAction::ClosePurge => self.close_purge(),
             ShellAction::AskAssistant => self.ask_assistant(),
             ShellAction::AskAboutCard(position) => self.ask_about_card(position),
             ShellAction::StopAnswer => self.stop_answer(),
@@ -1541,6 +1669,9 @@ impl ActionHandler for ShellController {
             ShellAction::CopyTmutil => self
                 .clicked_row()
                 .is_some_and(|node| self.state.borrow().offers_tmutil(node)),
+            ShellAction::PurgeSpace => self
+                .clicked_row()
+                .is_some_and(|node| self.state.borrow().offers_purge(node)),
             ShellAction::RemoveApplication(node) => {
                 let state = self.state.borrow();
                 state.gate().allows(action) && state.offers_application_removal(node)

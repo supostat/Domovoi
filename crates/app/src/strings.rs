@@ -255,6 +255,23 @@ pub const STOPPED_MIDWAY: &str = "остановлено на середине";
 pub const NOT_STARTED: &str = "не начато";
 pub const CLONED: &str = "Заменено клоном:";
 pub const NOT_CLONED: &str = "Не заменено:";
+pub const PURGE_SPACE: &str = "Освободить…";
+pub const PURGE_TITLE: &str = "Освобождение";
+pub const PURGE_RELEASE: &str = "Освободить";
+pub const PURGE_ESTIMATE: &str = "Можно освободить до";
+pub const PURGE_GOES_TIME_MACHINE: &str = "Уйдут локальные бэкапы Time Machine, загруженные копии файлов iCloud и системные кэши. Что и в каком порядке — выбирает macOS.";
+pub const PURGE_GOES_PLAIN: &str =
+    "Уйдут загруженные копии файлов iCloud и системные кэши. Что и в каком порядке — выбирает macOS.";
+pub const PURGING: &str = "Освобождаю:";
+pub const PURGED: &str = "Освобождено:";
+pub const PURGE_STOPPED: &str = "Остановлено. Остальное macOS освободит сама, когда место понадобится";
+pub const PURGE_TIMED_OUT: &str = "Домовой перестал ждать: macOS освобождала место слишком долго. Остальное она освободит сама, когда место понадобится";
+pub const PURGE_STALLED: &str = "macOS перестала освобождать место, но не сообщила о завершении";
+pub const PURGE_FAILED: &str = "macOS не смогла освободить место:";
+
+pub fn purge_failed_line(error: &str) -> String {
+    format!("{PURGE_FAILED} {error}")
+}
 
 pub const ASK_PLACEHOLDER: &str = "Спросите о своём диске…";
 pub const ASK_PLACEHOLDER_UNLOADED: &str = "Спросите о своём диске — модель загрузится в память с вопросом";

@@ -250,6 +250,26 @@ define_class!(
             self.dispatch(ShellAction::CopyTmutil);
         }
 
+        #[unsafe(method(purgeSpaceForClickedRow:))]
+        fn purge_space_for_clicked_row(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::PurgeSpace);
+        }
+
+        #[unsafe(method(releasePurge:))]
+        fn release_purge(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ReleasePurge);
+        }
+
+        #[unsafe(method(stopPurge:))]
+        fn stop_purge(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::StopPurge);
+        }
+
+        #[unsafe(method(closePurge:))]
+        fn close_purge(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::ClosePurge);
+        }
+
         #[unsafe(method(removeApplication:))]
         fn remove_application(&self, sender: &AnyObject) {
             self.dispatch(ShellAction::RemoveApplication(tag_of(sender)));
@@ -315,6 +335,8 @@ impl ShellActions {
             Some(ShellAction::ShowClickedRowProperties)
         } else if selector == sel!(copyTmutilForClickedRow:) {
             Some(ShellAction::CopyTmutil)
+        } else if selector == sel!(purgeSpaceForClickedRow:) {
+            Some(ShellAction::PurgeSpace)
         } else if selector == sel!(removeApplication:) {
             node.map(ShellAction::RemoveApplication)
         } else if selector == sel!(removeClickedApplication:) {
