@@ -30,6 +30,8 @@ cargo fmt --all -- --check
 | `cargo xtask check-sources` | Падает, если документ или книга расходятся с принятыми решениями. |
 | `cargo xtask theme` | Генерирует `crates/theme/src/generated.rs` из токенов раздела XI книги. |
 | `cargo xtask theme --check` | Падает, если сгенерированный модуль расходится с книгой. |
+| `cargo xtask icon` | Рисует набор PNG иконки `assets/icon/AppIcon.iconset` из `design/icon`: слоты до 32 px — упрощённый рисунок, остальные — полный. |
+| `cargo xtask icon --check` | Падает, если набор PNG расходится с рисунками SVG. |
 
 ## Переменные тестов и бенчей
 

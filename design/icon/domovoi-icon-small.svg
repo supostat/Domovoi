@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+      <linearGradient id="small-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#232A3E"/><stop offset="1" stop-color="#11141D"/></linearGradient>
+      <linearGradient id="small-sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".13"/><stop offset=".45" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+      <clipPath id="small-clip"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+    </defs>
+    <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#small-bg)"/>
+    <g clip-path="url(#small-clip)">
+    <defs><radialGradient id="small-p" cx=".5" cy=".5" r=".55"><stop offset="0" stop-color="#FFE2A0"/><stop offset="1" stop-color="#E3AE52"/></radialGradient></defs>
+    <circle cx="512" cy="512" r="352" fill="none" stroke="#E3AE52" stroke-width="44"/>
+    <path d="M512 512C587.0 383.0 593.0 284.0 512.0 212.0C431.0 284.0 437.0 383.0 512 512Z" fill="url(#small-p)" stroke="#11141D" stroke-width="22" stroke-linejoin="round"/><path d="M512 512C661.2 512.5 750.0 468.1 771.8 362.0C669.0 327.9 586.2 382.5 512 512Z" fill="url(#small-p)" stroke="#11141D" stroke-width="22" stroke-linejoin="round"/><path d="M512 512C586.2 641.5 669.0 696.1 771.8 662.0C750.0 555.9 661.2 511.5 512 512Z" fill="url(#small-p)" stroke="#11141D" stroke-width="22" stroke-linejoin="round"/><path d="M512 512C437.0 641.0 431.0 740.0 512.0 812.0C593.0 740.0 587.0 641.0 512 512Z" fill="url(#small-p)" stroke="#11141D" stroke-width="22" stroke-linejoin="round"/><path d="M512 512C362.8 511.5 274.0 555.9 252.2 662.0C355.0 696.1 437.8 641.5 512 512Z" fill="url(#small-p)" stroke="#11141D" stroke-width="22" stroke-linejoin="round"/><path d="M512 512C437.8 382.5 355.0 327.9 252.2 362.0C274.0 468.1 362.8 512.5 512 512Z" fill="url(#small-p)" stroke="#11141D" stroke-width="22" stroke-linejoin="round"/></g>
+    <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#small-sheen)"/>
+    <rect x="101.5" y="101.5" width="821" height="821" rx="184.5" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="3"/></svg>

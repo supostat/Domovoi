@@ -15,7 +15,11 @@ mod copy_tree;
 mod eval;
 mod fetch_test_models;
 mod finding;
+mod generate_mode;
 mod git;
+mod icon;
+mod icon_artwork;
+mod icon_slot;
 mod notarization;
 mod property_list;
 mod release;
@@ -34,8 +38,9 @@ mod workspace_version;
 use std::process::ExitCode;
 
 use finding::Finding;
+use generate_mode::GenerateMode;
 
-const USAGE: &str = "usage: cargo xtask <check-comments | check-tokens | check-sources | theme [--check] | fetch-test-models | eval --class <compact|standard|extended> | eval --claude-code | bundle --profile <dev|adhoc|release> | check-bundle <app> | release>";
+const USAGE: &str = "usage: cargo xtask <check-comments | check-tokens | check-sources | theme [--check] | icon [--check] | fetch-test-models | eval --class <compact|standard|extended> | eval --claude-code | bundle --profile <dev|adhoc|release> | check-bundle <app> | release>";
 
 fn main() -> ExitCode {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -43,8 +48,10 @@ fn main() -> ExitCode {
         ["check-comments"] => check_comments::run(),
         ["check-tokens"] => check_tokens::run(),
         ["check-sources"] => check_sources::run(),
-        ["theme"] => theme::run(theme::Mode::Write),
-        ["theme", "--check"] => theme::run(theme::Mode::Check),
+        ["theme"] => theme::run(GenerateMode::Write),
+        ["theme", "--check"] => theme::run(GenerateMode::Check),
+        ["icon"] => icon::run(GenerateMode::Write),
+        ["icon", "--check"] => icon::run(GenerateMode::Check),
         ["fetch-test-models"] => fetch_test_models::run(),
         ["eval", "--class", class] => eval::run(class),
         ["eval", "--claude-code"] => eval::run_claude_code(),

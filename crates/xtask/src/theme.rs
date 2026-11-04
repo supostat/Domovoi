@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use scraper::{Html, Selector};
 
 use crate::finding::Finding;
+use crate::generate_mode::GenerateMode;
 use crate::theme_codegen;
 use crate::theme_stylesheet::theme_blocks;
 use crate::theme_tokens::ThemeTokens;
@@ -13,13 +14,7 @@ use crate::workspace;
 const DESIGN_BOOK: &str = "design/domovoi-design-book.html";
 const GENERATED_MODULE: &str = "crates/theme/src/generated.rs";
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum Mode {
-    Write,
-    Check,
-}
-
-pub(crate) fn run(mode: Mode) -> io::Result<Vec<Finding>> {
+pub(crate) fn run(mode: GenerateMode) -> io::Result<Vec<Finding>> {
     let root = workspace::root();
     let book = fs::read_to_string(root.join(DESIGN_BOOK))?;
     let tokens = ThemeTokens::from_blocks(&theme_blocks(&stylesheet(&book))?)?;
@@ -34,11 +29,11 @@ pub(crate) fn run(mode: Mode) -> io::Result<Vec<Finding>> {
         return Ok(Vec::new());
     }
     match mode {
-        Mode::Write => {
+        GenerateMode::Write => {
             fs::write(&module_path, generated)?;
             Ok(Vec::new())
         }
-        Mode::Check => Ok(vec![stale_module(module_path, &committed, &generated)]),
+        GenerateMode::Check => Ok(vec![stale_module(module_path, &committed, &generated)]),
     }
 }
 
