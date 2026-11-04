@@ -7,10 +7,12 @@ use domovoi_render::{DiagramMode, NodeOrigin, ROOT, SmallGroups};
 use domovoi_theme::Palette;
 use objc2::rc::Retained;
 use objc2::runtime::{NSObjectProtocol, ProtocolObject};
+use objc2_foundation::NSTimer;
 
 use crate::access_state::AccessState;
 use crate::apply_job::ApplyJob;
 use crate::assistant::Assistant;
+use crate::cached_tray_summary::CachedTraySummary;
 use crate::care_models::CareModels;
 use crate::delete_run::DeleteRun;
 use crate::disk_overview::DiskOverview;
@@ -75,6 +77,10 @@ pub(crate) struct ShellState {
     pub contrast_observer: Option<Retained<ProtocolObject<dyn NSObjectProtocol>>>,
     pub assistant: Assistant,
     pub pending_model_events: Vec<ModelEvent>,
+    pub drag: Option<Vec<PathBuf>>,
+    pub drag_refusal: Option<String>,
+    pub refusal_timer: Option<Retained<NSTimer>>,
+    pub tray_summary: Option<CachedTraySummary>,
 }
 
 impl ShellState {
@@ -115,6 +121,10 @@ impl ShellState {
             contrast_observer: None,
             assistant,
             pending_model_events: Vec::new(),
+            drag: None,
+            drag_refusal: None,
+            refusal_timer: None,
+            tray_summary: None,
         }
     }
 

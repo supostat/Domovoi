@@ -7,4 +7,5 @@ pub struct LevelRow {
     pub size_text: String,
     pub share: f64,
     pub category: Category,
+    pub draggable: bool,
 }

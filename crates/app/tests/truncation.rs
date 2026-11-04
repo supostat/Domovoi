@@ -2,10 +2,11 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use domovoi_app::{
-    Breadcrumbs, CardModel, Crumb, DeleteStatus, HoverPanel, HoverTip, LevelRow, LevelRowView, MainScreen, MemberModel,
-    NARROW_WINDOW, Provenance, PurgeFinish, PurgeModel, PurgeProgress, PurgeReport, PurgeScreen, RecommendationCard,
-    SafetyBadge, ScanningScreen, Screen, Section, ShellActions, ShellFixture, ShellPalette, SidebarEntry,
-    SidebarItemView, TrayModel, TrayRow, TrayScreen, development_fonts, member_row, strings,
+    Breadcrumbs, CardModel, Crumb, DeleteStatus, DropHover, DropKind, HoverPanel, HoverTip, LevelRow, LevelRowView,
+    MainScreen, MemberModel, NARROW_WINDOW, Provenance, PurgeFinish, PurgeModel, PurgeProgress, PurgeReport,
+    PurgeScreen, RecommendationCard, SafetyBadge, ScanningScreen, Screen, Section, ShellActions, ShellFixture,
+    ShellPalette, SidebarEntry, SidebarItemView, TrayModel, TrayRow, TrayScreen, TraySummary, development_fonts,
+    member_row, strings,
 };
 use domovoi_index::Category;
 use domovoi_render::{DiagramMode, register_fonts};
@@ -123,6 +124,7 @@ fn level_rows(checks: &mut Checks, marker: MainThreadMarker) {
         size_text: SIZE_TEXT.to_owned(),
         share: 1.0,
         category: Category::Dev,
+        draggable: true,
     };
     for width in [360.0, NARROW_ROW] {
         let host = container(marker, width, ROW_HEIGHT);
@@ -321,6 +323,43 @@ fn head(checks: &mut Checks, marker: MainThreadMarker) {
     checks.expect(
         right_edge(&screen.crumbs) <= crumbs.size.width + 0.5,
         format!("the crumbs fit their frame: {:?}", titles(&screen.crumbs)),
+    );
+    let longest = TraySummary {
+        objects: 12_345,
+        bytes: 1_234_500_000_000,
+    };
+    screen.show_tray_summary(&longest.title());
+    head_in_order(checks, &screen, "a long tray summary");
+    screen.arm_tray(DropHover {
+        kind: DropKind::Add,
+        title: format!("{} 12 345 из 12 346 · ≈ 1 234,5 ГБ", strings::DROP_ADD),
+    });
+    head_in_order(checks, &screen, "a drag over a long tray summary");
+}
+
+fn head_in_order(checks: &mut Checks, screen: &MainScreen, case: &str) {
+    let cloud = screen.in_cloud.as_ref().expect("the head shows the cloud figure");
+    let frames = [
+        ("crumbs", screen.crumbs.frame()),
+        ("switch", screen.modes.view.frame()),
+        ("cloud", cloud.frame()),
+        ("free", screen.free.frame()),
+        ("tray", screen.tray.body_frame()),
+    ];
+    for pair in frames.windows(2) {
+        let ((left_name, left), (right_name, right)) = (pair[0], pair[1]);
+        checks.expect(
+            left.origin.x + left.size.width <= right.origin.x,
+            format!("{case}: the {left_name} {left:?} runs into the {right_name} {right:?}"),
+        );
+    }
+    let crumbs = screen.crumbs.frame();
+    checks.expect(
+        right_edge(&screen.crumbs) <= crumbs.size.width + 0.5,
+        format!(
+            "{case}: the crumbs fit their shrunk frame: {:?}",
+            titles(&screen.crumbs)
+        ),
     );
 }
 

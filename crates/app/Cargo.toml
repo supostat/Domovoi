@@ -72,6 +72,7 @@ objc2-app-kit = { workspace = true, features = [
   "NSOutlineView",
   "NSPanel",
   "NSPasteboard",
+  "NSPasteboardItem",
   "NSPopover",
   "NSParagraphStyle",
   "NSResponder",
@@ -117,6 +118,10 @@ domovoi-xpc-sys = { workspace = true, features = ["adhoc"] }
 
 [[test]]
 name = "truncation"
+harness = false
+
+[[test]]
+name = "tray_drop_button"
 harness = false
 
 [[test]]

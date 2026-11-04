@@ -170,6 +170,7 @@ impl ShellData {
                     size_text: format_size(node.size),
                     share: node.size as f64 / largest as f64,
                     category: node.category,
+                    draggable: matches!(node.origin, NodeOrigin::Indexed(_)),
                 }
             })
             .collect()

@@ -34,6 +34,9 @@ pub enum ShellAction {
     ApplyDuplicates,
     DeleteTray,
     UnmarkTrayRow(usize),
+    DragFromList,
+    DragEnded,
+    DropOnTray,
     StopDelete,
     CloseTray,
     PurgeSpace,
@@ -68,6 +71,8 @@ impl ShellAction {
                 | Self::SendCardsToTray
                 | Self::DeleteTray
                 | Self::UnmarkTrayRow(_)
+                | Self::DragFromList
+                | Self::DropOnTray
                 | Self::AddAnswerToTray(_)
                 | Self::RemoveApplication(_)
                 | Self::RemoveClickedApplication

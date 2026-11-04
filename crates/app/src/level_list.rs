@@ -1,10 +1,11 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
-use objc2::{MainThreadMarker, MainThreadOnly, sel};
+use objc2::{MainThreadMarker, MainThreadOnly, Message, sel};
 use objc2_app_kit::{
-    NSMenu, NSMenuItem, NSScrollView, NSTableColumn, NSTableView, NSTableViewColumnAutoresizingStyle, NSTableViewStyle,
+    NSDragOperation, NSMenu, NSMenuItem, NSScrollView, NSTableColumn, NSTableView, NSTableViewColumnAutoresizingStyle,
+    NSTableViewStyle,
 };
 
 use crate::preview_table::PreviewTable;
@@ -62,12 +63,18 @@ impl LevelList {
             table.setTarget(Some(actions.target()));
             table.setDoubleAction(Some(sel!(openClickedRow:)));
         }
+        table.setAllowsMultipleSelection(true);
+        table.setDraggingSourceOperationMask_forLocal(NSDragOperation::Copy, true);
+        table.setDraggingSourceOperationMask_forLocal(NSDragOperation::None, false);
         let source = LevelListSource::new(
             marker,
             LevelListModel {
                 rows: RefCell::new(Vec::new()),
                 palette,
                 width: frame.size.width - 4.0,
+                actions: actions.retain(),
+                dragged: RefCell::new(Vec::new()),
+                drag_end: Cell::new(None),
             },
         );
         unsafe {

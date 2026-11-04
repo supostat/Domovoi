@@ -2,11 +2,11 @@ use domovoi_render::{DiagramMode, DiagramState};
 use domovoi_theme::format_size;
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, sel};
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSLineBreakMode, NSTextField, NSView};
+use objc2_app_kit::{NSAccessibility, NSAutoresizingMaskOptions, NSLineBreakMode, NSTextField, NSView};
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use crate::breadcrumbs::Breadcrumbs;
-use crate::button_style::ButtonStyle;
+use crate::drop_hover::DropHover;
 use crate::label::{label, measure_label, retext};
 use crate::legend::legend;
 use crate::legend_entry::LegendEntry;
@@ -16,11 +16,11 @@ use crate::section::Section;
 use crate::segmented_switch::SegmentedSwitch;
 use crate::shell_actions::ShellActions;
 use crate::shell_actions::{SUNBURST_SEGMENT, TREEMAP_SEGMENT};
-use crate::shell_button::ShellButton;
 use crate::shell_data::ShellData;
 use crate::shell_layout::{PANE_PADDING, WINDOW, from_top};
 use crate::shell_palette::ShellPalette;
-use crate::strings::{DIAGRAM, IN_CLOUD, OUTSIDE_TOTAL, SOURCE_SCAN, SUNBURST, TRAY, TREEMAP};
+use crate::strings::{DIAGRAM, IN_CLOUD, OUTSIDE_TOTAL, SOURCE_SCAN, SUNBURST, TREEMAP};
+use crate::tray_drop_button::{RING_MARGIN, TrayDropButton};
 use crate::ui_font::{interface_font, mono_font};
 use crate::window_frame::WindowFrame;
 
@@ -32,6 +32,7 @@ const BODY_TOP: f64 = 70.0;
 const LIST_GAP: f64 = 24.0;
 const LEGEND_TOP_GAP: f64 = 16.0;
 const NOTICE_GAP: f64 = 12.0;
+const REFUSAL_GAP: f64 = 6.0;
 
 #[derive(Debug)]
 pub struct MainScreen {
@@ -40,7 +41,8 @@ pub struct MainScreen {
     pub list: LevelList,
     pub free: Retained<NSTextField>,
     pub in_cloud: Option<Retained<NSTextField>>,
-    pub tray: Retained<ShellButton>,
+    pub tray: Retained<TrayDropButton>,
+    pub refusal: Retained<NSTextField>,
     pub modes: SegmentedSwitch,
     pub diagram_frame: NSRect,
     pub probes: Probes,
@@ -65,19 +67,18 @@ impl MainScreen {
         let right = pane.width - PANE_PADDING;
         let pinned_top = NSAutoresizingMaskOptions::ViewMinYMargin;
         let pinned_top_right = NSAutoresizingMaskOptions::ViewMinXMargin | NSAutoresizingMaskOptions::ViewMinYMargin;
-        let tray = ShellButton::new(
+        let tray = TrayDropButton::new(marker, palette, actions);
+        tray.set_body_height(HEAD_HEIGHT);
+        let refusal = label(
             marker,
-            TRAY,
-            NSPoint::ZERO,
-            HEAD_HEIGHT,
-            ButtonStyle {
-                fill: Some(tokens.wax.ns_color()),
-                border: None,
-                text: tokens.wax_ink.ns_color(),
-                font: interface_font(13.0, 600.0),
-            },
+            "",
+            &interface_font(12.0, 400.0),
+            &tokens.risk.ns_color(),
+            NSLineBreakMode::ByTruncatingTail,
         );
-        tray.on_click(actions, sel!(openTray:));
+        refusal.setDrawsBackground(true);
+        refusal.setBackgroundColor(Some(&tokens.bg.ns_color()));
+        refusal.setHidden(true);
         let free = measure_label(marker, "", &mono_font(12.0, 400.0), &tokens.dim.ns_color());
         let in_cloud = (data.in_cloud_bytes > 0).then(|| {
             let cloud = measure_label(marker, "", &mono_font(12.0, 400.0), &tokens.dim.ns_color());
@@ -121,6 +122,8 @@ impl MainScreen {
             NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
         frame.pane.addSubview(&list.scroll);
+        refusal.setAutoresizingMask(pinned_top_right);
+        frame.pane.addSubview(&refusal);
         let mut screen = Self {
             frame,
             crumbs,
@@ -128,6 +131,7 @@ impl MainScreen {
             free,
             in_cloud,
             tray,
+            refusal,
             modes,
             diagram_frame,
             probes: Probes {
@@ -140,7 +144,7 @@ impl MainScreen {
             legend_views: Vec::new(),
         };
         screen.show(data, focus);
-        let tray_frame = screen.tray.frame();
+        let tray_frame = screen.tray.body_frame();
         screen.probes.accent_button = Some([
             WindowFrame::pane_origin_x() + tray_frame.origin.x,
             HEAD_TOP,
@@ -166,9 +170,39 @@ impl MainScreen {
         self.show_legend(data);
     }
 
+    pub fn show_tray_summary(&self, title: &str) {
+        self.tray.show_summary(title);
+        self.lay_out_head();
+    }
+
+    pub fn arm_tray(&self, hover: DropHover) {
+        self.tray.arm(hover);
+        self.lay_out_head();
+    }
+
+    pub fn disarm_tray(&self) {
+        self.tray.disarm();
+        self.lay_out_head();
+    }
+
+    pub fn show_refusal(&self, line: Option<&str>) {
+        match line {
+            Some(line) => {
+                retext(&self.refusal, line);
+                let full = NSString::from_str(line);
+                self.refusal.setToolTip(Some(&full));
+                self.refusal.setAccessibilityLabel(Some(&full));
+                self.refusal.setHidden(false);
+            }
+            None => self.refusal.setHidden(true),
+        }
+        self.lay_out_head();
+    }
+
     fn lay_out_head(&self) {
         let pane = self.frame.pane.frame().size;
-        let mut right_edge = place_head(&self.tray, pane, pane.width - PANE_PADDING);
+        let mut right_edge = place_head(&self.tray, pane, pane.width - PANE_PADDING + RING_MARGIN) + RING_MARGIN;
+        self.lay_out_refusal(pane);
         right_edge = place_head(&self.free, pane, right_edge);
         if let Some(cloud) = &self.in_cloud {
             right_edge = place_head(cloud, pane, right_edge);
@@ -179,6 +213,19 @@ impl MainScreen {
             PANE_PADDING,
             HEAD_TOP,
             NSSize::new(crumbs_right - PANE_PADDING, HEAD_HEIGHT),
+        ));
+    }
+
+    fn lay_out_refusal(&self, pane: NSSize) {
+        let body = self.tray.body_frame();
+        let right = body.origin.x + body.size.width;
+        let width = self.refusal.fittingSize().width.min(right - PANE_PADDING);
+        let height = self.refusal.fittingSize().height;
+        self.refusal.setFrame(from_top(
+            pane,
+            right - width,
+            HEAD_TOP + HEAD_HEIGHT + REFUSAL_GAP,
+            NSSize::new(width, height),
         ));
     }
 

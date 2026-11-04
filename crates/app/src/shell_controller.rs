@@ -27,8 +27,7 @@ use objc2_app_kit::{
     NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification, NSWorkspaceOpenConfiguration,
 };
 use objc2_foundation::{
-    NSArray, NSBundle, NSIndexSet, NSInteger, NSNotFound, NSNotification, NSOperationQueue, NSPoint, NSRect, NSSize,
-    NSString, NSTimer, NSUInteger, NSURL,
+    NSArray, NSBundle, NSInteger, NSNotification, NSOperationQueue, NSPoint, NSRect, NSSize, NSString, NSTimer, NSURL,
 };
 use objc2_quick_look_ui::QLPreviewPanel;
 
@@ -41,6 +40,7 @@ use crate::assistant_screen::AssistantScreen;
 use crate::assistant_settings::AssistantSettings;
 use crate::bundle_resources::diagram_metallib;
 use crate::cache_opening::CacheOpening;
+use crate::cached_tray_summary::CachedTraySummary;
 use crate::care_models::CareModels;
 #[cfg(feature = "claude-code")]
 use crate::claude_search::installed_claude_code;
@@ -53,6 +53,7 @@ use crate::delete_status::DeleteStatus;
 use crate::diagram_preference::{remember_mode, remember_small_groups, remembered_mode, remembered_small_groups};
 use crate::disk_overview::{DiskOverview, SYSTEM_DATA_ROOT};
 use crate::dock_progress::DockProgress;
+use crate::drop_kind::DropKind;
 use crate::duplicate_job::DuplicateJob;
 use crate::duplicate_key::DuplicateKey;
 use crate::duplicate_summary::DuplicateSummary;
@@ -87,6 +88,7 @@ use crate::scanning_screen::{ScanningScreen, center_lines};
 use crate::screen_key::ScreenKey;
 use crate::screen_views::ScreenViews;
 use crate::section::Section;
+use crate::selected_rows::selected_rows;
 use crate::session::Session;
 use crate::session_error::SessionError;
 use crate::session_paths::SessionPaths;
@@ -118,6 +120,7 @@ const MEASURE_TICK: f64 = 0.25;
 const TERMINAL_BUNDLE: &str = "com.apple.Terminal";
 const DISK_UTILITY_BUNDLE: &str = "com.apple.DiskUtility";
 const DELETE_TICK: f64 = 0.1;
+const REFUSAL_SHOWN: Duration = Duration::from_secs(4);
 const OPEN: &str = "/usr/bin/open";
 const LOG_SUBSYSTEM: &CStr = c"com.domovoi.app";
 const LOG_CATEGORY: &CStr = c"quit";
@@ -521,6 +524,114 @@ impl ShellController {
 
     fn show_current(&self) {
         autoreleasepool(|_| self.show_current_views());
+        self.refresh_tray_summary();
+    }
+
+    fn refresh_tray_summary(&self) {
+        let mut state = self.state.borrow_mut();
+        let ShellState {
+            views: Some(ScreenViews::Main { screen, .. }),
+            session: Some(session),
+            tray_summary,
+            ..
+        } = &mut *state
+        else {
+            return;
+        };
+        let index = session.index().expect("the main screen shows a scanned volume");
+        let items: Vec<PathBuf> = session.tray().items().iter().map(|item| item.path.clone()).collect();
+        let fresh = tray_summary
+            .as_ref()
+            .is_some_and(|cached| cached.generation == index.generation() && cached.items == items);
+        if !fresh {
+            *tray_summary = Some(CachedTraySummary {
+                generation: index.generation(),
+                items,
+                summary: session.tray_summary(),
+            });
+        }
+        let summary = tray_summary.as_ref().expect("the summary is cached").summary;
+        screen.show_tray_summary(&summary.title());
+    }
+
+    fn drag_from_list(&self) {
+        self.hide_refusal();
+        let mut state = self.state.borrow_mut();
+        let Some(ScreenViews::Main { screen, .. }) = &state.views else {
+            return;
+        };
+        let rows = screen.list.source.dragged_rows();
+        let data = state.data.as_ref().expect("the main screen shows built data");
+        let level = data.level_rows(state.focus);
+        let session = state.session.as_ref().expect("a drag reads an open session");
+        let index = session.index().expect("the main screen shows a scanned volume");
+        let paths: Vec<PathBuf> = rows
+            .iter()
+            .filter_map(|row| level.get(*row))
+            .filter_map(|row| state.indexed_node(row.node))
+            .map(|node| index.path(node))
+            .collect();
+        let verdict = session.judge_drop(&paths);
+        screen.arm_tray(verdict.hover());
+        let refusal = verdict.refusal_line();
+        state.drag = Some(paths);
+        state.drag_refusal = refusal;
+    }
+
+    fn drop_on_tray(&self) {
+        let verdict = {
+            let mut state = self.state.borrow_mut();
+            let paths = state.drag.clone().expect("a drop follows the start of a drag");
+            let session = state.session.as_mut().expect("a drop reads an open session");
+            session.drop_into_tray(&paths)
+        };
+        if let Some(line) = verdict.refusal_line() {
+            self.show_refusal(&line);
+        }
+        self.refresh_tray_summary();
+    }
+
+    fn drag_ended(&self) {
+        let refusal = {
+            let mut state = self.state.borrow_mut();
+            state.drag = None;
+            let refusal = state.drag_refusal.take();
+            let Some(ScreenViews::Main { screen, .. }) = &state.views else {
+                return;
+            };
+            let refused_over_tray = screen.tray.hover_kind() == Some(DropKind::Denied)
+                && screen
+                    .list
+                    .source
+                    .drag_end()
+                    .is_some_and(|end| !end.accepted && screen.tray.contains_screen_point(end.screen_point));
+            screen.disarm_tray();
+            refusal.filter(|_| refused_over_tray)
+        };
+        if let Some(line) = refusal {
+            self.show_refusal(&line);
+        }
+    }
+
+    fn show_refusal(&self, line: &str) {
+        let timer = self.once(REFUSAL_SHOWN, ShellController::hide_refusal);
+        let mut state = self.state.borrow_mut();
+        if let Some(previous) = state.refusal_timer.replace(timer) {
+            previous.invalidate();
+        }
+        if let Some(ScreenViews::Main { screen, .. }) = &state.views {
+            screen.show_refusal(Some(line));
+        }
+    }
+
+    fn hide_refusal(&self) {
+        let mut state = self.state.borrow_mut();
+        if let Some(timer) = state.refusal_timer.take() {
+            timer.invalidate();
+        }
+        if let Some(ScreenViews::Main { screen, .. }) = &state.views {
+            screen.show_refusal(None);
+        }
     }
 
     fn show_current_views(&self) {
@@ -1167,6 +1278,7 @@ impl ShellController {
         }
         let model = self.measured_tray();
         self.show_tray(&model, false);
+        self.refresh_tray_summary();
     }
 
     fn close_tray(&self) {
@@ -1649,6 +1761,9 @@ impl ActionHandler for ShellController {
             }
             ShellAction::CloseTray => self.close_tray(),
             ShellAction::UnmarkTrayRow(position) => self.unmark_tray_row(position),
+            ShellAction::DragFromList => self.drag_from_list(),
+            ShellAction::DragEnded => self.drag_ended(),
+            ShellAction::DropOnTray => self.drop_on_tray(),
             ShellAction::PurgeSpace => self.purge_space(),
             ShellAction::ReleasePurge => self.release_purge(),
             ShellAction::StopPurge => self.stop_purge(),
@@ -1713,19 +1828,6 @@ fn open_disk_utility() {
             None,
         );
     }
-}
-
-fn selected_rows(indexes: &NSIndexSet) -> impl Iterator<Item = usize> + '_ {
-    let absent = NSUInteger::try_from(NSNotFound).expect("NSNotFound is a positive sentinel");
-    let mut next = indexes.firstIndex();
-    std::iter::from_fn(move || {
-        if next == absent {
-            return None;
-        }
-        let current = next;
-        next = indexes.indexGreaterThanIndex(next);
-        Some(current)
-    })
 }
 
 fn sync_assistant(state: &mut ShellState, previous: Option<&ScreenViews>) {

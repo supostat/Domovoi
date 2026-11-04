@@ -1,17 +1,23 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use objc2::rc::Retained;
-use objc2::runtime::NSObjectProtocol;
+use objc2::runtime::{NSObjectProtocol, ProtocolObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 
 use objc2_app_kit::{
-    NSControlTextEditingDelegate, NSTableColumn, NSTableView, NSTableViewDataSource, NSTableViewDelegate, NSView,
+    NSControlTextEditingDelegate, NSDragOperation, NSDraggingSession, NSPasteboardItem, NSPasteboardWriting,
+    NSTableColumn, NSTableView, NSTableViewDataSource, NSTableViewDelegate, NSView,
 };
 use objc2_core_foundation::CGFloat;
-use objc2_foundation::{NSInteger, NSObject, NSString};
+use objc2_foundation::{NSIndexSet, NSInteger, NSObject, NSPoint, NSString};
 
+use crate::drag_end::DragEnd;
 use crate::level_row::LevelRow;
 use crate::level_row_cell::LevelRowCell;
+use crate::node_pasteboard::node_type;
+use crate::selected_rows::selected_rows;
+use crate::shell_action::ShellAction;
+use crate::shell_actions::ShellActions;
 use crate::shell_palette::ShellPalette;
 
 pub(crate) const ROW_HEIGHT: CGFloat = 44.0;
@@ -22,6 +28,9 @@ pub struct LevelListModel {
     pub rows: RefCell<Vec<LevelRow>>,
     pub palette: ShellPalette,
     pub width: f64,
+    pub actions: Retained<ShellActions>,
+    pub dragged: RefCell<Vec<usize>>,
+    pub drag_end: Cell<Option<DragEnd>>,
 }
 
 define_class!(
@@ -37,6 +46,48 @@ define_class!(
         #[unsafe(method(numberOfRowsInTableView:))]
         fn row_count(&self, _table: &NSTableView) -> NSInteger {
             NSInteger::try_from(self.ivars().rows.borrow().len()).expect("a level has few rows")
+        }
+
+        #[unsafe(method_id(tableView:pasteboardWriterForRow:))]
+        fn pasteboard_writer(
+            &self,
+            _table: &NSTableView,
+            row: NSInteger,
+        ) -> Option<Retained<ProtocolObject<dyn NSPasteboardWriting>>> {
+            let rows = self.ivars().rows.borrow();
+            usize::try_from(row)
+                .ok()
+                .and_then(|row| rows.get(row))
+                .filter(|row| row.draggable)
+                .map(|row| {
+                    let item = NSPasteboardItem::new();
+                    item.setString_forType(&NSString::from_str(&row.node.to_string()), &node_type());
+                    ProtocolObject::from_retained(item)
+                })
+        }
+
+        #[unsafe(method(tableView:draggingSession:willBeginAtPoint:forRowIndexes:))]
+        fn drag_began(&self, _table: &NSTableView, _session: &NSDraggingSession, _point: NSPoint, rows: &NSIndexSet) {
+            let model = self.ivars();
+            model.dragged.replace(selected_rows(rows).collect());
+            model.drag_end.set(None);
+            model.actions.dispatch(ShellAction::DragFromList);
+        }
+
+        #[unsafe(method(tableView:draggingSession:endedAtPoint:operation:))]
+        fn drag_ended(
+            &self,
+            _table: &NSTableView,
+            _session: &NSDraggingSession,
+            point: NSPoint,
+            operation: NSDragOperation,
+        ) {
+            let model = self.ivars();
+            model.drag_end.set(Some(DragEnd {
+                screen_point: point,
+                accepted: operation != NSDragOperation::None,
+            }));
+            model.actions.dispatch(ShellAction::DragEnded);
         }
     }
 
@@ -75,6 +126,14 @@ impl LevelListSource {
     pub fn new(marker: MainThreadMarker, model: LevelListModel) -> Retained<Self> {
         let this = Self::alloc(marker).set_ivars(model);
         unsafe { msg_send![super(this), init] }
+    }
+
+    pub fn dragged_rows(&self) -> Vec<usize> {
+        self.ivars().dragged.borrow().clone()
+    }
+
+    pub fn drag_end(&self) -> Option<DragEnd> {
+        self.ivars().drag_end.get()
     }
 
     pub fn show(&self, rows: Vec<LevelRow>) -> bool {
