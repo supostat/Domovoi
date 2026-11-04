@@ -2,7 +2,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use domovoi_app::{
-    Breadcrumbs, CardModel, Crumb, HoverPanel, HoverTip, LevelRow, LevelRowView, MainScreen, MemberModel,
+    Breadcrumbs, CardModel, Crumb, DeleteStatus, HoverPanel, HoverTip, LevelRow, LevelRowView, MainScreen, MemberModel,
     NARROW_WINDOW, Provenance, PurgeFinish, PurgeModel, PurgeProgress, PurgeReport, PurgeScreen, RecommendationCard,
     SafetyBadge, ScanningScreen, Screen, Section, ShellActions, ShellFixture, ShellPalette, SidebarEntry,
     SidebarItemView, TrayModel, TrayRow, TrayScreen, development_fonts, member_row, strings,
@@ -428,6 +428,51 @@ fn tray_application_group(checks: &mut Checks, marker: MainThreadMarker) {
     }
 }
 
+fn tray_unmark_row(checks: &mut Checks, marker: MainThreadMarker) {
+    let model = TrayModel {
+        rows: vec![TrayRow {
+            category: Category::Dev,
+            title: LONG_NAME.to_owned(),
+            size: 2_400_000_000,
+            details: Vec::new(),
+            unmarked: Vec::new(),
+        }],
+        ..TrayModel::default()
+    };
+    let actions = ShellActions::new(marker);
+    let screen = TrayScreen::build(marker, &model, &palette(), &actions);
+    let row = &screen.rows[0];
+    let unmark = row.unmark.as_ref().expect("a confirmed row can be unmarked");
+    checks.mode(&row.title, NSLineBreakMode::ByTruncatingTail, "tray row title");
+    checks.truncated_with_full_text(&row.title, LONG_NAME, "tray row title");
+    checks.never_cut(&row.size, "tray row size");
+    let title = row.title.frame();
+    let size = row.size.frame();
+    let cross = unmark.frame();
+    checks.expect(
+        title.origin.x + title.size.width <= size.origin.x,
+        format!("tray row title {title:?} runs into the size {size:?}"),
+    );
+    checks.expect(
+        size.origin.x + size.size.width <= cross.origin.x,
+        format!("tray row size {size:?} runs into the unmark cross {cross:?}"),
+    );
+    let label = unmark.accessibilityLabel().map(|label| label.to_string());
+    checks.expect(
+        label.as_deref() == Some(format!("{}: {LONG_NAME}", strings::UNMARK).as_str()),
+        format!("unmark cross: VoiceOver label {label:?}"),
+    );
+    let deleting = model.with_deleting(DeleteStatus {
+        files_done: 1,
+        files_total: 2,
+    });
+    let screen = TrayScreen::build(marker, &deleting, &palette(), &actions);
+    checks.expect(
+        screen.rows.iter().all(|row| row.unmark.is_none()),
+        "a row being deleted cannot be unmarked",
+    );
+}
+
 fn purge_sheet(checks: &mut Checks, marker: MainThreadMarker) {
     let report = PurgeReport {
         estimate: PURGE_ESTIMATE,
@@ -514,6 +559,7 @@ fn main() -> ExitCode {
     recommendation_card(&mut checks, marker);
     duplicate_rows(&mut checks, marker);
     tray_application_group(&mut checks, marker);
+    tray_unmark_row(&mut checks, marker);
     purge_sheet(&mut checks, marker);
     if checks.failures.is_empty() {
         println!("truncation: {} checks passed", checks.count);

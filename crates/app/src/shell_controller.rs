@@ -1151,6 +1151,24 @@ impl ShellController {
         self.show_tray(&model, false);
     }
 
+    fn unmark_tray_row(&self, position: usize) {
+        {
+            let mut state = self.state.borrow_mut();
+            let nodes = state
+                .tray
+                .as_ref()
+                .and_then(|sheet| sheet.model.row_nodes.get(position))
+                .cloned()
+                .expect("an unmark button stands on a shown row");
+            let session = state.session.as_mut().expect("the tray belongs to an open session");
+            for node in nodes {
+                session.remove_from_tray(node);
+            }
+        }
+        let model = self.measured_tray();
+        self.show_tray(&model, false);
+    }
+
     fn close_tray(&self) {
         let sheet = {
             let mut state = self.state.borrow_mut();
@@ -1630,6 +1648,7 @@ impl ActionHandler for ShellController {
                 }
             }
             ShellAction::CloseTray => self.close_tray(),
+            ShellAction::UnmarkTrayRow(position) => self.unmark_tray_row(position),
             ShellAction::PurgeSpace => self.purge_space(),
             ShellAction::ReleasePurge => self.release_purge(),
             ShellAction::StopPurge => self.stop_purge(),

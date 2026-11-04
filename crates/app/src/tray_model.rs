@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use domovoi_index::{Index, Reclaimable};
+use domovoi_index::{Index, NodeId, Reclaimable};
 use domovoi_rules::{Tray, TrayItem};
 use domovoi_theme::{format_count, group_thousands};
 use serde::Deserialize;
@@ -32,6 +32,8 @@ pub struct TrayModel {
     pub deleting: Option<DeleteStatus>,
     #[serde(default)]
     pub deleted: Option<DeleteOutcome>,
+    #[serde(skip)]
+    pub row_nodes: Vec<Vec<NodeId>>,
 }
 
 impl TrayModel {
@@ -47,7 +49,7 @@ impl TrayModel {
     }
 
     pub fn measured(index: &Index, tray: &Tray, sizes: &[Reclaimable]) -> Self {
-        let mut rows: Vec<(Option<RowGroup>, TrayRow)> = Vec::new();
+        let mut rows: Vec<(Option<RowGroup>, TrayRow, Vec<NodeId>)> = Vec::new();
         let mut held = Reclaimable::default();
         for (item, reclaimable) in tray.items().iter().zip(sizes.iter().copied()) {
             held += reclaimable;
@@ -56,12 +58,13 @@ impl TrayModel {
             let detail = item
                 .reason
                 .map(|reason| format!("{} · {}", tilde(&item.path), removal_phrase(reason)));
-            if let Some((_, row)) = rows
+            if let Some((_, row, nodes)) = rows
                 .iter_mut()
-                .find(|(existing, _)| group.is_some() && *existing == group)
+                .find(|(existing, _, _)| group.is_some() && *existing == group)
             {
                 row.size += size;
                 row.details.extend(detail);
+                nodes.push(item.node);
             } else {
                 let row = TrayRow {
                     category: index.node(item.node).category,
@@ -70,23 +73,25 @@ impl TrayModel {
                     details: detail.into_iter().collect(),
                     unmarked: unmarked_paths(tray, item),
                 };
-                rows.push((group, row));
+                rows.push((group, row, vec![item.node]));
             }
         }
+        let (rows, row_nodes): (Vec<TrayRow>, Vec<Vec<NodeId>>) = rows
+            .into_iter()
+            .map(|(_, mut row, nodes)| {
+                shorten_details(&mut row.details);
+                (row, nodes)
+            })
+            .unzip();
         Self {
-            rows: rows
-                .into_iter()
-                .map(|(_, mut row)| {
-                    shorten_details(&mut row.details);
-                    row
-                })
-                .collect(),
+            rows,
             held_by_snapshots: held.held_by_snapshots,
             held_by_clones: held.held_by_clones,
             held_by_hard_links: held.held_by_hard_links,
             measuring: None,
             deleting: None,
             deleted: None,
+            row_nodes,
         }
     }
 

@@ -213,6 +213,8 @@ pub const DROP_ADD: &str = "Добавить";
 pub const DROP_DENIED: &str = "Нельзя:";
 pub const DROP_ALREADY: &str = "Уже в списке";
 pub const NOT_ADDED: &str = "Не добавлено:";
+pub const UNMARK: &str = "Снять отметку";
+pub const UNMARK_MARK: &str = "×";
 pub const REFINING_SIZE: &str = "Уточняю размер:";
 pub const UPDATING_INDEX: &str = "Обновляю индекс…";
 pub const FILES: PluralForms = PluralForms {
@@ -248,8 +250,8 @@ pub const OBJECTS: PluralForms = PluralForms {
     few: "объекта",
     many: "объектов",
 };
-pub const TRAY_EMPTY: &str =
-    "Пока ничего не отмечено к удалению. Отметьте рекомендации или копии дубликатов, и они соберутся здесь.";
+pub const TRAY_EMPTY: &str = "Пока ничего не отмечено к удалению. Перетащите строки списка на кнопку «К удалению», \
+     отметьте рекомендации или копии дубликатов.";
 pub const DELETE_NO_PERMISSION: &str = "нет прав";
 pub const DELETE_READ_ONLY: &str = "том только для чтения";
 pub const DELETE_MISSING: &str = "файла уже нет";

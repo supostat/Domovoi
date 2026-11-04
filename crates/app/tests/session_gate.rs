@@ -1,11 +1,12 @@
 use domovoi_app::{Section, ShellAction, ShellGate};
 use domovoi_render::DiagramMode;
 
-const SESSION_ACTIONS: [ShellAction; 8] = [
+const SESSION_ACTIONS: [ShellAction; 9] = [
     ShellAction::Rescan,
     ShellAction::SendCardsToTray,
     ShellAction::OpenTray,
     ShellAction::DeleteTray,
+    ShellAction::UnmarkTrayRow(0),
     ShellAction::AddAnswerToTray(0),
     ShellAction::ToggleDuplicateSearch,
     ShellAction::ApplyDuplicates,

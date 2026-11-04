@@ -114,6 +114,11 @@ define_class!(
             self.dispatch(ShellAction::StopDelete);
         }
 
+        #[unsafe(method(unmarkTrayRow:))]
+        fn unmark_tray_row(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::UnmarkTrayRow(tag_of(sender)));
+        }
+
         #[unsafe(method(closeTray:))]
         fn close_tray(&self, _sender: Option<&AnyObject>) {
             self.dispatch(ShellAction::CloseTray);

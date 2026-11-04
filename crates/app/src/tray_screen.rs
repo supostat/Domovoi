@@ -6,6 +6,7 @@ use objc2::{MainThreadMarker, sel};
 use objc2_app_kit::{NSAccessibility, NSLineBreakMode, NSTextField, NSView};
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
+use crate::button_style::ButtonStyle;
 use crate::delete_outcome::DeleteOutcome;
 use crate::field_ornament::FieldOrnament;
 use crate::fill_view::{FillStyle, FillView};
@@ -17,19 +18,21 @@ use crate::shell_button::ShellButton;
 use crate::shell_layout::NARROW_WINDOW;
 use crate::shell_palette::ShellPalette;
 use crate::strings::{
-    CANCEL, CLOSE, DELETE, ESTIMATE_MARK, NOT_DELETED, NOT_MARKED_NAME_ONLY, STOP, TRAY, TRAY_EMPTY, TRAY_NOTE,
-    WILL_DELETE,
+    CANCEL, CLOSE, DELETE, ESTIMATE_MARK, NOT_DELETED, NOT_MARKED_NAME_ONLY, STOP, TRAY, TRAY_EMPTY, TRAY_NOTE, UNMARK,
+    UNMARK_MARK, WILL_DELETE,
 };
 use crate::tray_button::TrayButton;
 use crate::tray_column::{GAP, MARGIN, SECTION_GAP, TrayColumn};
 use crate::tray_model::TrayModel;
 use crate::tray_row::TrayRow;
+use crate::tray_row_views::TrayRowViews;
 use crate::ui_font::{interface_font, mono_font};
 
 const ROW_HEIGHT: f64 = 40.0;
 const DOT: f64 = 10.0;
 const DOT_RADIUS: f64 = 3.0;
 const DETAIL_GAP: f64 = 6.0;
+const UNMARK_SIZE: f64 = 24.0;
 
 #[derive(Debug)]
 pub struct TrayScreen {
@@ -37,6 +40,7 @@ pub struct TrayScreen {
     pub primary: Retained<ShellButton>,
     pub(crate) ornament: Option<Retained<FieldOrnament>>,
     pub details: Vec<Retained<NSTextField>>,
+    pub rows: Vec<TrayRowViews>,
     pub probes: Probes,
 }
 
@@ -67,6 +71,7 @@ impl TrayScreen {
         column.top += GAP;
         let mut ornament = None;
         let mut details = Vec::new();
+        let mut rows = Vec::new();
         let primary = if let Some(outcome) = &model.deleted {
             let (primary, stitched) = deleted(&mut column, outcome);
             ornament = Some(stitched);
@@ -76,7 +81,7 @@ impl TrayScreen {
             column.top += SECTION_GAP;
             column.buttons(&[(CLOSE, sel!(closeTray:), TrayButton::Primary)])
         } else {
-            details = confirmation(&mut column, model);
+            (details, rows) = confirmation(&mut column, model);
             if let Some(deleting) = model.deleting_line() {
                 column.paragraph(&deleting, &interface_font(13.5, 600.0), &tokens.text.ns_color());
                 column.top += GAP;
@@ -102,6 +107,7 @@ impl TrayScreen {
             primary,
             ornament,
             details,
+            rows,
             probes: Probes {
                 window_background: [NARROW_WINDOW.width - 6.0, height - 6.0],
                 sidebar: None,
@@ -131,11 +137,13 @@ fn deleted(column: &mut TrayColumn<'_>, outcome: &DeleteOutcome) -> (Retained<Sh
     (primary, stitched)
 }
 
-fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) -> Vec<Retained<NSTextField>> {
+fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) -> (Vec<Retained<NSTextField>>, Vec<TrayRowViews>) {
     let tokens = column.palette.tokens;
+    let unmarkable = model.deleting.is_none();
     let mut details = Vec::new();
-    for row in &model.rows {
-        tray_row(column, row);
+    let mut rows = Vec::new();
+    for (position, row) in model.rows.iter().enumerate() {
+        rows.push(tray_row(column, row, unmarkable.then_some(position)));
         details.extend(row_details(column, row));
     }
     column.top += GAP;
@@ -156,7 +164,7 @@ fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) -> Vec<Retained<
     }
     column.paragraph(TRAY_NOTE, &interface_font(13.0, 400.0), &tokens.dim.ns_color());
     column.top += SECTION_GAP;
-    details
+    (details, rows)
 }
 
 fn row_details(column: &mut TrayColumn<'_>, row: &TrayRow) -> Vec<Retained<NSTextField>> {
@@ -184,7 +192,7 @@ fn row_details(column: &mut TrayColumn<'_>, row: &TrayRow) -> Vec<Retained<NSTex
     fields
 }
 
-fn tray_row(column: &mut TrayColumn<'_>, row: &TrayRow) {
+fn tray_row(column: &mut TrayColumn<'_>, row: &TrayRow, unmark_position: Option<usize>) -> TrayRowViews {
     let tokens = column.palette.tokens;
     let band = FillView::new(
         column.marker,
@@ -222,9 +230,13 @@ fn tray_row(column: &mut TrayColumn<'_>, row: &TrayRow) {
         &mono_font(12.5, 500.0),
         &tokens.mute.ns_color(),
     );
+    let unmark = unmark_position.map(|position| unmark_button(column, row, position));
+    let size_right = unmark
+        .as_ref()
+        .map_or(column.width, |button| button.frame().origin.x - GAP);
     let size_size = size.fittingSize();
     size.setFrameOrigin(NSPoint::new(
-        column.width - size_size.width,
+        size_right - size_size.width,
         (ROW_HEIGHT - size_size.height) / 2.0,
     ));
     let title = label(
@@ -240,14 +252,41 @@ fn tray_row(column: &mut TrayColumn<'_>, row: &TrayRow) {
     let title_height = title.fittingSize().height;
     title.setFrame(NSRect::new(
         NSPoint::new(DOT + GAP, (ROW_HEIGHT - title_height) / 2.0),
-        NSSize::new(
-            (column.width - DOT - 3.0 * GAP - size_size.width).max(0.0),
-            title_height,
-        ),
+        NSSize::new((size_right - DOT - 3.0 * GAP - size_size.width).max(0.0), title_height),
     ));
     for child in [&*rule as &NSView, &dot, &title, &size] {
         band.addSubview(child);
     }
+    if let Some(button) = &unmark {
+        band.addSubview(button);
+    }
     column.add(band.into_super(), MARGIN, NSSize::new(column.width, ROW_HEIGHT));
     column.top += ROW_HEIGHT;
+    TrayRowViews { title, size, unmark }
+}
+
+fn unmark_button(column: &TrayColumn<'_>, row: &TrayRow, position: usize) -> Retained<ShellButton> {
+    let tokens = column.palette.tokens;
+    let button = ShellButton::new(
+        column.marker,
+        UNMARK_MARK,
+        NSPoint::ZERO,
+        UNMARK_SIZE,
+        ButtonStyle {
+            fill: None,
+            border: None,
+            text: tokens.dim.ns_color(),
+            font: interface_font(17.0, 400.0),
+        },
+    );
+    button.setFrame(NSRect::new(
+        NSPoint::new(column.width - UNMARK_SIZE, (ROW_HEIGHT - UNMARK_SIZE) / 2.0),
+        NSSize::new(UNMARK_SIZE, UNMARK_SIZE),
+    ));
+    button.setTag(isize::try_from(position).expect("a tray has few rows"));
+    button.on_click(column.actions, sel!(unmarkTrayRow:));
+    let label = NSString::from_str(&format!("{UNMARK}: {}", row.title));
+    button.setToolTip(Some(&label));
+    button.setAccessibilityLabel(Some(&label));
+    button
 }

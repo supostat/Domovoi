@@ -33,6 +33,7 @@ pub enum ShellAction {
     ToggleCopy(usize),
     ApplyDuplicates,
     DeleteTray,
+    UnmarkTrayRow(usize),
     StopDelete,
     CloseTray,
     PurgeSpace,
@@ -66,6 +67,7 @@ impl ShellAction {
                 | Self::OpenTray
                 | Self::SendCardsToTray
                 | Self::DeleteTray
+                | Self::UnmarkTrayRow(_)
                 | Self::AddAnswerToTray(_)
                 | Self::RemoveApplication(_)
                 | Self::RemoveClickedApplication
