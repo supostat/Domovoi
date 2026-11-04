@@ -146,6 +146,14 @@ h3{margin:44px 0 14px;font:600 13px/1.3 var(--f-ui);letter-spacing:.1em;text-tra
 .btn.ghost{background:transparent;border-color:transparent;color:var(--mute)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn.sm{padding:7px 11px;font-size:12px}
+/* кнопка «К удалению» — приёмник перетаскивания */
+.drop-cell{display:grid;gap:10px;justify-items:start;font-size:12.5px;color:var(--mute)}
+.drop-cell .btn{white-space:nowrap}
+.btn.primary.waiting{box-shadow:0 0 0 3px var(--bg-2),0 0 0 5px color-mix(in srgb,var(--wax) 55%,transparent)}
+.btn.primary.over{box-shadow:0 0 0 3px var(--bg-2),0 0 0 5px var(--wax)}
+.btn.denied{background:var(--surface-2);border-color:var(--surface-2);color:var(--risk);box-shadow:0 0 0 3px var(--bg-2),0 0 0 5px var(--risk)}
+.btn.already{background:var(--surface-2);border-color:var(--surface-2);color:var(--mute);box-shadow:0 0 0 3px var(--bg-2),0 0 0 5px var(--line)}
+.refusal{font:400 12px var(--f-ui);color:var(--risk)}
 .badge{display:inline-flex;align-items:center;gap:6px;font:600 11px/1 var(--f-ui);letter-spacing:.03em;padding:5px 9px;border-radius:999px;white-space:nowrap}
 .badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .b-safe{color:var(--ok);background:var(--ok-soft)}
@@ -296,9 +304,10 @@ svg text{pointer-events:none}
 .keep{font:600 10.5px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
 
 /* к удалению */
-.tray-row{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px;align-items:center}
+.tray-row{display:grid;grid-template-columns:12px minmax(0,1fr) auto 20px;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px;align-items:center}
 .tray-row i{width:10px;height:10px;border-radius:3px}
 .tray-row span{font:500 12.5px var(--f-mono);color:var(--mute);font-variant-numeric:tabular-nums}
+.tray-row b{font:400 16px/1 var(--f-ui);color:var(--dim);text-align:center}
 .tray-total{display:flex;justify-content:space-between;align-items:baseline;padding-top:16px;gap:12px;flex-wrap:wrap}
 .tray-total b{font:600 26px var(--f-mono);font-variant-numeric:tabular-nums;color:var(--wax)}
 
@@ -548,6 +557,18 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
       <label class="switch"><input type="checkbox" id="sw-ai"> Домовой (AI)</label>
     </div>
   </div>
+  <h3>Кнопка «К удалению»</h3>
+  <div class="board">
+    <div class="row" style="gap:22px;align-items:start">
+      <div class="drop-cell"><button class="btn primary">К удалению</button>пусто</div>
+      <div class="drop-cell"><button class="btn primary">К удалению · 3 · ≈ 42,2 ГБ</button>собрано</div>
+      <div class="drop-cell"><button class="btn primary waiting">К удалению · 3 · ≈ 42,2 ГБ</button>строку тащат</div>
+      <div class="drop-cell"><button class="btn primary over">Добавить 2 объекта · ≈ 36,0 ГБ</button>над кнопкой</div>
+      <div class="drop-cell"><button class="btn denied">Нельзя: системный том</button><span class="refusal">Не добавлено: System — системный том</span>под защитой и строка после броска</div>
+      <div class="drop-cell"><button class="btn already">Уже в списке</button>папка или её родитель уже отмечены</div>
+    </div>
+    <p style="color:var(--mute);font-size:13px;margin:0">Приёмник перетаскивания строк списка уровня. Кольцо ожидания — без движения; над кнопкой заголовок говорит, что будет, ширина держится по самому длинному заголовку жеста. Строка отказа живёт под кнопкой 4 с.</p>
+  </div>
 
   <h3>Бейджи безопасности и происхождения</h3>
   <div class="board">
@@ -625,7 +646,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">03</span><h4>Главное окно</h4><p>Диаграмма, список уровня и список «К удалению». Сегменты кликабельны, мелкие объекты каталога собраны в один сегмент. Меню узла: Finder, Terminal, Свойства; вложенная папка с именем родителя подписана «Music ▸ Music». «Скрытое» делится на Purgeable (локальные бэкапы Time Machine, если они включены) и «Не удалось найти» со счётчиком домашних папок других пользователей; при снапшотах меню строки предлагает скопировать команду tmutil, при ненулевой оценке purgeable — «Освободить…», открывающий лист «Освобождение».</p></div>
+    <div class="screen-cap"><span class="n">03</span><h4>Главное окно</h4><p>Диаграмма, список уровня и список «К удалению». Сегменты кликабельны, мелкие объекты каталога собраны в один сегмент. Строки списка уровня — одну или несколько — перетаскивают на кнопку «К удалению» в шапке; кнопка называет, что добавится или почему нельзя, и показывает число отметок с оценкой объёма. Меню узла: Finder, Terminal, Свойства; вложенная папка с именем родителя подписана «Music ▸ Music». «Скрытое» делится на Purgeable (локальные бэкапы Time Machine, если они включены) и «Не удалось найти» со счётчиком домашних папок других пользователей; при снапшотах меню строки предлагает скопировать команду tmutil, при ненулевой оценке purgeable — «Освободить…», открывающий лист «Освобождение».</p></div>
     <div class="mock"><div class="win">
       <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Macintosh HD</div></div>
       <div class="win-body">
@@ -745,7 +766,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">08</span><h4>К удалению</h4><p>Последний шаг перед действием. Четыре состояния: список с итогом, подтверждение, удаление с полосой и счётом файлов «Удаляю: N из M файлов» и кнопкой «Остановить», итог «Удалено: N объектов, освобождено X» со списком «Не удалено» и причинами. Программа, удаляемая вместе с файлами, — одна группа с путями и причинами, папки с совпадением только по имени — отдельно и не отмечены.</p></div>
+    <div class="screen-cap"><span class="n">08</span><h4>К удалению</h4><p>Последний шаг перед действием. У каждой строки до начала удаления — крестик «Снять отметку»: строка уходит целиком, итог пересчитывается. Четыре состояния: список с итогом, подтверждение, удаление с полосой и счётом файлов «Удаляю: N из M файлов» и кнопкой «Остановить», итог «Удалено: N объектов, освобождено X» со списком «Не удалено» и причинами. Программа, удаляемая вместе с файлами, — одна группа с путями и причинами, папки с совпадением только по имени — отдельно и не отмечены.</p></div>
     <div class="mock"><div class="win narrow">
       <div class="win-bar"><i></i><i></i><i></i><div class="ttl">К удалению</div></div>
       <div class="pane">
@@ -785,6 +806,10 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
     <tr><td>команда скопирована</td><td class="say">Команда tmutil скопирована. Вставьте её в Terminal, чтобы удалить локальные снапшоты</td><td class="no">Готово! Запустите tmutil прямо сейчас!</td></tr>
     <tr><td>том не отвечает минуту</td><td class="say">Файловая система не отвечает. Домовой ждал ответа диска дольше минуты и остановил скан.</td><td class="no">Диск завис! Всё пропало</td></tr>
     <tr><td>модель</td><td class="say">Модель занимает 5,0 ГБ. Удалить можно здесь же</td><td class="no">Скачиваем AI…</td></tr>
+    <tr><td>строку тащат на «К удалению»</td><td class="say">Добавить 2 объекта · ≈ 36,0 ГБ</td><td class="no">Бросайте сюда, избавимся!</td></tr>
+    <tr><td>строка под защитой</td><td class="say">Нельзя: системный том</td><td class="no">Ошибка! Действие запрещено</td></tr>
+    <tr><td>после броска с отказом</td><td class="say">Не добавлено: System — системный том</td><td class="no">Что-то пошло не так</td></tr>
+    <tr><td>пустой список</td><td class="say">Пока ничего не отмечено к удалению. Перетащите строки списка на кнопку «К удалению», отметьте рекомендации или копии дубликатов.</td><td class="no">Здесь пусто! Накидайте файлов</td></tr>
   </table></div>
 </section>
 
@@ -1137,7 +1162,7 @@ $('#recs-split').textContent=`безопасно ${fmt(tot.safe)} · восст�
 $('#recs-btn').textContent='Отметить к удалению · '+fmt(tot.safe);
 
 const tray=$('#tray');RULES.filter(r=>r.s==='safe').forEach(r=>{const d=document.createElement('div');d.className='tray-row';
-  d.innerHTML=`<i style="background:${catColor(r.cat)}"></i><span style="color:var(--text);font-family:var(--f-ui);font-size:13.5px">${r.t}</span><span>${fmt(r.size)}</span>`;tray.appendChild(d);});
+  d.innerHTML=`<i style="background:${catColor(r.cat)}"></i><span style="color:var(--text);font-family:var(--f-ui);font-size:13.5px">${r.t}</span><span>${fmt(r.size)}</span><b title="Снять отметку">×</b>`;tray.appendChild(d);});
 $('#tray-sum').textContent=fmt(tot.safe);
 
 /* ---------- сайдбары макетов ---------- */

@@ -36,6 +36,7 @@ use crate::delete_outcome::DeleteOutcome;
 use crate::delete_status::DeleteStatus;
 use crate::disk_overview::DiskOverview;
 use crate::disk_probe::DiskProbe;
+use crate::drop_kind::DropKind;
 use crate::duplicate_summary::DuplicateSummary;
 use crate::duplicates_model::DuplicatesModel;
 use crate::event_effect::EventEffect;
@@ -174,6 +175,8 @@ impl EndToEnd {
             }
             ScenarioStep::DeleteRecommendations { level } => self.delete_recommendations(*level),
             ScenarioStep::RemoveApplication { path } => self.remove_application(path),
+            ScenarioStep::MarkFromList { paths } => Ok(self.mark_from_list(paths)),
+            ScenarioStep::UnmarkTrayRow { row } => self.unmark_tray_row(*row),
             ScenarioStep::FindDuplicates => {
                 let started = Instant::now();
                 self.session_mut()
@@ -449,6 +452,47 @@ impl EndToEnd {
             "failures": report.failed.len(),
             "name_only": name_only,
             "paths_left": taken.iter().filter(|path| path.symlink_metadata().is_ok()).count(),
+        }))
+    }
+
+    fn mark_from_list(&mut self, paths: &[PathBuf]) -> Value {
+        let hover = self.session().judge_drop(paths).hover();
+        let verdict = self.session_mut().drop_into_tray(paths);
+        let marked: Vec<&Path> = self
+            .session()
+            .tray()
+            .items()
+            .iter()
+            .map(|item| item.path.as_path())
+            .collect();
+        json!({
+            "step": "mark_from_list",
+            "hover": hover.title,
+            "hover_kind": drop_kind_name(hover.kind),
+            "added": verdict.allowed.len(),
+            "refused": verdict.refused.len(),
+            "refusal_line": verdict.refusal_line(),
+            "summary": self.session().tray_summary().title(),
+            "tray": marked,
+        })
+    }
+
+    fn unmark_tray_row(&mut self, row: usize) -> Result<Value, String> {
+        let (before, _, _) = self.measured_tray()?;
+        let nodes = before
+            .row_nodes
+            .get(row)
+            .cloned()
+            .ok_or_else(|| format!("the tray has no row {row}"))?;
+        for node in nodes {
+            self.session_mut().remove_from_tray(node);
+        }
+        let (after, _, _) = self.measured_tray()?;
+        Ok(json!({
+            "step": "unmark_tray_row",
+            "rows_before": before.rows.len(),
+            "rows_after": after.rows.len(),
+            "summary": self.session().tray_summary().title(),
         }))
     }
 
@@ -770,6 +814,14 @@ impl EndToEnd {
     }
 }
 
+fn drop_kind_name(kind: DropKind) -> &'static str {
+    match kind {
+        DropKind::Add => "add",
+        DropKind::Denied => "denied",
+        DropKind::Already => "already",
+    }
+}
+
 fn step_name(step: &ScenarioStep) -> &'static str {
     match step {
         ScenarioStep::Scan => "scan",
@@ -780,6 +832,8 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::Recommendations => "recommendations",
         ScenarioStep::DeleteRecommendations { .. } => "delete_recommendations",
         ScenarioStep::RemoveApplication { .. } => "remove_application",
+        ScenarioStep::MarkFromList { .. } => "mark_from_list",
+        ScenarioStep::UnmarkTrayRow { .. } => "unmark_tray_row",
         ScenarioStep::FindDuplicates => "find_duplicates",
         ScenarioStep::ReplaceWithClone => "replace_with_clone",
         ScenarioStep::DownloadModel { .. } => "download_model",

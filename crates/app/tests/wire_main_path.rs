@@ -58,6 +58,8 @@ const ATTACHMENT: &str = "6F1E2D3C-4B5A-4978-8695-A4B3C2D1E0F9";
 const TRASH: &str = "Users/tester/.Trash";
 const TRASHED: &str = "old.zip";
 const PURGE_TIMEOUT_SECONDS: u64 = 30;
+const DROPPED: &str = "Drops/Keep";
+const PINNED: &str = "Drops/Pinned";
 
 fn manifest_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
@@ -139,6 +141,9 @@ fn populate(root: &Path) {
     write(&root.join(MUSIC).join("Podcasts/talk.mp3"), &noise(MEGABYTE / 2, 8));
     populate_applications(root);
     populate_cleanup(root);
+    write(&root.join(DROPPED).join("draft.txt"), b"a draft kept for later\n");
+    write(&root.join(PINNED).join("pinned.txt"), b"a pinned note\n");
+    run(CHFLAGS, &["uchg"], &root.join(PINNED));
 }
 
 fn populate_cleanup(root: &Path) {
@@ -286,6 +291,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     assert_interface_techniques(&report, &csv);
     assert_scanner_techniques(&report);
     assert_space_release(&report);
+    assert_tray_drag(&report, &mount_point);
     assert_model_and_answer(&report, &server);
     assert_snapshots(&report);
 }
@@ -348,6 +354,8 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
             {"step": "hidden_space"},
             {"step": "remove_application", "path": mount_point.join(TINY_BUNDLE)},
             {"step": "delete_recommendations", "level": "check_yourself"},
+            {"step": "mark_from_list", "paths": [mount_point.join(DROPPED), mount_point.join(PINNED)]},
+            {"step": "unmark_tray_row", "row": 0},
             {"step": "find_duplicates"},
             {"step": "replace_with_clone"},
             {
@@ -764,6 +772,26 @@ fn assert_space_release(report: &Value) {
         "the release leaves the volume consistent with the scan: {:#}",
         hidden[1]
     );
+}
+
+fn assert_tray_drag(report: &Value, mount_point: &Path) {
+    let marked = step(report, "mark_from_list");
+    assert_eq!(marked["hover_kind"], "add", "{marked:#}");
+    let hover = marked["hover"].as_str().expect("the button names the drop");
+    assert!(hover.starts_with("Добавить 1 из 2 · ≈ "), "{marked:#}");
+    assert_eq!(marked["added"], 1, "{marked:#}");
+    assert_eq!(marked["refused"], 1, "{marked:#}");
+    assert_eq!(
+        marked["refusal_line"], "Не добавлено: Pinned — защищено системой",
+        "{marked:#}"
+    );
+    let summary = marked["summary"].as_str().expect("the button shows the summary");
+    assert!(summary.starts_with("К удалению · 1 · ≈ "), "{marked:#}");
+    assert_eq!(marked["tray"], json!([mount_point.join(DROPPED)]), "{marked:#}");
+    let unmarked = step(report, "unmark_tray_row");
+    assert_eq!(unmarked["rows_before"], 1, "{unmarked:#}");
+    assert_eq!(unmarked["rows_after"], 0, "{unmarked:#}");
+    assert_eq!(unmarked["summary"], "К удалению", "{unmarked:#}");
 }
 
 fn assert_model_and_answer(report: &Value, server: &HfServer) {

@@ -29,6 +29,12 @@ pub enum ScenarioStep {
     RemoveApplication {
         path: PathBuf,
     },
+    MarkFromList {
+        paths: Vec<PathBuf>,
+    },
+    UnmarkTrayRow {
+        row: usize,
+    },
     FindDuplicates,
     ReplaceWithClone,
     DownloadModel {
