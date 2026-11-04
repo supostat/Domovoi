@@ -30,6 +30,8 @@
 	<true/>
 	<key>ATSApplicationFontsPath</key>
 	<string>Fonts</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/supostat/Domovoi/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>

@@ -5,6 +5,8 @@ pub(crate) const SERVICE_EXECUTABLE: &str = "domovoi-inference";
 pub(crate) const SERVICE_METALLIBS: [&str; 2] = ["default.metallib", "ggml-tensor.metallib"];
 pub(crate) const DIAGRAM_METALLIB: &str = "diagram.metallib";
 pub(crate) const CATALOG: &str = "catalog.json";
+pub(crate) const ICON_NAME: &str = "AppIcon";
+const ICON_EXTENSION: &str = "icns";
 const APPLICATION: &str = "DOMOVOI.app";
 const SERVICE_BUNDLE: &str = "com.domovoi.inference.xpc";
 const SPARKLE: &str = "Sparkle.framework";
@@ -40,6 +42,10 @@ impl BundleLayout {
 
     pub(crate) fn resources(&self) -> PathBuf {
         self.contents().join("Resources")
+    }
+
+    pub(crate) fn icon(&self) -> PathBuf {
+        self.resources().join(ICON_NAME).with_extension(ICON_EXTENSION)
     }
 
     pub(crate) fn fonts(&self) -> PathBuf {

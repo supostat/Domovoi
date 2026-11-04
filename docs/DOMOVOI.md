@@ -215,6 +215,7 @@ AppKit через objc2. Разделы в сайдбаре: Macintosh HD, Ре�
 - Обновления через Sparkle.
 - Entitlements для hardened runtime.
 - XPC-сервис подписан вместе с бандлом.
+- Иконка — «Восковая» розетка-оберег: исходники `design/icon/domovoi-icon.svg` (64 px и крупнее) и `design/icon/domovoi-icon-small.svg` (32 px и меньше); `cargo xtask icon` рисует из них набор PNG `assets/icon/AppIcon.iconset`, CI сверяет его командой `cargo xtask icon --check`, а `cargo xtask bundle` собирает `AppIcon.icns` системным `iconutil`.
 - Mac App Store не поддерживается: песочница несовместима со сканированием всего тома.
 
 ---

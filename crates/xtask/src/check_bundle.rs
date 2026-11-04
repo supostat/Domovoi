@@ -6,7 +6,7 @@ use std::process::Command;
 use serde_json::{Map, Value};
 
 use crate::bundle_layout::{
-    APP_EXECUTABLE, BundleLayout, CATALOG, DIAGRAM_METALLIB, SERVICE_EXECUTABLE, SERVICE_METALLIBS,
+    APP_EXECUTABLE, BundleLayout, CATALOG, DIAGRAM_METALLIB, ICON_NAME, SERVICE_EXECUTABLE, SERVICE_METALLIBS,
 };
 use crate::finding::Finding;
 use crate::property_list;
@@ -72,6 +72,7 @@ fn structure(root: &Path, layout: &BundleLayout) -> io::Result<Vec<Finding>> {
         layout.executable(),
         layout.info(),
         layout.resources().join(CATALOG),
+        layout.icon(),
         layout.resources().join(DIAGRAM_METALLIB),
         layout.licenses().join("Sparkle-LICENSE.txt"),
         layout.licenses().join("llama.cpp-LICENSE.txt"),
@@ -131,6 +132,7 @@ fn app_keys(path: &Path, info: &Value, version: &str) -> Vec<Finding> {
         ("CFBundlePackageType", "APPL"),
         ("LSMinimumSystemVersion", MINIMUM_SYSTEM),
         ("ATSApplicationFontsPath", "Fonts"),
+        ("CFBundleIconFile", ICON_NAME),
         ("CFBundleShortVersionString", version),
         ("CFBundleVersion", version),
     ] {

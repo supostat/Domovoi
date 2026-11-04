@@ -19,7 +19,7 @@ pub(crate) fn run(mode: GenerateMode) -> io::Result<Vec<Finding>> {
     match mode {
         GenerateMode::Write => {
             write_iconset(&root, &directory)?;
-            Ok(Vec::new())
+            check_iconset(&root, &directory)
         }
         GenerateMode::Check => check_iconset(&root, &directory),
     }
@@ -40,9 +40,6 @@ pub(crate) fn render(root: &Path, artwork: IconArtwork, pixels: u32) -> io::Resu
 }
 
 pub(crate) fn write_iconset(root: &Path, directory: &Path) -> io::Result<()> {
-    if directory.exists() {
-        fs::remove_dir_all(directory)?;
-    }
     fs::create_dir_all(directory)?;
     for slot in ICON_SLOTS {
         fs::write(
@@ -75,7 +72,7 @@ pub(crate) fn check_iconset(root: &Path, directory: &Path) -> io::Result<Vec<Fin
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| ICON_SLOTS.iter().any(|slot| slot.file_name == name));
             if !known {
-                findings.push(finding(&path, "is not an icon slot: run cargo xtask icon"));
+                findings.push(finding(&path, "is not an icon slot: remove it from the iconset"));
             }
         }
     }

@@ -1,12 +1,14 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use crate::build_outputs::BuildOutputs;
 use crate::bundle_layout::{BundleLayout, CATALOG, DIAGRAM_METALLIB, SERVICE_METALLIBS};
 use crate::bundle_profile::BundleProfile;
 use crate::copy_tree::copy_tree;
 use crate::finding::Finding;
+use crate::icon::ICONSET;
 use crate::notarization::publish;
 use crate::property_list;
 use crate::signing::Signing;
@@ -26,6 +28,7 @@ const SHORT_VERSION_KEY: &str = "CFBundleShortVersionString";
 const VERSION_KEY: &str = "CFBundleVersion";
 const TEAM_KEY: &str = "DOMOVOITeamIdentifier";
 const SPARKLE_SKIPPED: [&str; 1] = ["XPCServices"];
+const ICONUTIL: &str = "/usr/bin/iconutil";
 const SPARKLE_HELPERS: [&str; 2] = ["Versions/B/Autoupdate", "Versions/B/Updater.app"];
 
 pub(crate) fn run(profile: &str) -> io::Result<Vec<Finding>> {
@@ -117,6 +120,7 @@ fn place_resources(
         &layout.licenses().join("llama.cpp-LICENSE.txt"),
     )?;
     copy_into(&root.join("assets").join(CATALOG), &layout.resources().join(CATALOG))?;
+    build_icon(root, layout)?;
     copy_into(
         &BuildOutputs::require(outputs.diagram_metallib.as_ref(), "the diagram shaders")?,
         &layout.resources().join(DIAGRAM_METALLIB),
@@ -135,6 +139,20 @@ fn sign(root: &Path, layout: &BundleLayout, signing: &Signing) -> io::Result<()>
     signing.sign(&layout.sparkle(), None)?;
     signing.sign(&layout.service(), Some(&root.join(SERVICE_ENTITLEMENTS)))?;
     signing.sign(&layout.app, None)
+}
+
+fn build_icon(root: &Path, layout: &BundleLayout) -> io::Result<()> {
+    let status = Command::new(ICONUTIL)
+        .args(["--convert", "icns", "--output"])
+        .arg(layout.icon())
+        .arg(root.join(ICONSET))
+        .status()?;
+    if !status.success() {
+        return Err(io::Error::other(format!(
+            "{ICONUTIL} could not build an icon from {ICONSET}"
+        )));
+    }
+    Ok(())
 }
 
 fn copy_into(source: &Path, target: &Path) -> io::Result<()> {
