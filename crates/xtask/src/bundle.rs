@@ -1,7 +1,8 @@
-use std::fs;
+use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::SystemTime;
 
 use crate::build_outputs::BuildOutputs;
 use crate::bundle_layout::{BundleLayout, CATALOG, DIAGRAM_METALLIB, SERVICE_METALLIBS};
@@ -58,6 +59,7 @@ pub(crate) fn assemble(root: &Path, profile: BundleProfile, version: &str) -> io
     place_resources(root, &layout, &outputs, &sparkle)?;
     copy_tree(&sparkle.framework(), &layout.sparkle(), &SPARKLE_SKIPPED)?;
     sign(root, &layout, &signing)?;
+    mark_bundle_changed(&layout.app)?;
     Ok(layout.app)
 }
 
@@ -139,6 +141,12 @@ fn sign(root: &Path, layout: &BundleLayout, signing: &Signing) -> io::Result<()>
     signing.sign(&layout.sparkle(), None)?;
     signing.sign(&layout.service(), Some(&root.join(SERVICE_ENTITLEMENTS)))?;
     signing.sign(&layout.app, None)
+}
+
+fn mark_bundle_changed(app: &Path) -> io::Result<()> {
+    File::open(app)
+        .and_then(|folder| folder.set_modified(SystemTime::now()))
+        .map_err(|error| io::Error::new(error.kind(), format!("{}: {error}", app.display())))
 }
 
 fn build_icon(root: &Path, layout: &BundleLayout) -> io::Result<()> {
