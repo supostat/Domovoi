@@ -2,10 +2,10 @@ use std::path::Path;
 use std::time::Duration;
 
 use domovoi_app::{
-    DeleteOutcome, DeleteStatus, MeasureProgress, RecommendationsModel, Screen, ShellFixture, TrayModel,
-    scan_finished_line, strings,
+    DeleteOutcome, DeleteStatus, DropRefusal, DropVerdict, MeasureProgress, RecommendationsModel, Screen, ShellFixture,
+    TrayModel, TraySummary, scan_finished_line, strings,
 };
-use domovoi_rules::{ConfigOverrides, rule_table};
+use domovoi_rules::{ConfigOverrides, DenyReason, rule_table};
 
 const STRINGS_SOURCE: &str = include_str!("../src/strings.rs");
 const NO_BREAK_SPACE: char = '\u{A0}';
@@ -265,4 +265,36 @@ fn application_removal_states_its_reasons_plainly() {
         strings::rule_title("apps.leftover-data"),
         Some("Данные удалённых программ")
     );
+}
+
+#[test]
+fn dropping_rows_on_the_collection_button_speaks_plainly() {
+    assert_eq!(strings::DROP_ADD, "Добавить");
+    assert_eq!(strings::DROP_DENIED, "Нельзя:");
+    assert_eq!(strings::DROP_ALREADY, "Уже в списке");
+    assert_eq!(strings::NOT_ADDED, "Не добавлено:");
+    let refused = DropVerdict {
+        refused: vec![
+            DropRefusal {
+                name: "System".to_owned(),
+                reason: DenyReason::SystemVolume,
+            },
+            DropRefusal {
+                name: "usr".to_owned(),
+                reason: DenyReason::SystemVolume,
+            },
+        ],
+        ..DropVerdict::default()
+    };
+    assert_eq!(refused.hover().title, "Нельзя: системный том");
+    assert_eq!(
+        refused.refusal_line().as_deref(),
+        Some("Не добавлено: System — системный том · usr — системный том")
+    );
+    let collected = TraySummary {
+        objects: 3,
+        bytes: 42_200_000_000,
+    };
+    assert_eq!(spoken(&collected.title()), "К удалению · 3 · ≈ 42,2 ГБ");
+    assert_eq!(TraySummary::default().title(), "К удалению");
 }

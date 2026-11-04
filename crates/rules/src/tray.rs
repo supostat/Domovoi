@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use domovoi_index::{Index, NodeId, Reclaimable};
 
@@ -51,7 +51,7 @@ impl Tray {
         application: Option<String>,
     ) {
         let path = index.path(node);
-        if self.items.iter().any(|item| path.starts_with(&item.path)) {
+        if self.covers(&path) {
             return;
         }
         self.items.retain(|item| !item.path.starts_with(&path));
@@ -77,6 +77,10 @@ impl Tray {
 
     pub fn items(&self) -> &[TrayItem] {
         &self.items
+    }
+
+    pub fn covers(&self, path: &Path) -> bool {
+        self.items.iter().any(|item| path.starts_with(&item.path))
     }
 
     pub fn applications(&self) -> &[TrayApplication] {

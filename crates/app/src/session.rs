@@ -29,6 +29,7 @@ use domovoi_scanner::{
 };
 
 use crate::cache_opening::CacheOpening;
+use crate::drop_verdict::DropVerdict;
 use crate::event_effect::EventEffect;
 use crate::event_request::EventRequest;
 use crate::group_paths::GroupPaths;
@@ -37,6 +38,8 @@ use crate::question::Question;
 use crate::remapping::Remapping;
 use crate::session_error::SessionError;
 use crate::session_paths::SessionPaths;
+use crate::tray_model::TrayModel;
+use crate::tray_summary::TraySummary;
 
 const LOG_SUBSYSTEM: &CStr = c"com.domovoi.app";
 const LOG_CATEGORY: &CStr = c"session";
@@ -347,6 +350,40 @@ impl Session {
 
     pub fn remove_from_tray(&mut self, node: NodeId) {
         self.tray.remove(node);
+    }
+
+    pub fn judge_drop(&self, paths: &[PathBuf]) -> DropVerdict {
+        let index = self
+            .index
+            .as_ref()
+            .expect("the tray collects nodes of a scanned volume");
+        DropVerdict::judge(index, &self.denylist, &self.tray, paths)
+    }
+
+    pub fn drop_into_tray(&mut self, paths: &[PathBuf]) -> DropVerdict {
+        let index = self
+            .index
+            .as_ref()
+            .expect("the tray collects nodes of a scanned volume");
+        let verdict = DropVerdict::judge(index, &self.denylist, &self.tray, paths);
+        for node in &verdict.allowed {
+            self.tray.add(index, *node, None);
+        }
+        verdict
+    }
+
+    pub fn tray_summary(&self) -> TraySummary {
+        let index = self
+            .index
+            .as_ref()
+            .expect("the tray collects nodes of a scanned volume");
+        TraySummary {
+            objects: self.tray.items().len(),
+            bytes: TrayModel::estimated_sizes(index, &self.tray)
+                .iter()
+                .map(|size| size.bytes)
+                .sum(),
+        }
     }
 
     pub fn take_tray_for_delete(&mut self, sizes: &[Reclaimable]) -> (Vec<DeleteSubject>, Vec<DeleteRefusal>) {

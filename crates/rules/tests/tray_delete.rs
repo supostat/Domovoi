@@ -124,3 +124,33 @@ fn a_taken_folder_carries_the_number_of_its_files_from_the_index() {
         "the files of the subtree, the folders are not counted"
     );
 }
+
+#[test]
+fn the_tray_covers_an_item_and_its_inside_but_not_a_neighbour_sharing_the_start_of_its_name() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.root().expect("root opens");
+    let marked = root.directory("b").expect("directory is created");
+    marked.file("inner", 512, Fill::Byte(5)).expect("file is written");
+    root.directory("bc")
+        .expect("directory is created")
+        .file("other", 512, Fill::Byte(6))
+        .expect("file is written");
+    let index = index_of(tree.path());
+    let folder = child(&index, "b");
+    let neighbour = child(&index, "bc");
+    let inner = index
+        .child_named(folder, "inner".as_ref())
+        .expect("the inner file is indexed");
+    let mut tray = Tray::default();
+    tray.add(&index, folder, None);
+
+    assert!(tray.covers(&index.path(folder)), "the marked folder itself is covered");
+    assert!(
+        tray.covers(&index.path(inner)),
+        "a path inside the marked folder is covered"
+    );
+    assert!(
+        !tray.covers(&index.path(neighbour)),
+        "a neighbour whose name starts the same is not inside the marked folder"
+    );
+}
