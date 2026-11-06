@@ -18,6 +18,7 @@ use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 const ROW_HEIGHT: f64 = 30.0;
 const NARROW_ROW: f64 = 180.0;
+const NARROW_MARKED_ROW: f64 = 240.0;
 const SIDEBAR_WIDTH: f64 = 230.0;
 const SIDEBAR_ROW: f64 = 28.0;
 const LONG_NAME: &str = "Очень длинное имя папки проекта, которое не помещается в строку списка уровня";
@@ -125,6 +126,7 @@ fn level_rows(checks: &mut Checks, marker: MainThreadMarker) {
         share: 1.0,
         category: Category::Dev,
         draggable: true,
+        marked: false,
     };
     for width in [360.0, NARROW_ROW] {
         let host = container(marker, width, ROW_HEIGHT);
@@ -142,6 +144,51 @@ fn level_rows(checks: &mut Checks, marker: MainThreadMarker) {
         checks.truncated_with_full_text(&parts.name, LONG_NAME, &format!("{element}, name"));
         checks.mode(&parts.size, NSLineBreakMode::ByClipping, &format!("{element}, size"));
         checks.never_cut(&parts.size, &format!("{element}, size"));
+        checks.expect(parts.mark.isHidden(), format!("{element}: an unmarked row hides the mark"));
+    }
+}
+
+fn marked_level_rows(checks: &mut Checks, marker: MainThreadMarker) {
+    let row = LevelRow {
+        node: 1,
+        name: LONG_NAME.to_owned(),
+        size_text: SIZE_TEXT.to_owned(),
+        share: 1.0,
+        category: Category::Dev,
+        draggable: true,
+        marked: true,
+    };
+    for width in [360.0, NARROW_MARKED_ROW] {
+        let host = container(marker, width, ROW_HEIGHT);
+        let parts = LevelRowView::build(marker, &host, &row, &palette());
+        let element = format!("marked level row at {width} pt");
+        checks.expect(!parts.mark.isHidden(), format!("{element}: the mark is shown"));
+        checks.expect(
+            parts.name.frame().size.width < parts.name.fittingSize().width,
+            format!("{element}: the long name is shortened first"),
+        );
+        checks.mode(&parts.mark, NSLineBreakMode::ByClipping, &format!("{element}, mark"));
+        checks.never_cut(&parts.mark, &format!("{element}, mark"));
+        checks.never_cut(&parts.size, &format!("{element}, size"));
+        checks.expect(
+            parts.name.frame().origin.x + parts.name.frame().size.width <= parts.mark.frame().origin.x,
+            format!("{element}: the name stops before the mark"),
+        );
+        checks.expect(
+            parts.mark.frame().origin.x + parts.mark.frame().size.width <= parts.size.frame().origin.x,
+            format!("{element}: the mark stops before the size"),
+        );
+        let tooltip = parts.name.toolTip().map(|tooltip| tooltip.to_string());
+        checks.expect(
+            tooltip.as_deref() == Some(LONG_NAME),
+            format!("{element}: tooltip {tooltip:?}"),
+        );
+        let label = parts.name.accessibilityLabel().map(|label| label.to_string());
+        let spoken = format!("{LONG_NAME}, {}", strings::MARKED);
+        checks.expect(
+            label.as_deref() == Some(spoken.as_str()),
+            format!("{element}: VoiceOver label {label:?}"),
+        );
     }
 }
 
@@ -590,6 +637,7 @@ fn main() -> ExitCode {
     }
     let mut checks = Checks::default();
     level_rows(&mut checks, marker);
+    marked_level_rows(&mut checks, marker);
     sidebar(&mut checks, marker);
     crumbs(&mut checks, marker);
     head(&mut checks, marker);

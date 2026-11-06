@@ -215,6 +215,7 @@ pub const DROP_ALREADY: &str = "Уже в списке";
 pub const NOT_ADDED: &str = "Не добавлено:";
 pub const UNMARK: &str = "Снять отметку";
 pub const UNMARK_MARK: &str = "×";
+pub const MARKED: &str = "к удалению";
 pub const REFINING_SIZE: &str = "Уточняю размер:";
 pub const UPDATING_INDEX: &str = "Обновляю индекс…";
 pub const FILES: PluralForms = PluralForms {

@@ -178,7 +178,7 @@ impl ShellState {
         self.expansion = index.map_or_else(Expansion::default, |index| {
             Expansion::around(index, focus_node.unwrap_or_else(|| index.root()), NODE_BUDGET)
         });
-        let data = ShellData::measured(
+        let mut data = ShellData::measured(
             self.access,
             self.overview(),
             index,
@@ -187,6 +187,9 @@ impl ShellState {
             care,
             self.assistant.models(),
         );
+        if let (Some(index), Some(session)) = (index, self.session.as_ref()) {
+            data.mark_tray(index, session.tray());
+        }
         self.focus = focus_node
             .and_then(|node| data.tree_position(NodeOrigin::Indexed(node)))
             .unwrap_or(ROOT);

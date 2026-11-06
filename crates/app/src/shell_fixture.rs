@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use domovoi_index::TimeMachineSettings;
-use domovoi_render::{DiagramTree, ROOT};
+use domovoi_render::{DiagramTree, MarkedNodes, ROOT};
 use serde::Deserialize;
 
 use crate::access_state::AccessState;
@@ -79,6 +79,7 @@ impl ShellFixture {
                 auto_backup: Some(self.time_machine_backups),
                 mobile_backups: None,
             },
+            marked: MarkedNodes::default(),
         })
     }
 }

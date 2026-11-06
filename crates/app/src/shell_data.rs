@@ -1,7 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::iter;
 
-use domovoi_index::{Category, Index, TimeMachineSettings};
-use domovoi_render::{DiagramTree, NodeOrigin, ROOT};
+use domovoi_index::{Category, Index, NodeId, TimeMachineSettings};
+use domovoi_render::{DiagramTree, MarkedNodes, NodeOrigin, ROOT};
+use domovoi_rules::Tray;
 use domovoi_theme::{format_count, format_size};
 
 use crate::access_state::AccessState;
@@ -39,6 +41,7 @@ pub struct ShellData {
     pub snapshots_present: bool,
     pub other_user_homes: u64,
     pub time_machine: TimeMachineSettings,
+    pub marked: MarkedNodes,
 }
 
 impl ShellData {
@@ -67,7 +70,30 @@ impl ShellData {
             snapshots_present: !overview.volumes.snapshots.is_empty(),
             other_user_homes: index.map_or(0, Index::other_user_homes),
             time_machine: overview.time_machine,
+            marked: MarkedNodes::default(),
         }
+    }
+
+    pub fn mark_tray(&mut self, index: &Index, tray: &Tray) {
+        let positions: HashMap<NodeId, usize> = (0..self.tree.len())
+            .filter_map(|position| match self.tree.node(position).origin {
+                NodeOrigin::Indexed(node) => Some((node, position)),
+                _ => None,
+            })
+            .collect();
+        let mut marked = MarkedNodes::default();
+        for item in tray.items() {
+            if let Some(position) = positions.get(&item.node) {
+                marked.mark(*position);
+                continue;
+            }
+            let nearest_shown = iter::successors(index.parent(item.node), |node| index.parent(*node))
+                .find_map(|ancestor| positions.get(&ancestor).copied());
+            if let Some(position) = nearest_shown {
+                marked.deduct(position, index.node(item.node).allocated);
+            }
+        }
+        self.marked = marked;
     }
 
     pub fn tree_position(&self, origin: NodeOrigin) -> Option<usize> {
@@ -171,6 +197,7 @@ impl ShellData {
                     share: node.size as f64 / largest as f64,
                     category: node.category,
                     draggable: matches!(node.origin, NodeOrigin::Indexed(_)),
+                    marked: self.marked.covers(&self.tree, *child),
                 }
             })
             .collect()

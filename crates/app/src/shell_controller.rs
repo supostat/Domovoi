@@ -484,6 +484,7 @@ impl ShellController {
             let state = self.state.borrow();
             if let (Some(ScreenViews::Main { diagram, .. }), Some(data)) = (state.views.as_ref(), state.data.as_ref()) {
                 let tree = data.tree.clone();
+                let marked = data.marked.clone();
                 let tokens = state.palette.tokens;
                 let focus = state.focus;
                 let small_groups_always = state.small_groups.always;
@@ -493,6 +494,7 @@ impl ShellController {
                     diagram.reduce_motion = reduce_motion;
                     diagram.set_small_groups_always(small_groups_always);
                     diagram.jump_to(focus);
+                    diagram.jump_marked(marked);
                 });
             }
         }
@@ -530,8 +532,10 @@ impl ShellController {
     fn refresh_tray_summary(&self) {
         let mut state = self.state.borrow_mut();
         let ShellState {
-            views: Some(ScreenViews::Main { screen, .. }),
+            views: Some(ScreenViews::Main { screen, diagram }),
             session: Some(session),
+            data: Some(data),
+            focus,
             tray_summary,
             ..
         } = &mut *state
@@ -549,6 +553,10 @@ impl ShellController {
                 items,
                 summary: session.tray_summary(),
             });
+            data.mark_tray(index, session.tray());
+            screen.list.show(data.level_rows(*focus));
+            let marked = data.marked.clone();
+            diagram.update_state(|diagram| diagram.set_marked(marked, Instant::now()));
         }
         let summary = tray_summary.as_ref().expect("the summary is cached").summary;
         screen.show_tray_summary(&summary.title());

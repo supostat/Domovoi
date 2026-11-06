@@ -252,6 +252,7 @@ impl MainScreen {
         let side = DIAGRAM_SIDE as f32;
         let mut state = DiagramState::new(data.tree.clone(), mode, DIAGRAM, palette.tokens, side, side);
         state.jump_to(focus);
+        state.jump_marked(data.marked.clone());
         state
     }
 }

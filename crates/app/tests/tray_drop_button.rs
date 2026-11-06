@@ -182,6 +182,7 @@ fn pasteboard_carries_only_indexed_rows(checks: &mut Checks, marker: MainThreadM
         share: 1.0,
         category: Category::Dev,
         draggable,
+        marked: false,
     };
     list.show(vec![row(7, true), row(8, false)]);
     let node_type = NSString::from_str(NODE_TYPE);

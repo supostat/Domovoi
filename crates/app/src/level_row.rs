@@ -8,4 +8,5 @@ pub struct LevelRow {
     pub share: f64,
     pub category: Category,
     pub draggable: bool,
+    pub marked: bool,
 }
