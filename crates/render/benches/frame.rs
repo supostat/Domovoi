@@ -4,7 +4,7 @@ use std::time::Instant;
 use domovoi_index::Category;
 use domovoi_render::{
     BUILT_METALLIB, DiagramOutline, DiagramPainter, DiagramRenderer, DiagramStrings, DiagramTree, GlyphAtlas,
-    NodeOrigin, ROOT, SmallGroups, SunburstLayout, TreemapLayout, register_fonts,
+    MarkedNodes, NodeOrigin, ROOT, SmallGroups, SunburstLayout, TreemapLayout, register_fonts,
 };
 use domovoi_theme::{Palette, PluralForms};
 
@@ -68,10 +68,17 @@ fn main() {
     for (name, fanout) in FIXTURES {
         let tree = DiagramTree::from_outline(&outline(&fanout, &mut Sizes(7), 1));
         let started = Instant::now();
-        let sunburst = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIDE, 1.0, &SmallGroups::default());
+        let sunburst = SunburstLayout::compute(
+            &tree,
+            ROOT,
+            SUNBURST_SIDE,
+            1.0,
+            &SmallGroups::default(),
+            &MarkedNodes::default(),
+        );
         let sunburst_layout = started.elapsed();
         let started = Instant::now();
-        let treemap = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT);
+        let treemap = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT, &MarkedNodes::default());
         let treemap_layout = started.elapsed();
         let painter = DiagramPainter {
             tree: &tree,

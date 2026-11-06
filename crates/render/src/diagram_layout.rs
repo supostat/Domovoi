@@ -1,7 +1,9 @@
 use crate::diagram_mode::DiagramMode;
 use crate::diagram_tree::DiagramTree;
 use crate::hit::Hit;
+use crate::marked_nodes::MarkedNodes;
 use crate::point::Point;
+use crate::rect::Rect;
 use crate::small_groups::SmallGroups;
 use crate::sunburst_layout::SunburstLayout;
 use crate::treemap_layout::TreemapLayout;
@@ -17,16 +19,23 @@ impl DiagramLayout {
         mode: DiagramMode,
         tree: &DiagramTree,
         focus: usize,
-        width: f32,
-        height: f32,
+        bounds: Rect,
         sweep: f32,
         groups: &SmallGroups,
+        marked: &MarkedNodes,
     ) -> Self {
         match mode {
-            DiagramMode::Sunburst => {
-                Self::Sunburst(SunburstLayout::compute(tree, focus, width.min(height), sweep, groups))
+            DiagramMode::Sunburst => Self::Sunburst(SunburstLayout::compute(
+                tree,
+                focus,
+                bounds.width.min(bounds.height),
+                sweep,
+                groups,
+                marked,
+            )),
+            DiagramMode::Treemap => {
+                Self::Treemap(TreemapLayout::compute(tree, focus, bounds.width, bounds.height, marked))
             }
-            DiagramMode::Treemap => Self::Treemap(TreemapLayout::compute(tree, focus, width, height)),
         }
     }
 

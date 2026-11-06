@@ -63,10 +63,35 @@ impl DiagramPainter<'_> {
     ) -> Scene {
         let mut scene = self.empty_scene(layout.size, layout.size, progress);
         let center = layout.center();
+        let moving = progress < 1.0;
+        let collapsed_now = collapse_points(layout);
+        let collapsed_before = previous.map(collapse_points).unwrap_or_default();
+        if moving && let Some(previous) = previous {
+            for leaving in &previous.segments {
+                let stays = layout.segments.iter().any(|segment| segment.hit() == leaving.hit());
+                let Some(angle) = collapse_angle(self.tree, &collapsed_now, leaving.node).filter(|_| !stays) else {
+                    continue;
+                };
+                let (fill, stroke, dashed) = self.segment_style(leaving, ring_opacity(leaving));
+                scene.shapes.push(ShapeInstance {
+                    geometry: [angle, angle, leaving.inner_radius, leaving.inner_radius],
+                    previous: segment_geometry(leaving),
+                    fill,
+                    stroke,
+                    center: [center.x, center.y],
+                    stroke_width: HAIRLINE,
+                    kind: SHAPE_ARC,
+                    dashed: u32::from(dashed),
+                    ..ShapeInstance::default()
+                });
+            }
+        }
         for segment in &layout.segments {
-            let node = self.tree.node(segment.node);
-            let opacity = (1.0 - segment.ring as f32 * RING_FADE) * self.dim_factor(segment.hit());
-            let geometry = arc_geometry(segment);
+            if segment.kind == SegmentKind::Collapsed && !moving {
+                continue;
+            }
+            let opacity = ring_opacity(segment) * self.dim_factor(segment.hit());
+            let geometry = segment_geometry(segment);
             let previous = previous
                 .and_then(|layout| {
                     layout
@@ -74,19 +99,13 @@ impl DiagramPainter<'_> {
                         .iter()
                         .find(|candidate| candidate.hit() == segment.hit())
                 })
-                .map_or([geometry[0], geometry[0], geometry[2], geometry[3]], arc_geometry);
-            let (fill, stroke, dashed) = match segment.kind {
-                SegmentKind::Node => (
-                    faded(category_color(self.palette, node.category), opacity),
-                    self.hidden_stroke(node.category),
-                    node.category == Category::Hidden,
-                ),
-                SegmentKind::SmallGroup { .. } => (
-                    faded(self.palette.mute, opacity * SMALL_GROUP_OPACITY),
-                    self.palette.line.premultiplied(),
-                    false,
-                ),
-            };
+                .map(segment_geometry)
+                .or_else(|| {
+                    collapse_angle(self.tree, &collapsed_before, segment.node)
+                        .map(|angle| [angle, angle, segment.inner_radius, segment.inner_radius])
+                })
+                .unwrap_or([geometry[0], geometry[0], geometry[2], geometry[3]]);
+            let (fill, stroke, dashed) = self.segment_style(segment, opacity);
             scene.shapes.push(ShapeInstance {
                 geometry,
                 previous,
@@ -251,6 +270,27 @@ impl DiagramPainter<'_> {
         )
     }
 
+    fn segment_style(&self, segment: &ArcSegment, opacity: f32) -> ([f32; 4], [f32; 4], bool) {
+        let node = self.tree.node(segment.node);
+        match segment.kind {
+            SegmentKind::Node => (
+                faded(category_color(self.palette, node.category), opacity),
+                self.hidden_stroke(node.category),
+                node.category == Category::Hidden,
+            ),
+            SegmentKind::SmallGroup { .. } => (
+                faded(self.palette.mute, opacity * SMALL_GROUP_OPACITY),
+                self.palette.line.premultiplied(),
+                false,
+            ),
+            SegmentKind::Collapsed => (
+                faded(category_color(self.palette, node.category), opacity),
+                [0.0; 4],
+                false,
+            ),
+        }
+    }
+
     fn dim_factor(&self, hit: Hit) -> f32 {
         match self.hovered {
             Some(hovered) if hovered != hit => 1.0 - (1.0 - HOVER_DIM_OPACITY) * self.dim_progress,
@@ -312,7 +352,40 @@ pub fn fit_end(text: &str, style: TextStyle, max_width: f32) -> ShapedLine {
     }
 }
 
-fn arc_geometry(segment: &ArcSegment) -> [f32; 4] {
+fn segment_geometry(segment: &ArcSegment) -> [f32; 4] {
+    if segment.kind == SegmentKind::Collapsed {
+        return [
+            segment.start_angle,
+            segment.start_angle,
+            segment.inner_radius,
+            segment.inner_radius,
+        ];
+    }
     let (start, end) = segment.drawn_angles();
     [start, end, segment.inner_radius, segment.outer_radius]
+}
+
+fn ring_opacity(segment: &ArcSegment) -> f32 {
+    1.0 - segment.ring as f32 * RING_FADE
+}
+
+fn collapse_points(layout: &SunburstLayout) -> Vec<(usize, f32)> {
+    layout
+        .collapsed()
+        .map(|segment| (segment.node, segment.start_angle))
+        .collect()
+}
+
+fn collapse_angle(tree: &DiagramTree, points: &[(usize, f32)], node: usize) -> Option<f32> {
+    if points.is_empty() {
+        return None;
+    }
+    let mut current = Some(node);
+    while let Some(candidate) = current {
+        if let Some((_, angle)) = points.iter().find(|(point, _)| *point == candidate) {
+            return Some(*angle);
+        }
+        current = tree.node(candidate).parent;
+    }
+    None
 }

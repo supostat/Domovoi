@@ -11,7 +11,9 @@ use crate::diagram_strings::DiagramStrings;
 use crate::diagram_tree::{DiagramTree, ROOT};
 use crate::glyph_atlas::GlyphAtlas;
 use crate::hit::Hit;
+use crate::marked_nodes::MarkedNodes;
 use crate::point::Point;
+use crate::rect::Rect;
 use crate::scene::Scene;
 use crate::segment_focus::SegmentFocus;
 use crate::small_groups::SmallGroups;
@@ -34,8 +36,10 @@ pub struct DiagramState {
     pub center: Option<[String; 3]>,
     pub layout: DiagramLayout,
     pub small_groups: SmallGroups,
+    marked: MarkedNodes,
     previous: Option<SunburstLayout>,
     zoom: Option<Transition>,
+    collapse: Option<Transition>,
     dim: Option<Transition>,
     keyboard: SegmentFocus,
 }
@@ -50,7 +54,16 @@ impl DiagramState {
         height: f32,
     ) -> Self {
         let small_groups = SmallGroups::default();
-        let layout = DiagramLayout::compute(mode, &tree, ROOT, width, height, FULL_SWEEP, &small_groups);
+        let marked = MarkedNodes::default();
+        let layout = DiagramLayout::compute(
+            mode,
+            &tree,
+            ROOT,
+            bounds(width, height),
+            FULL_SWEEP,
+            &small_groups,
+            &marked,
+        );
         Self {
             tree,
             mode,
@@ -64,8 +77,10 @@ impl DiagramState {
             center: None,
             layout,
             small_groups,
+            marked,
             previous: None,
             zoom: None,
+            collapse: None,
             dim: None,
             keyboard: SegmentFocus::default(),
         }
@@ -89,6 +104,7 @@ impl DiagramState {
         self.mode = mode;
         self.previous = None;
         self.zoom = None;
+        self.collapse = None;
         self.relayout(self.focus());
     }
 
@@ -101,6 +117,7 @@ impl DiagramState {
         self.small_groups.always = always;
         self.previous = None;
         self.zoom = None;
+        self.collapse = None;
         self.relayout(self.focus());
     }
 
@@ -108,6 +125,7 @@ impl DiagramState {
         self.small_groups.open(parent);
         self.previous = None;
         self.zoom = None;
+        self.collapse = None;
         self.hovered = None;
         self.relayout(self.focus());
     }
@@ -121,6 +139,7 @@ impl DiagramState {
             DiagramLayout::Treemap(_) => None,
         };
         self.zoom = Some(Transition::start(Motion::LevelZoom, now, self.reduce_motion));
+        self.collapse = None;
         self.hovered = None;
         self.keyboard.reset();
         self.relayout(node);
@@ -129,9 +148,35 @@ impl DiagramState {
     pub fn jump_to(&mut self, node: usize) {
         self.previous = None;
         self.zoom = None;
+        self.collapse = None;
         self.hovered = None;
         self.keyboard.reset();
         self.relayout(node);
+    }
+
+    pub fn set_marked(&mut self, marked: MarkedNodes, now: Instant) {
+        if marked == self.marked {
+            return;
+        }
+        self.previous = match &self.layout {
+            DiagramLayout::Sunburst(layout) => Some(layout.clone()),
+            DiagramLayout::Treemap(_) => None,
+        };
+        self.zoom = None;
+        self.collapse = Some(Transition::start(Motion::TrashCollapse, now, self.reduce_motion));
+        self.marked = marked;
+        self.hovered = None;
+        self.dim = None;
+        self.keyboard.reset();
+        self.relayout(self.focus());
+    }
+
+    pub fn jump_marked(&mut self, marked: MarkedNodes) {
+        self.marked = marked;
+        self.previous = None;
+        self.zoom = None;
+        self.collapse = None;
+        self.relayout(self.focus());
     }
 
     pub fn hover(&mut self, point: Option<Point>, now: Instant) {
@@ -207,7 +252,7 @@ impl DiagramState {
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        [self.zoom, self.dim]
+        [self.zoom, self.collapse, self.dim]
             .into_iter()
             .flatten()
             .any(|transition| !transition.is_finished(now))
@@ -225,7 +270,10 @@ impl DiagramState {
         };
         match &self.layout {
             DiagramLayout::Sunburst(layout) => {
-                let progress = self.zoom.map_or(1.0, |zoom| zoom.progress(now));
+                let progress = self
+                    .zoom
+                    .or(self.collapse)
+                    .map_or(1.0, |transition| transition.progress(now));
                 painter.sunburst(layout, self.previous.as_ref(), progress, atlas)
             }
             DiagramLayout::Treemap(layout) => painter.treemap(layout, atlas),
@@ -237,10 +285,19 @@ impl DiagramState {
             self.mode,
             &self.tree,
             focus,
-            self.width,
-            self.height,
+            bounds(self.width, self.height),
             self.sweep,
             &self.small_groups,
+            &self.marked,
         );
+    }
+}
+
+fn bounds(width: f32, height: f32) -> Rect {
+    Rect {
+        x: 0.0,
+        y: 0.0,
+        width,
+        height,
     }
 }

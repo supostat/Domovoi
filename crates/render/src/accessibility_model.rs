@@ -31,11 +31,11 @@ pub fn accessible_segments(
             let mut segments: Vec<AccessibleSegment> = sunburst
                 .segments
                 .iter()
-                .filter(|segment| segment.ring == 0)
+                .filter(|segment| segment.ring == 0 && segment.kind != SegmentKind::Collapsed)
                 .map(|segment| AccessibleSegment {
                     node: segment.node,
                     label: match segment.kind {
-                        SegmentKind::Node => label(segment.node),
+                        SegmentKind::Node | SegmentKind::Collapsed => label(segment.node),
                         SegmentKind::SmallGroup { count, bytes } => strings.small_group_label(count, bytes),
                     },
                     frame: arc_frame(sunburst, segment),

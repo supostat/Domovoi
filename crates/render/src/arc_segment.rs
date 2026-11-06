@@ -16,7 +16,7 @@ pub struct ArcSegment {
 impl ArcSegment {
     pub fn hit(&self) -> Hit {
         match self.kind {
-            SegmentKind::Node => Hit::Node(self.node),
+            SegmentKind::Node | SegmentKind::Collapsed => Hit::Node(self.node),
             SegmentKind::SmallGroup { .. } => Hit::Group(self.node),
         }
     }

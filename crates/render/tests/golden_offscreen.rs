@@ -4,8 +4,8 @@ use std::env;
 use std::path::PathBuf;
 
 use domovoi_render::{
-    BgraImage, DiagramPainter, DiagramRenderer, DiagramTree, FontFamily, GlyphAtlas, ROOT, Scene, ShapedLine,
-    SmallGroups, SunburstLayout, TextStyle, TreemapLayout,
+    BgraImage, DiagramPainter, DiagramRenderer, DiagramTree, FontFamily, GlyphAtlas, MarkedNodes, ROOT, Scene,
+    ShapedLine, SmallGroups, SunburstLayout, TextStyle, TreemapLayout,
 };
 use domovoi_theme::Palette;
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
@@ -49,14 +49,21 @@ fn render(renderer: &mut DiagramRenderer, mode: &str, palette: &'static Palette,
     let painter = painter(palette, scale, &tree);
     let scene = if mode == "sunburst" {
         painter.sunburst(
-            &SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &SmallGroups::default()),
+            &SunburstLayout::compute(
+                &tree,
+                ROOT,
+                SUNBURST_SIZE,
+                1.0,
+                &SmallGroups::default(),
+                &MarkedNodes::default(),
+            ),
             None,
             1.0,
             &mut atlas,
         )
     } else {
         painter.treemap(
-            &TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT),
+            &TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT, &MarkedNodes::default()),
             &mut atlas,
         )
     };

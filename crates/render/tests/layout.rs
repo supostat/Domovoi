@@ -3,10 +3,12 @@ mod support;
 use std::f32::consts::TAU;
 use std::time::Instant;
 
+use domovoi_index::Category;
 use domovoi_render::{
-    ArcSegment, DiagramLayout, DiagramMode, DiagramState, FontFamily, GROUP_MIN_HEIGHT, GROUP_MIN_WIDTH, Hit,
-    LABEL_MIN_HEIGHT, LABEL_MIN_WIDTH, Point, RING_COUNT, ROOT, SMALL_GROUP_SPAN, SegmentKind, SmallGroups,
-    SunburstLayout, TextStyle, TileRole, TreemapLayout, VISIBLE_SIDE, center_text, fit_end,
+    ArcSegment, DiagramLayout, DiagramMode, DiagramOutline, DiagramState, DiagramTree, EffectiveSizes, FontFamily,
+    GROUP_MIN_HEIGHT, GROUP_MIN_WIDTH, Hit, LABEL_MIN_HEIGHT, LABEL_MIN_WIDTH, MarkedNodes, NodeOrigin, Point,
+    RING_COUNT, ROOT, SMALL_GROUP_SPAN, SegmentKind, SmallGroups, SunburstLayout, TextStyle, TileRole, TreemapLayout,
+    VISIBLE_SIDE, center_text, fit_end,
 };
 use domovoi_theme::Palette;
 use support::{SMALL_FILE_BYTES, SMALL_FILES, STRINGS, book_v, fonts, small_group_tree};
@@ -30,7 +32,7 @@ fn closed() -> SmallGroups {
 #[test]
 fn every_ring_of_the_sunburst_closes_the_full_circle_and_maps_to_the_node_depth() {
     let tree = book_v();
-    let layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &closed());
+    let layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &closed(), &MarkedNodes::default());
     assert!(
         (layout.ring_angle_sum(0) - TAU).abs() < ANGLE_TOLERANCE,
         "{}",
@@ -50,6 +52,7 @@ fn every_ring_of_the_sunburst_closes_the_full_circle_and_maps_to_the_node_depth(
                 assert_eq!(segment.ring, depth, "the group sits among the children of its parent");
                 assert!(count > 0 && bytes > 0);
             }
+            SegmentKind::Collapsed => panic!("nothing is marked in this layout"),
         }
         assert!(segment.ring < RING_COUNT);
         let (start, end) = segment.drawn_angles();
@@ -84,7 +87,7 @@ fn every_ring_of_the_sunburst_closes_the_full_circle_and_maps_to_the_node_depth(
         );
     }
     let focus = tree.node(ROOT).children[0];
-    let zoomed = SunburstLayout::compute(&tree, focus, SUNBURST_SIZE, 1.0, &closed());
+    let zoomed = SunburstLayout::compute(&tree, focus, SUNBURST_SIZE, 1.0, &closed(), &MarkedNodes::default());
     assert!((zoomed.ring_angle_sum(0) - TAU).abs() < ANGLE_TOLERANCE);
     assert!(
         zoomed
@@ -99,7 +102,7 @@ fn every_ring_of_the_sunburst_closes_the_full_circle_and_maps_to_the_node_depth(
 fn small_children_fold_into_one_group_that_opens_on_demand() {
     let tree = small_group_tree();
     let large_folder = tree.node(ROOT).children[0];
-    let closed_layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &closed());
+    let closed_layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &closed(), &MarkedNodes::default());
     let group = *closed_layout.groups().next().expect("the small files form a group");
     assert_eq!(closed_layout.groups().count(), 1);
     assert_eq!((group.node, group.ring), (ROOT, 0));
@@ -126,7 +129,7 @@ fn small_children_fold_into_one_group_that_opens_on_demand() {
 
     let mut opened = closed();
     opened.open(ROOT);
-    let open_layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &opened);
+    let open_layout = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &opened, &MarkedNodes::default());
     assert_eq!(open_layout.groups().count(), 0);
     assert_eq!(
         open_layout.segments.iter().filter(|segment| segment.ring == 0).count(),
@@ -143,7 +146,14 @@ fn small_children_fold_into_one_group_that_opens_on_demand() {
         (members - span(&group)).abs() < ANGLE_TOLERANCE,
         "the members fill exactly the arc of the group"
     );
-    let always = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &SmallGroups::always(true));
+    let always = SunburstLayout::compute(
+        &tree,
+        ROOT,
+        SUNBURST_SIZE,
+        1.0,
+        &SmallGroups::always(true),
+        &MarkedNodes::default(),
+    );
     assert_eq!(always.segments, open_layout.segments);
 
     let mut state = DiagramState::new(
@@ -166,7 +176,7 @@ fn small_children_fold_into_one_group_that_opens_on_demand() {
 #[test]
 fn the_scan_sector_follows_the_actual_progress() {
     for tree in [book_v(), small_group_tree()] {
-        let half = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 0.5, &closed());
+        let half = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 0.5, &closed(), &MarkedNodes::default());
         assert!(
             half.segments
                 .iter()
@@ -179,7 +189,7 @@ fn the_scan_sector_follows_the_actual_progress() {
 #[test]
 fn hit_testing_inverts_both_layouts() {
     let tree = book_v();
-    let sunburst = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &closed());
+    let sunburst = SunburstLayout::compute(&tree, ROOT, SUNBURST_SIZE, 1.0, &closed(), &MarkedNodes::default());
     for segment in &sunburst.segments {
         let (angle, radius) = segment.middle();
         assert_eq!(sunburst.hit_test(sunburst.point_at(angle, radius)), Some(segment.hit()));
@@ -189,7 +199,7 @@ fn hit_testing_inverts_both_layouts() {
         None,
         "the center belongs to no segment"
     );
-    let treemap = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT);
+    let treemap = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT, &MarkedNodes::default());
     for tile in &treemap.tiles {
         let deeper_inside = treemap.tiles.iter().any(|other| {
             other.role == TileRole::Nested
@@ -212,8 +222,8 @@ fn hit_testing_inverts_both_layouts() {
 #[test]
 fn squarified_tiles_stay_inside_their_bounds_without_overlap_and_repeat_exactly() {
     let tree = book_v();
-    let first = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT);
-    let second = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT);
+    let first = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT, &MarkedNodes::default());
+    let second = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT, &MarkedNodes::default());
     assert_eq!(first, second, "the layout is deterministic");
     let top: Vec<_> = first
         .tiles
@@ -255,7 +265,7 @@ fn squarified_tiles_stay_inside_their_bounds_without_overlap_and_repeat_exactly(
 fn treemap_labels_appear_only_above_the_thresholds_and_are_cut_at_the_end() {
     fonts();
     let tree = book_v();
-    let layout = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT);
+    let layout = TreemapLayout::compute(&tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT, &MarkedNodes::default());
     for tile in &layout.tiles {
         match tile.role {
             TileRole::Group => {
@@ -284,7 +294,7 @@ fn the_sun_center_shrinks_to_the_minimum_before_the_ellipsis() {
     fonts();
     let tree = book_v();
     for size in (140..=560).step_by(20) {
-        let layout = SunburstLayout::compute(&tree, ROOT, size as f32, 1.0, &closed());
+        let layout = SunburstLayout::compute(&tree, ROOT, size as f32, 1.0, &closed(), &MarkedNodes::default());
         for text in [PATH, NAME, LONG_NAME] {
             for line in center_text(&layout, text, text, text) {
                 let width = line.line.width();
@@ -303,4 +313,258 @@ fn the_sun_center_shrinks_to_the_minimum_before_the_ellipsis() {
             }
         }
     }
+}
+
+const MEDIA: u64 = 600;
+const MEDIA_ORIGINALS: u64 = 400;
+const MEDIA_EXPORTS: u64 = 200;
+const DOCUMENTS: u64 = 300;
+const PROJECTS: u64 = 100;
+const DISK: u64 = MEDIA + DOCUMENTS + PROJECTS;
+const OUT_OF_TREE: u64 = 50;
+
+struct MarkedFixture {
+    tree: DiagramTree,
+    media: usize,
+    originals: usize,
+    exports: usize,
+    documents: usize,
+    projects: usize,
+}
+
+impl MarkedFixture {
+    fn new() -> Self {
+        let leaf = |name: &str, size: u64, category: Category| DiagramOutline {
+            name: name.to_owned(),
+            category,
+            size,
+            origin: NodeOrigin::Outline,
+            children: Vec::new(),
+        };
+        let tree = DiagramTree::from_outline(&DiagramOutline {
+            name: "Macintosh HD".to_owned(),
+            category: Category::Home,
+            size: 0,
+            origin: NodeOrigin::Outline,
+            children: vec![
+                DiagramOutline {
+                    name: "Media".to_owned(),
+                    category: Category::Media,
+                    size: 0,
+                    origin: NodeOrigin::Outline,
+                    children: vec![
+                        leaf("Originals", MEDIA_ORIGINALS, Category::Media),
+                        leaf("Exports", MEDIA_EXPORTS, Category::Media),
+                    ],
+                },
+                leaf("Documents", DOCUMENTS, Category::Docs),
+                leaf("Projects", PROJECTS, Category::Dev),
+            ],
+        });
+        let child = |parent: usize, name: &str| {
+            tree.node(parent)
+                .children
+                .iter()
+                .copied()
+                .find(|child| tree.node(*child).name == name)
+                .expect("the fixture names its children")
+        };
+        let media = child(ROOT, "Media");
+        let originals = child(media, "Originals");
+        let exports = child(media, "Exports");
+        let documents = child(ROOT, "Documents");
+        let projects = child(ROOT, "Projects");
+        Self {
+            tree,
+            media,
+            originals,
+            exports,
+            documents,
+            projects,
+        }
+    }
+
+    fn sunburst(&self, focus: usize, marked: &MarkedNodes) -> SunburstLayout {
+        SunburstLayout::compute(&self.tree, focus, SUNBURST_SIZE, 1.0, &closed(), marked)
+    }
+}
+
+fn marked(nodes: &[usize]) -> MarkedNodes {
+    let mut marked = MarkedNodes::default();
+    for node in nodes {
+        marked.mark(*node);
+    }
+    marked
+}
+
+fn segment_of(layout: &SunburstLayout, node: usize) -> &ArcSegment {
+    layout
+        .segments
+        .iter()
+        .find(|segment| segment.node == node && !matches!(segment.kind, SegmentKind::SmallGroup { .. }))
+        .expect("the node has a segment")
+}
+
+fn share(bytes: u64, total: u64) -> f32 {
+    TAU * bytes as f32 / total as f32
+}
+
+#[test]
+fn marked_bytes_leave_every_ancestor_and_the_siblings_share_the_circle() {
+    let fixture = MarkedFixture::new();
+    let marked = marked(&[fixture.originals]);
+    let sizes = EffectiveSizes::of(&fixture.tree, &marked, ROOT);
+    assert_eq!(sizes.size(fixture.originals), 0);
+    assert_eq!(sizes.size(fixture.media), MEDIA - MEDIA_ORIGINALS);
+    assert_eq!(sizes.size(ROOT), DISK - MEDIA_ORIGINALS);
+    assert_eq!(sizes.size(fixture.documents), DOCUMENTS);
+
+    let layout = fixture.sunburst(ROOT, &marked);
+    let remaining = DISK - MEDIA_ORIGINALS;
+    for (node, bytes) in [
+        (fixture.media, MEDIA_EXPORTS),
+        (fixture.documents, DOCUMENTS),
+        (fixture.projects, PROJECTS),
+    ] {
+        let segment = segment_of(&layout, node);
+        assert!(
+            (span(segment) - share(bytes, remaining)).abs() < ANGLE_TOLERANCE,
+            "{}",
+            fixture.tree.node(node).name
+        );
+    }
+    assert!((layout.ring_angle_sum(0) - TAU).abs() < ANGLE_TOLERANCE);
+    let exports = segment_of(&layout, fixture.exports);
+    assert!(
+        (span(exports) - span(segment_of(&layout, fixture.media))).abs() < ANGLE_TOLERANCE,
+        "the remaining child takes the whole sector of its parent"
+    );
+}
+
+#[test]
+fn marked_node_collapses_to_zero_angle_and_the_children_keep_their_order() {
+    let fixture = MarkedFixture::new();
+    let layout = fixture.sunburst(ROOT, &marked(&[fixture.media]));
+    let ring: Vec<(usize, SegmentKind)> = layout
+        .segments
+        .iter()
+        .filter(|segment| segment.ring == 0)
+        .map(|segment| (segment.node, segment.kind))
+        .collect();
+    assert_eq!(
+        ring,
+        [
+            (fixture.media, SegmentKind::Collapsed),
+            (fixture.documents, SegmentKind::Node),
+            (fixture.projects, SegmentKind::Node),
+        ],
+        "the tree order stays even though Media is now the smallest"
+    );
+    let media = segment_of(&layout, fixture.media);
+    assert!(span(media).abs() < f32::EPSILON);
+    assert!(
+        layout
+            .segments
+            .iter()
+            .all(|segment| segment.node != fixture.originals && segment.node != fixture.exports),
+        "the children of a collapsed node leave the layout and shrink into its point while the frame moves"
+    );
+    assert_eq!(layout.collapsed().count(), 1);
+}
+
+#[test]
+fn marked_focus_keeps_the_sizes_of_its_level() {
+    let fixture = MarkedFixture::new();
+    let marked = marked(&[fixture.media]);
+    let sizes = EffectiveSizes::of(&fixture.tree, &marked, fixture.media);
+    assert_eq!(sizes.size(fixture.originals), MEDIA_ORIGINALS);
+    assert_eq!(sizes.size(fixture.media), MEDIA);
+    let layout = fixture.sunburst(fixture.media, &marked);
+    assert_eq!(layout.collapsed().count(), 0);
+    let originals = segment_of(&layout, fixture.originals);
+    assert!((span(originals) - share(MEDIA_ORIGINALS, MEDIA)).abs() < ANGLE_TOLERANCE);
+    assert!(marked.covers(&fixture.tree, fixture.originals));
+}
+
+#[test]
+fn marked_segment_takes_no_pointer_and_no_accessibility_element() {
+    let fixture = MarkedFixture::new();
+    let marked = marked(&[fixture.documents]);
+    let layout = fixture.sunburst(ROOT, &marked);
+    let documents = segment_of(&layout, fixture.documents);
+    let radius = f32::midpoint(documents.inner_radius, documents.outer_radius);
+    for angle in [documents.start_angle, documents.start_angle + ANGLE_TOLERANCE] {
+        assert_ne!(
+            layout.hit_test(layout.point_at(angle, radius)),
+            Some(Hit::Node(fixture.documents))
+        );
+    }
+
+    let mut state = DiagramState::new(
+        fixture.tree.clone(),
+        DiagramMode::Sunburst,
+        STRINGS,
+        &Palette::DARK,
+        SUNBURST_SIZE,
+        SUNBURST_SIZE,
+    );
+    state.jump_marked(marked);
+    assert!(
+        state
+            .segments()
+            .iter()
+            .all(|segment| segment.is_center || segment.node != fixture.documents),
+        "a collapsed segment is not offered to VoiceOver"
+    );
+    assert_eq!(state.segments().len(), 3, "Media, Projects and the center");
+}
+
+#[test]
+fn marked_treemap_tiles_share_the_former_bounds_without_the_marked_one() {
+    let fixture = MarkedFixture::new();
+    let marked = marked(&[fixture.documents]);
+    let layout = TreemapLayout::compute(&fixture.tree, ROOT, TREEMAP_WIDTH, TREEMAP_HEIGHT, &marked);
+    assert!(layout.tile_of(fixture.documents).is_none());
+    for tile in &layout.tiles {
+        assert!(tile.rect.x >= 0.0 && tile.rect.y >= 0.0);
+        assert!(tile.rect.x + tile.rect.width <= TREEMAP_WIDTH + ANGLE_TOLERANCE);
+        assert!(tile.rect.y + tile.rect.height <= TREEMAP_HEIGHT + ANGLE_TOLERANCE);
+    }
+    let area = |node: usize| {
+        let rect = layout.tile_of(node).expect("the tile exists").rect;
+        rect.width * rect.height
+    };
+    let ratio = area(fixture.media) / area(fixture.projects);
+    let unmarked = TreemapLayout::compute(
+        &fixture.tree,
+        ROOT,
+        TREEMAP_WIDTH,
+        TREEMAP_HEIGHT,
+        &MarkedNodes::default(),
+    );
+    let unmarked_media = unmarked.tile_of(fixture.media).expect("Media has a tile").rect;
+    assert!(
+        area(fixture.media) > unmarked_media.width * unmarked_media.height,
+        "Media grows into the place of the marked tile"
+    );
+    assert!(ratio > 4.0, "Media still outweighs Projects six to one: {ratio}");
+}
+
+#[test]
+fn marked_partial_deduction_shrinks_the_node_and_its_ancestors_without_collapsing_it() {
+    let fixture = MarkedFixture::new();
+    let mut marked = MarkedNodes::default();
+    marked.deduct(fixture.exports, OUT_OF_TREE);
+    let sizes = EffectiveSizes::of(&fixture.tree, &marked, ROOT);
+    assert_eq!(sizes.size(fixture.exports), MEDIA_EXPORTS - OUT_OF_TREE);
+    assert_eq!(sizes.size(fixture.media), MEDIA - OUT_OF_TREE);
+    assert_eq!(sizes.size(ROOT), DISK - OUT_OF_TREE);
+    assert!(!sizes.is_collapsed(fixture.exports));
+    assert!(!marked.covers(&fixture.tree, fixture.exports));
+
+    let layout = fixture.sunburst(ROOT, &marked);
+    assert_eq!(layout.collapsed().count(), 0);
+    let exports = segment_of(&layout, fixture.exports);
+    assert_eq!(exports.kind, SegmentKind::Node);
+    assert!((span(exports) - share(MEDIA_EXPORTS - OUT_OF_TREE, DISK - OUT_OF_TREE)).abs() < ANGLE_TOLERANCE);
 }

@@ -723,6 +723,7 @@ impl EndToEnd {
             DIAGRAM_SIDE,
             1.0,
             &domovoi_render::SmallGroups::default(),
+            &domovoi_render::MarkedNodes::default(),
         );
         let groups = layout.groups().filter(|group| group.ring == 0).count();
         Ok(json!({

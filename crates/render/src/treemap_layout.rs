@@ -1,4 +1,6 @@
 use crate::diagram_tree::DiagramTree;
+use crate::effective_sizes::EffectiveSizes;
+use crate::marked_nodes::MarkedNodes;
 use crate::point::Point;
 use crate::rect::Rect;
 use crate::squarify::squarify;
@@ -25,7 +27,8 @@ pub struct TreemapLayout {
 }
 
 impl TreemapLayout {
-    pub fn compute(tree: &DiagramTree, focus: usize, width: f32, height: f32) -> Self {
+    pub fn compute(tree: &DiagramTree, focus: usize, width: f32, height: f32, marked: &MarkedNodes) -> Self {
+        let sizes = EffectiveSizes::of(tree, marked, focus);
         let mut tiles = Vec::new();
         let focus_node = tree.node(focus);
         let top: Vec<usize> = if focus_node.children.is_empty() {
@@ -39,7 +42,7 @@ impl TreemapLayout {
             width,
             height,
         };
-        for (node, cell) in squarify(&weights(tree, &top), bounds) {
+        for (node, cell) in squarify(&weights(&sizes, &top), bounds) {
             let rect = cell.inset(TILE_INSET);
             if rect.width < VISIBLE_SIDE || rect.height < VISIBLE_SIDE {
                 continue;
@@ -65,7 +68,7 @@ impl TreemapLayout {
                     width: rect.width - 2.0 * GROUP_PADDING,
                     height: rect.height - GROUP_HEADER - GROUP_PADDING,
                 };
-                for (child, cell) in squarify(&weights(tree, children), inner) {
+                for (child, cell) in squarify(&weights(&sizes, children), inner) {
                     let rect = cell.inset(NESTED_INSET);
                     if rect.width < 1.0 || rect.height < 1.0 {
                         continue;
@@ -107,10 +110,10 @@ impl TreemapLayout {
     }
 }
 
-fn weights(tree: &DiagramTree, nodes: &[usize]) -> Vec<(usize, f32)> {
+fn weights(sizes: &EffectiveSizes, nodes: &[usize]) -> Vec<(usize, f32)> {
     nodes
         .iter()
-        .map(|node| (*node, tree.node(*node).size as f32))
+        .map(|node| (*node, sizes.size(*node) as f32))
         .filter(|(_, size)| *size > 0.0)
         .collect()
 }

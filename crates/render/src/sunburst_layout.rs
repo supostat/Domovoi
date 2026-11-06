@@ -2,7 +2,9 @@ use std::f32::consts::TAU;
 
 use crate::arc_segment::ArcSegment;
 use crate::diagram_tree::DiagramTree;
+use crate::effective_sizes::EffectiveSizes;
 use crate::hit::Hit;
+use crate::marked_nodes::MarkedNodes;
 use crate::point::Point;
 use crate::segment_kind::SegmentKind;
 use crate::small_groups::SmallGroups;
@@ -32,14 +34,22 @@ struct SmallRun {
 }
 
 impl SunburstLayout {
-    pub fn compute(tree: &DiagramTree, focus: usize, size: f32, sweep: f32, groups: &SmallGroups) -> Self {
+    pub fn compute(
+        tree: &DiagramTree,
+        focus: usize,
+        size: f32,
+        sweep: f32,
+        groups: &SmallGroups,
+        marked: &MarkedNodes,
+    ) -> Self {
         let mut layout = Self {
             size,
             focus,
             sweep: sweep.clamp(0.0, 1.0),
             segments: Vec::new(),
         };
-        layout.walk(tree, focus, 0.0, TAU, 0, groups);
+        let sizes = EffectiveSizes::of(tree, marked, focus);
+        layout.walk(tree, &sizes, focus, (0.0, TAU), 0, groups);
         layout
     }
 
@@ -70,6 +80,12 @@ impl SunburstLayout {
             .sum()
     }
 
+    pub fn collapsed(&self) -> impl Iterator<Item = &ArcSegment> {
+        self.segments
+            .iter()
+            .filter(|segment| segment.kind == SegmentKind::Collapsed)
+    }
+
     pub fn groups(&self) -> impl Iterator<Item = &ArcSegment> {
         self.segments
             .iter()
@@ -84,7 +100,8 @@ impl SunburstLayout {
         self.segments
             .iter()
             .find(|segment| {
-                radius >= segment.inner_radius
+                segment.kind != SegmentKind::Collapsed
+                    && radius >= segment.inner_radius
                     && radius <= segment.outer_radius
                     && angle >= segment.start_angle
                     && angle < segment.end_angle
@@ -100,8 +117,16 @@ impl SunburstLayout {
         }
     }
 
-    fn walk(&mut self, tree: &DiagramTree, node: usize, start: f32, end: f32, ring: u32, groups: &SmallGroups) {
-        let parent_size = tree.node(node).size;
+    fn walk(
+        &mut self,
+        tree: &DiagramTree,
+        sizes: &EffectiveSizes,
+        node: usize,
+        (start, end): (f32, f32),
+        ring: u32,
+        groups: &SmallGroups,
+    ) {
+        let parent_size = sizes.size(node);
         if parent_size == 0 {
             return;
         }
@@ -110,15 +135,20 @@ impl SunburstLayout {
         let mut angle = start;
         let mut small: Option<SmallRun> = None;
         for child in tree.node(node).children.clone() {
-            let child_size = tree.node(child).size;
+            let child_size = sizes.size(child);
             let span = (end - start) * (child_size as f32 / parent_size as f32);
             let child_end = angle + span;
-            if span > 0.0 && angle < limit {
+            if sizes.is_collapsed(child) {
+                if angle < limit {
+                    self.segments
+                        .push(self.segment(child, SegmentKind::Collapsed, ring, angle, angle, 0.0));
+                }
+            } else if span > 0.0 && angle < limit {
                 if span > SMALL_GROUP_SPAN || opened {
                     self.segments
                         .push(self.segment(child, SegmentKind::Node, ring, angle, child_end.min(limit), span));
                     if ring + 1 < RING_COUNT {
-                        self.walk(tree, child, angle, child_end, ring + 1, groups);
+                        self.walk(tree, sizes, child, (angle, child_end), ring + 1, groups);
                     }
                 } else {
                     let run = small.get_or_insert(SmallRun {

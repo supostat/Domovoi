@@ -2,4 +2,5 @@
 pub enum SegmentKind {
     Node,
     SmallGroup { count: usize, bytes: u64 },
+    Collapsed,
 }
