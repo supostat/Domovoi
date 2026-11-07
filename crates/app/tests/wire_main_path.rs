@@ -786,7 +786,9 @@ fn assert_tray_drag(report: &Value, mount_point: &Path) {
     assert!(summary.starts_with("К удалению · 1 · ≈ "), "{marked:#}");
     assert_eq!(marked["tray"], json!([mount_point.join(DROPPED)]), "{marked:#}");
     assert_eq!(marked["marked_rows"], json!(["Keep"]), "{marked:#}");
-    let collapsed = marked["collapsed_segments"].as_u64().expect("the step counts collapsed segments");
+    let collapsed = marked["collapsed_segments"]
+        .as_u64()
+        .expect("the step counts collapsed segments");
     assert!(collapsed > 0, "{marked:#}");
     let unmarked = step(report, "unmark_tray_row");
     assert_eq!(unmarked["rows_before"], 1, "{unmarked:#}");

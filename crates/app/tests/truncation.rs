@@ -144,7 +144,10 @@ fn level_rows(checks: &mut Checks, marker: MainThreadMarker) {
         checks.truncated_with_full_text(&parts.name, LONG_NAME, &format!("{element}, name"));
         checks.mode(&parts.size, NSLineBreakMode::ByClipping, &format!("{element}, size"));
         checks.never_cut(&parts.size, &format!("{element}, size"));
-        checks.expect(parts.mark.isHidden(), format!("{element}: an unmarked row hides the mark"));
+        checks.expect(
+            parts.mark.isHidden(),
+            format!("{element}: an unmarked row hides the mark"),
+        );
     }
 }
 

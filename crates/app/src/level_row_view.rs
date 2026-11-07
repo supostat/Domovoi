@@ -86,7 +86,8 @@ impl LevelRowView {
         self.name.setStringValue(&full);
         self.name.setTextColor(Some(&name_color.ns_color()));
         self.name.setToolTip(Some(&full));
-        self.name.setAccessibilityLabel(Some(&NSString::from_str(&spoken_name(row))));
+        self.name
+            .setAccessibilityLabel(Some(&NSString::from_str(&spoken_name(row))));
         self.size.setStringValue(&NSString::from_str(&row.size_text));
         self.size.setTextColor(Some(&size_color.ns_color()));
         self.mark.setTextColor(Some(&tokens.wax.ns_color()));
