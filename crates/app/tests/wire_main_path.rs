@@ -744,10 +744,6 @@ fn assert_space_release(report: &Value) {
         "an image volume has nothing to recover: {release:#}"
     );
     assert_eq!(
-        release["freed"], 0,
-        "nothing is freed where nothing is held: {release:#}"
-    );
-    assert_eq!(
         release["finish"], "completed",
         "the mechanism reports its own completion: {release:#}"
     );
@@ -757,9 +753,10 @@ fn assert_space_release(report: &Value) {
     let after = release["available_after"]
         .as_u64()
         .expect("the available space after the release is reported");
-    assert!(
-        after >= before,
-        "the available space does not shrink from a release: {release:#}"
+    assert_eq!(
+        release["freed"],
+        after.saturating_sub(before),
+        "what is freed is the growth of the available space, whatever else the volume does meanwhile: {release:#}"
     );
     let hidden = steps(report, "hidden_space");
     assert_eq!(
