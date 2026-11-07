@@ -788,10 +788,15 @@ fn assert_tray_drag(report: &Value, mount_point: &Path) {
     let summary = marked["summary"].as_str().expect("the button shows the summary");
     assert!(summary.starts_with("К удалению · 1 · ≈ "), "{marked:#}");
     assert_eq!(marked["tray"], json!([mount_point.join(DROPPED)]), "{marked:#}");
+    assert_eq!(marked["marked_rows"], json!(["Keep"]), "{marked:#}");
+    let collapsed = marked["collapsed_segments"].as_u64().expect("the step counts collapsed segments");
+    assert!(collapsed > 0, "{marked:#}");
     let unmarked = step(report, "unmark_tray_row");
     assert_eq!(unmarked["rows_before"], 1, "{unmarked:#}");
     assert_eq!(unmarked["rows_after"], 0, "{unmarked:#}");
     assert_eq!(unmarked["summary"], "К удалению", "{unmarked:#}");
+    assert_eq!(unmarked["marked_rows"], json!([]), "{unmarked:#}");
+    assert_eq!(unmarked["collapsed_segments"], 0, "{unmarked:#}");
 }
 
 fn assert_model_and_answer(report: &Value, server: &HfServer) {

@@ -16,8 +16,9 @@ use domovoi_downloader::{
 use domovoi_index::{ModelEvent, NodeId, Reclaimable, SpaceRecovery};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::Timeouts;
-use domovoi_render::{NodeOrigin, SunburstLayout};
+use domovoi_render::{DiagramLayout, DiagramMode, NodeOrigin, SunburstLayout};
 use domovoi_scanner::{CancelToken, VolumeEvent};
+use domovoi_theme::Palette;
 use objc2::MainThreadMarker;
 use objc2_foundation::NSTimer;
 use serde_json::{Value, json};
@@ -43,6 +44,7 @@ use crate::event_effect::EventEffect;
 use crate::event_queue::{EventQueue, HEAVY_DELTA_NODES};
 use crate::expansion::{Expansion, NODE_BUDGET};
 use crate::inference_client::InferenceClient;
+use crate::main_screen::MainScreen;
 use crate::preview_targets::PreviewTargets;
 use crate::provenance::Provenance;
 use crate::purge_job::{PurgeJob, available_capacity};
@@ -60,6 +62,7 @@ use crate::service_address::ServiceAddress;
 use crate::session::Session;
 use crate::session_paths::SessionPaths;
 use crate::shell_data::ShellData;
+use crate::shell_palette::ShellPalette;
 use crate::shell_snapshot::write_snapshots;
 use crate::snapshot_options::SnapshotOptions;
 use crate::strings::CARD_QUESTION;
@@ -175,7 +178,7 @@ impl EndToEnd {
             }
             ScenarioStep::DeleteRecommendations { level } => self.delete_recommendations(*level),
             ScenarioStep::RemoveApplication { path } => self.remove_application(path),
-            ScenarioStep::MarkFromList { paths } => Ok(self.mark_from_list(paths)),
+            ScenarioStep::MarkFromList { paths } => self.mark_from_list(paths),
             ScenarioStep::UnmarkTrayRow { row } => self.unmark_tray_row(*row),
             ScenarioStep::FindDuplicates => {
                 let started = Instant::now();
@@ -455,9 +458,15 @@ impl EndToEnd {
         }))
     }
 
-    fn mark_from_list(&mut self, paths: &[PathBuf]) -> Value {
+    fn mark_from_list(&mut self, paths: &[PathBuf]) -> Result<Value, String> {
+        let level = paths
+            .first()
+            .and_then(|path| path.parent())
+            .ok_or("mark_from_list drops at least one folder with a parent")?
+            .to_path_buf();
         let hover = self.session().judge_drop(paths).hover();
         let verdict = self.session_mut().drop_into_tray(paths);
+        let (marked_rows, collapsed_segments) = self.marks_on_level(&level)?;
         let marked: Vec<&Path> = self
             .session()
             .tray()
@@ -465,7 +474,7 @@ impl EndToEnd {
             .iter()
             .map(|item| item.path.as_path())
             .collect();
-        json!({
+        Ok(json!({
             "step": "mark_from_list",
             "hover": hover.title,
             "hover_kind": drop_kind_name(hover.kind),
@@ -474,7 +483,28 @@ impl EndToEnd {
             "refusal_line": verdict.refusal_line(),
             "summary": self.session().tray_summary().title(),
             "tray": marked,
-        })
+            "marked_rows": marked_rows,
+            "collapsed_segments": collapsed_segments,
+        }))
+    }
+
+    fn marks_on_level(&mut self, level: &Path) -> Result<(Vec<String>, usize), String> {
+        let (data, focus) = self.live_disk(level)?;
+        let marked_rows = data
+            .level_rows(focus)
+            .into_iter()
+            .filter(|row| row.marked)
+            .map(|row| row.name)
+            .collect();
+        let palette = ShellPalette {
+            tokens: &Palette::DARK,
+            high_contrast: false,
+        };
+        let diagram = MainScreen::diagram_state(&data, focus, DiagramMode::Sunburst, &palette);
+        let DiagramLayout::Sunburst(layout) = &diagram.layout else {
+            unreachable!("the main diagram is built as a sunburst");
+        };
+        Ok((marked_rows, layout.collapsed().count()))
     }
 
     fn unmark_tray_row(&mut self, row: usize) -> Result<Value, String> {
@@ -484,15 +514,24 @@ impl EndToEnd {
             .get(row)
             .cloned()
             .ok_or_else(|| format!("the tray has no row {row}"))?;
+        let index = self.session().index().expect("a tray row follows a scan");
+        let level = nodes
+            .first()
+            .and_then(|node| index.parent(*node))
+            .map(|parent| index.path(parent))
+            .ok_or_else(|| format!("tray row {row} has no folder above it"))?;
         for node in nodes {
             self.session_mut().remove_from_tray(node);
         }
         let (after, _, _) = self.measured_tray()?;
+        let (marked_rows, collapsed_segments) = self.marks_on_level(&level)?;
         Ok(json!({
             "step": "unmark_tray_row",
             "rows_before": before.rows.len(),
             "rows_after": after.rows.len(),
             "summary": self.session().tray_summary().title(),
+            "marked_rows": marked_rows,
+            "collapsed_segments": collapsed_segments,
         }))
     }
 
@@ -800,7 +839,7 @@ impl EndToEnd {
         let models = ModelStore::open(&self.paths.models).map_err(|error| error.to_string())?;
         let mut assistant = Assistant::new(models, Catalog::bundled(), AssistantSettings::default());
         assistant.library.finish_scan()?;
-        Ok(ShellData {
+        let mut data = ShellData {
             rescan_allowed: true,
             ..ShellData::measured(
                 AccessState::probe(),
@@ -811,7 +850,9 @@ impl EndToEnd {
                 care,
                 assistant.models(),
             )
-        })
+        };
+        data.mark_tray(index, self.session().tray());
+        Ok(data)
     }
 }
 

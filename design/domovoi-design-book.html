@@ -184,6 +184,9 @@ select.sel{font:500 13px var(--f-ui);padding:7px 10px;border-radius:7px;backgrou
 .srow .bar{grid-area:bar;height:5px;border-radius:3px;background:var(--line-soft);overflow:hidden}
 .srow .bar b{display:block;height:100%;border-radius:3px}
 .srow .sz{text-align:right;font:500 12px var(--f-mono);font-variant-numeric:tabular-nums;color:var(--mute)}
+.srow.marked{grid-template-columns:12px minmax(0,1fr) auto auto;grid-template-areas:"dot nm mk sz" ". bar bar bar"}
+.srow.marked .nm,.srow.marked .sz{color:var(--dim)}
+.srow .mk{grid-area:mk;font:500 12px var(--f-mono);color:var(--wax);white-space:nowrap}
 
 /* карточка рекомендации */
 .rec{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px 16px;padding:16px 18px;border:1px solid var(--line-soft);border-radius:var(--r-m);background:var(--surface);align-items:start}
@@ -598,7 +601,9 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   <div class="board"><div class="row" id="legend"></div></div>
 
   <h3>Строка размера</h3>
-  <div class="board"><div class="sizes" id="sample-rows"></div></div>
+  <div class="board"><div class="sizes" id="sample-rows"></div>
+    <p style="color:var(--mute);font-size:13px;margin:0">Строка Caches отмечена: её папка лежит в «К удалению». Имя, размер, точка и полоса гаснут до <code>dim</code>, слева от размера стоит метка «к удалению» цветом воска; имя обрезается первым, метка и размер — никогда, VoiceOver читает «Caches, к удалению». Внутри отмеченной папки метку несут все строки. Сегмент такой папки на диаграмме за 320 мс сжимается к центру, соседи забирают его угол; Treemap меняет плитки сменой кадра.</p>
+  </div>
 
   <h3>Рекомендация</h3>
   <div style="display:grid;gap:12px" id="sample-recs"></div>
@@ -1096,10 +1101,12 @@ function treemap(host,o){
 }
 
 /* ---------- список и крошки ---------- */
-function sizeList(host,focus,onFocus,limit){
+function sizeList(host,focus,onFocus,limit,marked){
   host.innerHTML='';const kids=(focus.children||[]).slice(0,limit||99);const mx=kids.length?kids[0].size:1;
-  kids.forEach(n=>{const r=document.createElement('div');r.className='srow';r.tabIndex=0;
-    r.innerHTML=`<i style="background:${catColor(n.cat)}"></i><span class="nm" title="${n.name}">${n.name}</span><span class="bar"><b style="width:${(n.size/mx*100).toFixed(1)}%;background:${catColor(n.cat)}"></b></span><span class="sz">${fmt(n.size)}</span>`;
+  kids.forEach(n=>{const r=document.createElement('div');const isMarked=!!marked&&marked.has(n);
+    r.className=isMarked?'srow marked':'srow';r.tabIndex=0;const ink=isMarked?'var(--dim)':catColor(n.cat);
+    r.setAttribute('aria-label',isMarked?`${n.name}, к удалению`:n.name);
+    r.innerHTML=`<i style="background:${ink}"></i><span class="nm" title="${n.name}">${n.name}</span>${isMarked?'<span class="mk">к удалению</span>':''}<span class="bar"><b style="width:${(n.size/mx*100).toFixed(1)}%;background:${ink}"></b></span><span class="sz">${fmt(n.size)}</span>`;
     if(n.children&&onFocus){r.addEventListener('click',()=>onFocus(n));r.addEventListener('keydown',e=>{if(e.key==='Enter')onFocus(n);});} else r.style.cursor='default';
     host.appendChild(r);});
 }
@@ -1141,7 +1148,7 @@ const leaves=[];(function w(n){if(n.children)n.children.forEach(w);else leaves.p
 const byCat={};leaves.forEach(n=>{byCat[n.cat]=(byCat[n.cat]||0)+n.size;});
 Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]).forEach(k=>{const s=document.createElement('span');s.className='chip';
   s.innerHTML=`<i style="background:${catColor(k)}"></i>${CAT[k]} <span>${fmt(byCat[k])}</span>`;$('#legend').appendChild(s);});
-sizeList($('#sample-rows'),BY['Developer'].parent,null,4);
+sizeList($('#sample-rows'),BY['Developer'].parent,null,4,new Set([BY['Caches']]));
 
 const RULES=[
   {id:'xcode.derived-data',t:'Xcode · DerivedData',nodes:['Xcode · DerivedData'],s:'safe',p:'~/Library/Developer/Xcode/DerivedData',why:'Промежуточные результаты сборки. Xcode пересоздаст их при следующей сборке.'},
