@@ -2,7 +2,7 @@ use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap};
 use std::iter;
 
-use domovoi_index::{Index, NodeId, Reclaimable, SafetyLevel};
+use domovoi_index::{Index, NodeId, Reclaimable};
 
 use crate::blocked_item::BlockedItem;
 use crate::card_item::CardItem;
@@ -260,7 +260,6 @@ fn empty_card(rules: &RuleSet, rule: usize, running_bundle_ids: &BTreeSet<String
         owner_running: definition
             .owner_bundle
             .is_some_and(|owner| running_bundle_ids.contains(owner)),
-        preselected: definition.level == SafetyLevel::Safe && !definition.is_info_only(),
     }
 }
 

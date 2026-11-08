@@ -108,7 +108,7 @@ fn rule_card(index: &Index, rules: &RuleSet, card: &RuleCard) -> CardModel {
         .then_some(rule.owner_bundle)
         .flatten()
         .map(running_application_name);
-    let model = CardModel {
+    CardModel {
         title: rule_title(rule.id)
             .expect("every rule of the table has a title")
             .to_owned(),
@@ -136,7 +136,7 @@ fn rule_card(index: &Index, rules: &RuleSet, card: &RuleCard) -> CardModel {
         blocked: blocked_line(&card.blocked.iter().map(|(_, reason)| reason).collect::<Vec<_>>()),
         vendor_command: rule.vendor_command.map(|command| format!("{VENDOR_COMMAND} {command}")),
         age: None,
-        selected: card.preselected,
+        selected: false,
         targets: card
             .items
             .iter()
@@ -147,10 +147,6 @@ fn rule_card(index: &Index, rules: &RuleSet, card: &RuleCard) -> CardModel {
             })
             .collect(),
         rows: Vec::new(),
-    };
-    CardModel {
-        selected: model.selected && model.selectable(),
-        ..model
     }
 }
 
@@ -204,7 +200,7 @@ fn projects_card(index: &Index, rules: &RuleSet, projects: &[ProjectCard], now: 
         .flat_map(|project| &project.blocked)
         .map(|blocked| &blocked.reason)
         .collect();
-    let mut card = CardModel {
+    CardModel {
         title: PROJECTS_TITLE.to_owned(),
         paths: items.into_iter().map(|(_, path)| path).collect(),
         path_reasons: Vec::new(),
@@ -222,9 +218,7 @@ fn projects_card(index: &Index, rules: &RuleSet, projects: &[ProjectCard], now: 
         selected: false,
         targets: rows.iter().flat_map(|row| row.targets.iter().cloned()).collect(),
         rows,
-    };
-    card.selected = card.every_row_selected();
-    card
+    }
 }
 
 fn project_row(index: &Index, rules: &RuleSet, project: &ProjectCard, now: SystemTime) -> ProjectRow {
@@ -240,7 +234,7 @@ fn project_row(index: &Index, rules: &RuleSet, project: &ProjectCard, now: Syste
         age: last_work.map_or_else(String::new, |then| format_elapsed(then, now)),
         stale,
         amount: project.reclaimable.bytes,
-        selected: stale && project.reclaimable.bytes > 0,
+        selected: false,
         targets: project
             .items
             .iter()

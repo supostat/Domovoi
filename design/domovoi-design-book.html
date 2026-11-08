@@ -692,7 +692,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">04</span><h4>Рекомендации</h4><p>Сначала итог, потом детали. Безопасное отмечено заранее, остальное — по выбору. Сборки и зависимости проектов собраны в карточку «Проекты разработки»: строка — проект с артефактами, давностью и размером; проекты без изменений больше месяца отмечены заранее, недавние — нет. «Спросить Домового» на карточке открывает разговор, где Домовой разбирает именно её. У карточек остатков удалённых программ под путями видна причина: метаданные контейнера, Team ID в имени группы.</p></div>
+    <div class="screen-cap"><span class="n">04</span><h4>Рекомендации</h4><p>Сначала итог, потом детали. Заранее ничего не отмечено: что уйдёт в «К удалению», решает человек, и пока отметок нет, кнопка неактивна. Сборки и зависимости проектов собраны в карточку «Проекты разработки»: строка — проект с артефактами, давностью и размером; проекты без изменений больше месяца стоят первыми. «Спросить Домового» на карточке открывает разговор, где Домовой разбирает именно её. У карточек остатков удалённых программ под путями видна причина: метаданные контейнера, Team ID в имени группы.</p></div>
     <div class="mock"><div class="win">
       <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Рекомендации</div></div>
       <div class="win-body fixed">
@@ -1191,27 +1191,26 @@ const PROJECTS=[
 ];
 PROJECTS.forEach(p=>{p.size=BY[p.node].size;p.cat=BY[p.node].cat;});
 const sumOf=list=>list.reduce((s,p)=>s+p.size,0);
+const NOTHING_MARKED='0 Б';
 const staleProjects=PROJECTS.filter(p=>p.stale),freshProjects=PROJECTS.filter(p=>!p.stale);
-function projRow(p){return `<div class="prow ${p.stale?'':'off'}"><input type="checkbox" ${p.stale?'checked':''} aria-label="Выбрать ${p.n}"><div class="pname">${p.n}</div><div class="pmeta"><span class="page">${p.age}</span><span class="psize">${fmt(p.size)}</span></div><div class="ppath">~/Projects/${p.n}</div><div class="parts">${p.a.join(' · ')}</div></div>`;}
-function projGroup(title,list,checked){return `<div class="pgrp"><input type="checkbox" ${checked?'checked':''} aria-label="${title}">${title}<span class="gsum">${list.length} ${list.length===1?'проект':list.length<5?'проекта':'проектов'} · ${fmt(sumOf(list))}</span></div>`+list.map(projRow).join('');}
+function projRow(p){return `<div class="prow off"><input type="checkbox" aria-label="Выбрать ${p.n}"><div class="pname">${p.n}</div><div class="pmeta"><span class="page">${p.age}</span><span class="psize">${fmt(p.size)}</span></div><div class="ppath">~/Projects/${p.n}</div><div class="parts">${p.a.join(' · ')}</div></div>`;}
+function projGroup(title,list){return `<div class="pgrp"><input type="checkbox" aria-label="${title}">${title}<span class="gsum">${list.length} ${list.length===1?'проект':list.length<5?'проекта':'проектов'} · ${fmt(sumOf(list))}</span></div>`+list.map(projRow).join('');}
 function projCard(){const d=document.createElement('div');d.className='rec';
-  d.innerHTML=`<input type="checkbox" class="proj-all" aria-label="Выбрать проекты разработки"><div style="min-width:0"><h5>Проекты разработки</h5><div class="path">${PROJECTS.length} проектов</div><p class="why">Зависимости и результаты сборки проектов. Вернутся после установки зависимостей и сборки. Заранее отмечены проекты без изменений больше месяца.</p><div class="tags"><span class="badge b-safe">Безопасно</span><span class="prov">правила проектов</span></div><div class="prows">${projGroup('Без изменений больше месяца',staleProjects,true)}${projGroup('Менялись за последний месяц',freshProjects,false)}</div><button class="btn sm ask">Спросить Домового</button></div><div class="amt">${fmt(sumOf(staleProjects))}<small>из ${fmt(sumOf(PROJECTS))}</small></div>`;
-  d.querySelector('.proj-all').indeterminate=true;return d;}
+  d.innerHTML=`<input type="checkbox" class="proj-all" aria-label="Выбрать проекты разработки"><div style="min-width:0"><h5>Проекты разработки</h5><div class="path">${PROJECTS.length} проектов</div><p class="why">Зависимости и результаты сборки проектов. Вернутся после установки зависимостей и сборки.</p><div class="tags"><span class="badge b-safe">Безопасно</span><span class="prov">правила проектов</span></div><div class="prows">${projGroup('Без изменений больше месяца',staleProjects)}${projGroup('Менялись за последний месяц',freshProjects)}</div><button class="btn sm ask">Спросить Домового</button></div><div class="amt">${NOTHING_MARKED}<small>из ${fmt(sumOf(PROJECTS))}</small></div>`;return d;}
 
 const recHost=$('#recs');
-RULES.forEach((r,i)=>{recHost.appendChild(recCard(r,r.s==='safe'));if(i===0)recHost.appendChild(projCard());});recHost.appendChild(hypCard());
+RULES.forEach((r,i)=>{recHost.appendChild(recCard(r,false));if(i===0)recHost.appendChild(projCard());});recHost.appendChild(hypCard());
 const tot={safe:sumOf(PROJECTS),recover:0,check:0};RULES.forEach(r=>tot[r.s]+=r.size);
 const all=tot.safe+tot.recover+tot.check;
-const preselected=tot.safe-sumOf(freshProjects);
 $('#recs-total').textContent='Можно освободить '+fmt(all);
 $('#recs-split').textContent=`безопасно ${fmt(tot.safe)} · восстановимо ${fmt(tot.recover)} · проверьте ${fmt(tot.check)}`;
-$('#recs-btn').textContent='Отметить к удалению · '+fmt(preselected);
+$('#recs-btn').textContent='Отметить к удалению · '+NOTHING_MARKED;$('#recs-btn').disabled=true;
 
 const tray=$('#tray');
 const trayRows=RULES.filter(r=>r.s==='safe').map(r=>({t:r.t,size:r.size,cat:r.cat})).concat(staleProjects.map(p=>({t:p.n,size:p.size,cat:p.cat})));
 trayRows.forEach(r=>{const d=document.createElement('div');d.className='tray-row';
   d.innerHTML=`<i style="background:${catColor(r.cat)}"></i><span style="color:var(--text);font-family:var(--f-ui);font-size:13.5px">${r.t}</span><span>${fmt(r.size)}</span><b title="Снять отметку">×</b>`;tray.appendChild(d);});
-$('#tray-sum').textContent=fmt(preselected);
+$('#tray-sum').textContent=fmt(trayRows.reduce((s,r)=>s+r.size,0));
 
 /* ---------- сайдбары макетов ---------- */
 const used=ROOT.size,free=DISK-used;

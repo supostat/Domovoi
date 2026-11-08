@@ -28,7 +28,6 @@ struct CardView {
     blocked: BTreeMap<PathBuf, DenyReason>,
     reclaimable: Reclaimable,
     owner_running: bool,
-    preselected: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -172,7 +171,6 @@ impl Workbench {
                             .collect(),
                         reclaimable: card.reclaimable,
                         owner_running: card.owner_running,
-                        preselected: card.preselected,
                     };
                     (self.rules.rule(card.rule).id, view)
                 })

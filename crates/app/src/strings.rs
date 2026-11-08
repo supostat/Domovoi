@@ -128,8 +128,8 @@ pub const RULE_PROVENANCE: &str = "правило";
 pub const MODEL_HYPOTHESIS: &str = "гипотеза модели";
 pub const PROJECTS_PROVENANCE: &str = "правила проектов";
 pub const PROJECTS_TITLE: &str = "Проекты разработки";
-pub const PROJECTS_EXPLANATION: &str = "Зависимости и результаты сборки проектов. Вернутся после установки зависимостей и сборки. \
-     Заранее отмечены проекты без изменений больше месяца.";
+pub const PROJECTS_EXPLANATION: &str =
+    "Зависимости и результаты сборки проектов. Вернутся после установки зависимостей и сборки.";
 pub const PROJECTS: PluralForms = PluralForms {
     one: "проект",
     few: "проекта",

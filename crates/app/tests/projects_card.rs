@@ -118,17 +118,16 @@ fn names(card: &CardModel) -> Vec<&str> {
 }
 
 #[test]
-fn one_card_lists_every_project_with_stale_projects_first_and_preselected() {
+fn one_card_lists_every_project_with_stale_projects_first_and_none_checked() {
     let workspace = Workspace::new();
     let model = workspace.model();
     let card = projects(&model);
     assert_eq!(card.title, strings::PROJECTS_TITLE);
     assert_eq!(names(card), ["archive", "mono", "engine"]);
     let stale: Vec<(bool, bool)> = card.rows.iter().map(|row| (row.stale, row.selected)).collect();
-    assert_eq!(stale, [(true, true), (true, true), (false, false)]);
-    assert!(card.some_row_selected() && !card.every_row_selected());
-    let selected: u64 = card.rows[..2].iter().map(|row| row.amount).sum();
-    assert_eq!(card.selected_amount(), selected);
+    assert_eq!(stale, [(true, false), (true, false), (false, false)]);
+    assert!(!card.some_row_selected() && !card.selected);
+    assert_eq!(card.selected_amount(), 0);
     assert_eq!(card.amount, card.rows.iter().map(|row| row.amount).sum::<u64>());
     assert_eq!(card.path_line(), "3\u{a0}проекта");
     assert!(
@@ -157,8 +156,14 @@ fn toggling_rows_groups_and_the_card_moves_the_selection() {
     let workspace = Workspace::new();
     let mut model = workspace.model();
     let card = projects_mut(&mut model);
+    card.toggle_group(true);
+    assert_eq!(
+        card.rows.iter().map(|row| row.selected).collect::<Vec<_>>(),
+        [true, true, false]
+    );
+    assert!(card.some_row_selected() && !card.selected);
     card.toggle_row(2);
-    assert!(card.every_row_selected());
+    assert!(card.every_row_selected() && card.selected);
     card.toggle_group(true);
     assert_eq!(
         card.rows.iter().map(|row| row.selected).collect::<Vec<_>>(),
@@ -186,15 +191,16 @@ fn the_selection_of_rows_survives_a_rebuild() {
             .iter()
             .map(|row| (row.name.as_str(), row.selected))
             .collect::<Vec<_>>(),
-        [("archive", false), ("mono", true), ("engine", true)]
+        [("archive", true), ("mono", false), ("engine", true)]
     );
 }
 
 #[test]
 fn selected_rows_go_to_the_tray_as_one_row_per_project() {
     let workspace = Workspace::new();
-    let model = workspace.model();
-    let card = projects(&model);
+    let mut model = workspace.model();
+    let card = projects_mut(&mut model);
+    card.toggle_group(true);
     let targets = card.selected_targets();
     assert_eq!(
         targets.len(),

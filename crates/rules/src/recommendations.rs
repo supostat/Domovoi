@@ -17,7 +17,6 @@ pub struct RuleCard {
     pub blocked: Vec<(NodeId, DenyReason)>,
     pub reclaimable: Reclaimable,
     pub owner_running: bool,
-    pub preselected: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

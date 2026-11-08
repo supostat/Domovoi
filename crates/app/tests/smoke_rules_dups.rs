@@ -15,6 +15,8 @@ use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat};
 const MEGABYTE: usize = 1024 * 1024;
 const BUILD_OUTPUT: usize = 2 * MEGABYTE;
 const DUPLICATE: usize = 3 * MEGABYTE / 2;
+const NPM_CACHE: &str = "Users/tester/.npm/_cacache/content-v2";
+const NPM_CACHE_RULE: &str = "cache.npm";
 
 fn noise(size: usize, seed: u8) -> Vec<u8> {
     (0..size)
@@ -27,6 +29,9 @@ fn populate(root: &Path) {
     fs::create_dir_all(project.join("target/debug")).expect("the project tree is created");
     fs::write(project.join("Cargo.toml"), "[package]\nname = \"demo\"\n").expect("the manifest is written");
     fs::write(project.join("target/debug/demo"), noise(BUILD_OUTPUT, 7)).expect("the build output is written");
+    let npm_cache = root.join(NPM_CACHE);
+    fs::create_dir_all(&npm_cache).expect("the npm cache is created");
+    fs::write(npm_cache.join("package.tgz"), noise(MEGABYTE, 13)).expect("a cached package is written");
     let media = root.join("Media");
     fs::create_dir_all(&media).expect("the media folder is created");
     let content = noise(DUPLICATE, 11);
@@ -59,7 +64,7 @@ fn the_demo_project(recommendations: &RecommendationsModel) -> (&CardModel, &Pro
     assert_eq!(demo.artifacts, ["target"]);
     assert!(
         !demo.stale && !demo.selected,
-        "a project changed today is not preselected"
+        "a project changed today is fresh and nothing is checked before the user checks it"
     );
     assert!(
         demo.targets
@@ -123,10 +128,19 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
         SystemTime::now(),
     );
     let (card, demo) = the_demo_project(&recommendations);
+    let npm_cache = recommendations
+        .cards
+        .iter()
+        .find(|card| card.provenance == Provenance::Rule(NPM_CACHE_RULE.to_owned()))
+        .expect("the npm cache makes a rule card");
+    assert!(
+        npm_cache.level == SafetyBadge::Safe && npm_cache.selectable() && !npm_cache.selected,
+        "a safe card that can be checked is not checked before the user checks it"
+    );
     assert_eq!(
-        recommendations.selected_total() + card.amount,
-        recommendations.safe,
-        "every other safe card stays preselected"
+        recommendations.selected_total(),
+        0,
+        "nothing is checked before the user checks it"
     );
 
     session

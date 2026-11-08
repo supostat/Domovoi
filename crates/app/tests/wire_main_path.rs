@@ -493,7 +493,7 @@ fn assert_projects(recommendations: &Value) {
         assert_eq!(project["stale"], false, "{project:#}");
         assert_eq!(
             project["selected"], false,
-            "a project changed today is not preselected: {project:#}"
+            "nothing is checked before the user checks it: {project:#}"
         );
         assert!(
             project["amount"].as_u64().is_some_and(|amount| amount > 0),
