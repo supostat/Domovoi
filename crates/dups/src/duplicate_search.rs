@@ -20,6 +20,7 @@ use crate::duplicate_progress::DuplicateProgress;
 use crate::duplicate_stage::DuplicateStage;
 use crate::duplicates::Duplicates;
 use crate::hashing_pool::HashingPool;
+use crate::read_limits::ReadLimits;
 use crate::search_error::SearchError;
 use crate::skip_reason::SkipReason;
 use crate::skipped_file::SkippedFile;
@@ -70,9 +71,9 @@ pub fn find_duplicates(
             .iter()
             .flat_map(|position| search.candidates[*position].entries.iter().copied())
             .collect();
-        groups.push(
-            DuplicateGroup::of_members(index, bucket.size, bucket.fully_hashed, &members).map_err(SearchError::Io)?,
-        );
+        if let Some(group) = DuplicateGroup::of_members(index, bucket.size, &members).map_err(SearchError::Io)? {
+            groups.push(group);
+        }
     }
     groups.sort_by_key(|group| (Reverse(group.reclaimable.bytes), Reverse(group.size), group.keep));
     Ok(Duplicates { groups, skipped })
@@ -112,17 +113,16 @@ impl Search<'_> {
         }));
         let wanting_contents: Vec<usize> = by_edges
             .iter()
-            .filter(|((size, _), _)| self.needs_contents(*size))
+            .filter(|((size, _), _)| !edges_cover_whole_file(*size))
             .flat_map(|(_, positions)| positions.iter().copied())
             .filter(|position| self.contents[*position].is_none() && self.failures[*position].is_none())
             .collect();
         self.hash(&wanting_contents, DigestKind::Contents, content_stage, deadline)?;
         let mut buckets = Vec::new();
         for ((size, _), positions) in by_edges {
-            if !self.needs_contents(size) {
+            if edges_cover_whole_file(size) {
                 buckets.push(Bucket {
                     size,
-                    fully_hashed: edges_cover_whole_file(size),
                     members: positions,
                 });
                 continue;
@@ -132,17 +132,9 @@ impl Search<'_> {
                     .iter()
                     .filter_map(|position| self.contents[*position].map(|content| (content, *position))),
             );
-            buckets.extend(by_contents.into_values().map(|members| Bucket {
-                size,
-                fully_hashed: true,
-                members,
-            }));
+            buckets.extend(by_contents.into_values().map(|members| Bucket { size, members }));
         }
         Ok(buckets)
-    }
-
-    fn needs_contents(&self, size: u64) -> bool {
-        !edges_cover_whole_file(size) && size <= self.options.full_hash_limit
     }
 
     fn hash(
@@ -167,10 +159,14 @@ impl Search<'_> {
                         return (*position, None);
                     }
                     let candidate = &candidates[*position];
-                    let outcome = if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                    let limits = ReadLimits {
+                        cancel: &options.cancel,
+                        deadline,
+                    };
+                    let outcome = if limits.passed_deadline() {
                         Err(SkipReason::TimeLimit)
                     } else {
-                        digest(&candidate.physical, candidate.size, kind)
+                        digest(&candidate.physical, candidate.size, kind, &limits)
                     };
                     report(
                         options,
@@ -180,7 +176,7 @@ impl Search<'_> {
                             files_total: total,
                         },
                     );
-                    (*position, Some(outcome))
+                    (*position, outcome.transpose())
                 })
                 .collect()
         });

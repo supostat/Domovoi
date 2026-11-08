@@ -26,6 +26,7 @@ fn member(path: &str) -> MemberModel {
         clone: false,
         checked: false,
         refusal: None,
+        package: None,
         node: None,
     }
 }

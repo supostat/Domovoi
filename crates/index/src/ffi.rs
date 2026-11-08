@@ -21,7 +21,7 @@ use objc2_security::{
 };
 use objc2_uniform_type_identifiers::{
     UTType, UTTypeApplicationBundle, UTTypeArchive, UTTypeAudiovisualContent, UTTypeCompositeContent, UTTypeData,
-    UTTypeDirectory, UTTypeDiskImage, UTTypeImage, UTTypePDF, UTTypeSourceCode, UTTypeText,
+    UTTypeDirectory, UTTypeDiskImage, UTTypeImage, UTTypePDF, UTTypePackage, UTTypeSourceCode, UTTypeText,
 };
 
 use crate::code_signing::CodeSigning;
@@ -55,6 +55,15 @@ pub(crate) fn extension_conforms(extension: &str, directory: bool, families: &[T
             .iter()
             .any(|parent| uniform_type.conformsToType(parent))
     })
+}
+
+pub(crate) fn names_a_package(name: &std::ffi::OsStr) -> bool {
+    let Some(extension) = Path::new(name).extension().and_then(std::ffi::OsStr::to_str) else {
+        return false;
+    };
+    let directory = unsafe { UTTypeDirectory };
+    UTType::typeWithFilenameExtension_conformingToType(&NSString::from_str(extension), directory)
+        .is_some_and(|uniform_type| uniform_type.conformsToType(unsafe { UTTypePackage }))
 }
 
 fn family_types(family: TypeFamily) -> Vec<&'static UTType> {

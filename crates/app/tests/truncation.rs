@@ -721,6 +721,7 @@ fn duplicate_rows(checks: &mut Checks, marker: MainThreadMarker) {
         clone: false,
         checked: true,
         refusal: None,
+        package: None,
         node: None,
     };
     let actions = ShellActions::new(marker);

@@ -33,6 +33,7 @@ use crate::drop_verdict::DropVerdict;
 use crate::event_effect::EventEffect;
 use crate::event_request::EventRequest;
 use crate::group_paths::GroupPaths;
+use crate::member_stamp::MemberStamp;
 use crate::pending_delta::PendingDelta;
 use crate::question::Question;
 use crate::remapping::Remapping;
@@ -486,10 +487,9 @@ impl Session {
                 .iter()
                 .map(|group| GroupPaths {
                     size: group.size,
-                    fully_hashed: group.fully_hashed,
                     members: std::iter::once(group.keep)
                         .chain(group.copies.iter().map(|copy| copy.node))
-                        .map(|member| (member, index.path(member)))
+                        .map(|member| (member, index.path(member), MemberStamp::of(index, member)))
                         .collect(),
                 })
                 .collect(),
@@ -509,22 +509,21 @@ impl Session {
                 let members: Vec<NodeId> = paths
                     .members
                     .iter()
-                    .filter_map(|(node, path)| resolve(*node, path))
+                    .filter_map(|(node, path, stamp)| {
+                        resolve(*node, path).filter(|member| MemberStamp::of(index, *member) == *stamp)
+                    })
                     .collect();
                 let unchanged = members.len() == paths.members.len()
                     && members
                         .iter()
                         .zip(&paths.members)
-                        .all(|(member, (node, _))| member == node);
+                        .all(|(member, (node, _, _))| member == node);
                 if unchanged && remapping == Remapping::Detached {
                     remapped.push(group);
-                } else if members.len() > 1 {
-                    remapped.push(DuplicateGroup::of_members(
-                        index,
-                        paths.size,
-                        paths.fully_hashed,
-                        &members,
-                    )?);
+                } else if members.len() > 1
+                    && let Some(regrouped) = DuplicateGroup::of_members(index, paths.size, &members)?
+                {
+                    remapped.push(regrouped);
                 }
             }
             duplicates.groups = remapped;

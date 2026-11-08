@@ -21,6 +21,7 @@ mod duplicates;
 mod hashing_pool;
 mod mount_point;
 mod pending_replacement;
+mod read_limits;
 mod search_error;
 mod skip_reason;
 mod skipped_file;

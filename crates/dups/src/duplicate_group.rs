@@ -8,45 +8,53 @@ use crate::duplicate_copy::DuplicateCopy;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DuplicateGroup {
     pub size: u64,
-    pub fully_hashed: bool,
     pub keep: NodeId,
     pub copies: Vec<DuplicateCopy>,
     pub reclaimable: Reclaimable,
 }
 
 impl DuplicateGroup {
-    pub fn of_members(index: &Index, size: u64, fully_hashed: bool, members: &[NodeId]) -> io::Result<Self> {
-        let keep = *members
+    pub fn of_members(index: &Index, size: u64, members: &[NodeId]) -> io::Result<Option<Self>> {
+        let placed: Vec<(NodeId, Option<NodeId>)> = members
             .iter()
-            .min_by_key(|member| {
-                let node = index.node(**member);
+            .map(|member| (*member, index.enclosing_package(*member)))
+            .collect();
+        let (keep, _) = *placed
+            .iter()
+            .min_by_key(|(member, package)| {
+                let node = index.node(*member);
                 (
-                    index.inside_dependency_store(**member),
+                    package.is_none(),
+                    index.inside_trash(*member),
+                    index.inside_dependency_store(*member),
                     node.real_dev,
                     node.file_id,
-                    **member,
+                    *member,
                 )
             })
             .expect("a duplicate group has members");
-        let copies: Vec<DuplicateCopy> = members
+        let copies: Vec<DuplicateCopy> = placed
             .iter()
-            .filter(|member| **member != keep)
-            .map(|member| DuplicateCopy {
+            .filter(|(member, _)| *member != keep)
+            .map(|(member, package)| DuplicateCopy {
                 node: *member,
                 shares_blocks: shares_blocks_with_another_member(index, members, *member),
+                package: *package,
             })
             .collect();
+        if copies.iter().all(|copy| copy.package.is_some()) {
+            return Ok(None);
+        }
         let mut reclaimable = Reclaimable::default();
-        for copy in copies.iter().filter(|copy| !copy.shares_blocks) {
+        for copy in copies.iter().filter(|copy| copy.is_removable()) {
             reclaimable += index.reclaimable(copy.node)?;
         }
-        Ok(Self {
+        Ok(Some(Self {
             size,
-            fully_hashed,
             keep,
             copies,
             reclaimable,
-        })
+        }))
     }
 
     pub fn take_copies_for_delete(

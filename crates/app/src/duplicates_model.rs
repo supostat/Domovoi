@@ -34,18 +34,21 @@ impl DuplicatesModel {
             let keep_path = index.path(group.keep);
             let mut copies = Vec::with_capacity(group.copies.len());
             for copy in &group.copies {
-                let frees = if copy.shares_blocks {
-                    0
-                } else {
+                let frees = if copy.is_removable() {
                     index.reclaimable(copy.node)?.bytes
+                } else {
+                    0
                 };
                 copies.push(MemberModel {
                     path: tilde(&index.path(copy.node)),
                     size: group.size,
                     frees,
                     clone: copy.shares_blocks,
-                    checked: !copy.shares_blocks,
+                    checked: copy.is_removable(),
                     refusal: None,
+                    package: copy
+                        .package
+                        .map(|package| index.name(package).to_string_lossy().into_owned()),
                     node: Some(copy.node),
                 });
             }
@@ -60,6 +63,7 @@ impl DuplicatesModel {
                     clone: false,
                     checked: false,
                     refusal: None,
+                    package: None,
                     node: Some(group.keep),
                 },
                 copies,
@@ -143,7 +147,11 @@ impl DuplicatesModel {
             let Some(keep) = group.keep.node else {
                 continue;
             };
-            for copy in group.copies.iter_mut().filter(|copy| !copy.clone) {
+            for copy in group
+                .copies
+                .iter_mut()
+                .filter(|copy| !copy.clone && copy.package.is_none())
+            {
                 copy.refusal = copy
                     .node
                     .and_then(|node| refusal(keep, node).err())

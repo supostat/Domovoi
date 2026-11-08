@@ -150,8 +150,8 @@ pub fn member_row(
     trailing.setFrameOrigin(NSPoint::new(right, (MEMBER_HEIGHT - trailing_size.height) / 2.0));
     trailing.setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinXMargin);
     row.addSubview(&trailing);
-    if let Some(refusal) = member.refusal.as_ref().filter(|_| clone_mode) {
-        let reason = measure_label(marker, refusal, &interface_font(12.0, 400.0), &tokens.dim.ns_color());
+    if let Some(refusal) = member.shown_refusal(clone_mode) {
+        let reason = measure_label(marker, &refusal, &interface_font(12.0, 400.0), &tokens.dim.ns_color());
         let reason_size = reason.fittingSize();
         right -= GAP + reason_size.width;
         reason.setFrameOrigin(NSPoint::new(right, (MEMBER_HEIGHT - reason_size.height) / 2.0));

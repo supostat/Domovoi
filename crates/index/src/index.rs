@@ -11,6 +11,7 @@ use crate::badges::Badges;
 use crate::category::Category;
 use crate::copy_groups::CopyGroups;
 use crate::enrichment::Enrichment;
+use crate::ffi::names_a_package;
 use crate::file_types::FileTypes;
 use crate::index_node::IndexNode;
 use crate::index_root::IndexRoot;
@@ -24,6 +25,7 @@ use crate::reach::Reach;
 use crate::timestamp::Timestamp;
 
 const DEPENDENCY_STORE_NAMES: [&str; 2] = ["node_modules", ".pnpm"];
+const TRASH_NAMES: [&str; 2] = [".Trash", ".Trashes"];
 const USERS_FOLDER: &str = "Users";
 const DEVELOPMENT_DIRECTORY_NAMES: [&str; 9] = [
     "node_modules",
@@ -482,6 +484,20 @@ impl Index {
             current = self.parent(node);
         }
         false
+    }
+
+    pub fn inside_trash(&self, id: NodeId) -> bool {
+        self.ancestors(id)
+            .any(|ancestor| TRASH_NAMES.iter().any(|trash| OsStr::new(trash) == self.name(ancestor)))
+    }
+
+    pub fn enclosing_package(&self, id: NodeId) -> Option<NodeId> {
+        self.ancestors(id)
+            .find(|ancestor| self.node(*ancestor).kind == NodeKind::Directory && names_a_package(self.name(*ancestor)))
+    }
+
+    fn ancestors(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+        std::iter::successors(self.parent(id), |node| self.parent(*node))
     }
 
     fn aggregate(&mut self, live: &[NodeId], counted: &[bool]) {

@@ -3,7 +3,8 @@ use std::fs::OpenOptions;
 use std::os::unix::fs::FileExt;
 use std::path::Path;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use domovoi_apfs_sys::sys::IOPOL_UTILITY;
 use domovoi_apfs_sys::thread_disk_policy;
@@ -15,6 +16,10 @@ use domovoi_scanner::{ScanOptions, scan};
 use domovoi_testkit::{Fill, TempTree};
 
 const MEBIBYTE: u64 = 1024 * 1024;
+const BEYOND_THE_OLD_FULL_HASH_LIMIT: u64 = 4 * 1024 * MEBIBYTE + MEBIBYTE;
+const ENDLESS: u64 = 16 * 1024 * MEBIBYTE;
+const STOP_AFTER: Duration = Duration::from_millis(500);
+const STOPPED_WITHIN: Duration = Duration::from_secs(3);
 const PROGRESS_CAPACITY: usize = 4096;
 
 fn index_of(root: &Path) -> Index {
@@ -115,7 +120,6 @@ fn identical_files_form_a_group_and_only_independent_copies_count_as_gain() {
     assert_eq!(duplicates.groups.len(), 1, "{duplicates:?}");
     let group = &duplicates.groups[0];
     assert_eq!(group.size, 2 * MEBIBYTE);
-    assert!(group.fully_hashed);
     let members: BTreeSet<String> = names(
         &index,
         std::iter::once(group.keep).chain(group.copies.iter().map(|copy| copy.node)),
@@ -173,7 +177,7 @@ fn identical_files_form_a_group_and_only_independent_copies_count_as_gain() {
 }
 
 #[test]
-fn files_above_the_full_hash_limit_are_grouped_by_size_and_edges_only() {
+fn files_of_any_size_are_compared_by_their_whole_contents() {
     let tree = TempTree::new().expect("temp tree is created");
     let big = tree
         .root()
@@ -181,21 +185,74 @@ fn files_above_the_full_hash_limit_are_grouped_by_size_and_edges_only() {
         .directory("big")
         .expect("directory is created");
     for name in ["one", "two"] {
-        big.file(name, 3 * MEBIBYTE, Fill::Noise(5)).expect("file is written");
+        big.sparse(name, BEYOND_THE_OLD_FULL_HASH_LIMIT)
+            .expect("file is written");
     }
-    overwrite_middle(&big.path().join("two"), 3 * MEBIBYTE);
+    overwrite_middle(&big.path().join("two"), BEYOND_THE_OLD_FULL_HASH_LIMIT);
     let index = index_of(tree.path());
 
-    assert!(search(&index, &options()).groups.is_empty());
+    assert!(
+        search(&index, &options()).groups.is_empty(),
+        "the same size and edges do not make two large files equal"
+    );
+}
 
+fn endless_pair(folder: &str) -> (TempTree, Index) {
+    let tree = TempTree::new().expect("temp tree is created");
+    let directory = tree
+        .root()
+        .expect("root opens")
+        .directory(folder)
+        .expect("directory is created");
+    for name in ["one", "two"] {
+        directory.sparse(name, ENDLESS).expect("file is written");
+    }
+    let index = index_of(tree.path());
+    (tree, index)
+}
+
+#[test]
+fn a_search_stops_inside_a_file_it_is_hashing() {
+    let (_tree, index) = endless_pair("big");
+    let pool = HashingPool::new(None).expect("hashing pool starts");
+    let options = options();
+    let cancel = options.cancel.clone();
+    let stopper = thread::spawn(move || {
+        thread::sleep(STOP_AFTER);
+        cancel.cancel();
+    });
+    let started = Instant::now();
+
+    let outcome = find_duplicates(&index, &pool, &options);
+
+    stopper.join().expect("the stopper finishes");
+    assert!(matches!(outcome, Err(SearchError::Cancelled)), "{outcome:?}");
+    let elapsed = started.elapsed();
+    assert!(elapsed < STOPPED_WITHIN, "the search stopped after {elapsed:?}");
+}
+
+#[test]
+fn the_cloud_time_limit_ends_a_file_being_hashed() {
+    let (_tree, index) = endless_pair("cloud");
     let limited = DuplicateOptions {
-        full_hash_limit: 2 * MEBIBYTE,
-        ..options()
+        cloud_time_limit: STOP_AFTER,
+        ..DuplicateOptions::new(CloudFolders::new(vec![index.path(node(&index, "cloud"))]))
     };
+    let started = Instant::now();
+
     let duplicates = search(&index, &limited);
-    assert_eq!(duplicates.groups.len(), 1);
-    assert!(!duplicates.groups[0].fully_hashed);
-    assert_eq!(duplicates.groups[0].copies.len(), 1);
+
+    let elapsed = started.elapsed();
+    assert!(elapsed < STOPPED_WITHIN, "the cloud pass ended after {elapsed:?}");
+    assert!(duplicates.groups.is_empty());
+    assert!(
+        duplicates
+            .skipped
+            .iter()
+            .any(|skipped| skipped.reason == SkipReason::TimeLimit),
+        "{:?}",
+        duplicates.skipped
+    );
 }
 
 #[test]

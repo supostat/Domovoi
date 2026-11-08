@@ -109,6 +109,7 @@ mod main_menu;
 mod main_screen;
 mod measure_progress;
 mod member_model;
+mod member_stamp;
 mod model_board;
 mod model_card_model;
 mod model_card_state;
