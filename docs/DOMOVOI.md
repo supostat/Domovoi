@@ -107,6 +107,10 @@
 | `xcode.device-support` | iOS DeviceSupport | Восстановимо |
 | `cargo.target` | каталоги `target/` Rust-проектов | Безопасно |
 | `dev.deps` | `node_modules`, `zig-cache` и подобные | Безопасно |
+| `dev.python` | `.venv`, `__pycache__`, `.mypy_cache`, `.pytest_cache` Python-проектов | Безопасно |
+| `dev.web-build` | `.next`, `.nuxt`, `.turbo` | Безопасно |
+| `dev.cocoapods` | `Pods` проектов CocoaPods | Безопасно |
+| `dev.swiftpm` | `.build` пакетов Swift | Безопасно |
 | `caches.user` | `~/Library/Caches` | Безопасно |
 | `downloads.installers` | `.dmg` и `.pkg` в Загрузках | Восстановимо |
 | `xcode.simulators` | симуляторы CoreSimulator | Проверьте сами |

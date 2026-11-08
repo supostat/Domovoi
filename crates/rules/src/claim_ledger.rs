@@ -1,11 +1,15 @@
+use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap};
 use std::iter;
 
 use domovoi_index::{Index, NodeId, Reclaimable, SafetyLevel};
 
+use crate::blocked_item::BlockedItem;
 use crate::card_item::CardItem;
 use crate::deny_reason::DenyReason;
 use crate::denylist::Denylist;
+use crate::project_card::ProjectCard;
+use crate::project_item::ProjectItem;
 use crate::recommendations::{LevelTotals, RuleCard};
 use crate::rule_set::{Claim, RuleSet};
 
@@ -44,24 +48,43 @@ impl ClaimLedger {
         ledger
     }
 
-    pub(crate) fn of_cards(cards: Vec<RuleCard>) -> Self {
+    pub(crate) fn of_recommendations(cards: Vec<RuleCard>, projects: Vec<ProjectCard>) -> Self {
         let mut ledger = Self::default();
         for card in cards {
             let rule = card.rule;
             let counted = card
                 .items
                 .into_iter()
-                .map(|item| (item.node, Standing::Counted(item.reclaimable)));
+                .map(|item| (Claim { node: item.node, rule }, Standing::Counted(item.reclaimable)));
             let blocked = card
                 .blocked
                 .into_iter()
-                .map(|(node, reason)| (node, Standing::Blocked(reason)));
-            for (node, standing) in counted.chain(blocked) {
-                ledger.insert(LedgerEntry {
-                    claim: Claim { node, rule },
-                    standing: Some(standing),
-                    due: Due::Nothing,
-                });
+                .map(|(node, reason)| (Claim { node, rule }, Standing::Blocked(reason)));
+            for (claim, standing) in counted.chain(blocked) {
+                ledger.settled(claim, standing);
+            }
+        }
+        for project in projects {
+            let counted = project.items.into_iter().map(|item| {
+                (
+                    Claim {
+                        node: item.node,
+                        rule: item.rule,
+                    },
+                    Standing::Counted(item.reclaimable),
+                )
+            });
+            let blocked = project.blocked.into_iter().map(|blocked| {
+                (
+                    Claim {
+                        node: blocked.node,
+                        rule: blocked.rule,
+                    },
+                    Standing::Blocked(blocked.reason),
+                )
+            });
+            for (claim, standing) in counted.chain(blocked) {
+                ledger.settled(claim, standing);
             }
         }
         ledger
@@ -164,53 +187,108 @@ impl ClaimLedger {
         }
     }
 
-    pub(crate) fn into_cards(
+    pub(crate) fn into_recommendations(
         self,
+        index: &Index,
         rules: &RuleSet,
         running_bundle_ids: &BTreeSet<String>,
-    ) -> (Vec<RuleCard>, LevelTotals) {
+    ) -> (Vec<RuleCard>, Vec<ProjectCard>, LevelTotals) {
         let mut cards: Vec<RuleCard> = Vec::new();
-        for entry in self.entries.into_iter().flatten() {
-            let Claim { node, rule } = entry.claim;
-            let position = if let Some(position) = cards.iter().position(|card| card.rule == rule) {
-                position
-            } else {
-                let definition = rules.rule(rule);
-                cards.push(RuleCard {
-                    rule,
-                    items: Vec::new(),
-                    blocked: Vec::new(),
-                    reclaimable: Reclaimable::default(),
-                    owner_running: definition
-                        .owner_bundle
-                        .is_some_and(|owner| running_bundle_ids.contains(owner)),
-                    preselected: definition.level == SafetyLevel::Safe && !definition.is_info_only(),
-                });
-                cards.len() - 1
-            };
-            let card = &mut cards[position];
-            match entry.standing.expect("every claim is settled before its card is built") {
-                Standing::Counted(reclaimable) => {
-                    card.reclaimable += reclaimable;
-                    card.items.push(CardItem { node, reclaimable });
-                }
-                Standing::Blocked(reason) => card.blocked.push((node, reason)),
-            }
-        }
+        let mut projects: Vec<ProjectCard> = Vec::new();
+        let mut project_positions: HashMap<NodeId, usize> = HashMap::new();
+        let mut roots: HashMap<NodeId, NodeId> = HashMap::new();
         let mut totals = LevelTotals::default();
-        for card in &cards {
-            let rule = rules.rule(card.rule);
-            if !rule.is_info_only() {
-                totals.add(rule.level, card.reclaimable.bytes);
+        for entry in self.entries.into_iter().flatten() {
+            let claim = entry.claim;
+            let standing = entry.standing.expect("every claim is settled before its card is built");
+            let definition = rules.rule(claim.rule);
+            if let Standing::Counted(reclaimable) = &standing
+                && !definition.is_info_only()
+            {
+                totals.add(definition.level, reclaimable.bytes);
+            }
+            if let Some(marker_folder) = rules.project_folder(index, claim) {
+                let root = *roots
+                    .entry(marker_folder)
+                    .or_insert_with(|| ProjectCard::root_of(index, marker_folder));
+                let position = *project_positions.entry(root).or_insert_with(|| {
+                    projects.push(ProjectCard::empty(root));
+                    projects.len() - 1
+                });
+                file_into_project(&mut projects[position], claim, standing);
+            } else {
+                let position = cards
+                    .iter()
+                    .position(|card| card.rule == claim.rule)
+                    .unwrap_or_else(|| {
+                        cards.push(empty_card(rules, claim.rule, running_bundle_ids));
+                        cards.len() - 1
+                    });
+                file_into_card(&mut cards[position], claim.node, standing);
             }
         }
-        cards.sort_by_key(|card| std::cmp::Reverse(card.reclaimable.bytes));
-        (cards, totals)
+        cards.sort_by_key(|card| Reverse(card.reclaimable.bytes));
+        for project in &mut projects {
+            project.items.sort_by_key(|item| Reverse(item.reclaimable.bytes));
+            project.settle_last_work(index);
+        }
+        projects.sort_by_key(|project| Reverse(project.reclaimable.bytes));
+        (cards, projects, totals)
+    }
+
+    fn settled(&mut self, claim: Claim, standing: Standing) {
+        self.insert(LedgerEntry {
+            claim,
+            standing: Some(standing),
+            due: Due::Nothing,
+        });
     }
 
     fn insert(&mut self, entry: LedgerEntry) {
         self.positions.insert(entry.claim.node, self.entries.len());
         self.entries.push(Some(entry));
+    }
+}
+
+fn empty_card(rules: &RuleSet, rule: usize, running_bundle_ids: &BTreeSet<String>) -> RuleCard {
+    let definition = rules.rule(rule);
+    RuleCard {
+        rule,
+        items: Vec::new(),
+        blocked: Vec::new(),
+        reclaimable: Reclaimable::default(),
+        owner_running: definition
+            .owner_bundle
+            .is_some_and(|owner| running_bundle_ids.contains(owner)),
+        preselected: definition.level == SafetyLevel::Safe && !definition.is_info_only(),
+    }
+}
+
+fn file_into_card(card: &mut RuleCard, node: NodeId, standing: Standing) {
+    match standing {
+        Standing::Counted(reclaimable) => {
+            card.reclaimable += reclaimable;
+            card.items.push(CardItem { node, reclaimable });
+        }
+        Standing::Blocked(reason) => card.blocked.push((node, reason)),
+    }
+}
+
+fn file_into_project(project: &mut ProjectCard, claim: Claim, standing: Standing) {
+    match standing {
+        Standing::Counted(reclaimable) => {
+            project.reclaimable += reclaimable;
+            project.items.push(ProjectItem {
+                node: claim.node,
+                rule: claim.rule,
+                reclaimable,
+            });
+        }
+        Standing::Blocked(reason) => project.blocked.push(BlockedItem {
+            node: claim.node,
+            rule: claim.rule,
+            reason,
+        }),
     }
 }
 

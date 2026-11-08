@@ -5,11 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::os::fd::AsFd;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use domovoi_apfs_sys::chflags;
 use domovoi_apfs_sys::sys::{EF_MAY_SHARE_BLOCKS, UF_COMPRESSED, UF_IMMUTABLE};
 use domovoi_index::{
-    ChangedPath, DeltaRequest, DirectoryListing, Enrichment, Index, IndexRoot, ListedEntry, Reclaimable,
+    ChangedPath, DeltaRequest, DirectoryListing, Enrichment, Index, IndexRoot, ListedEntry, Reclaimable, Timestamp,
 };
 use domovoi_rules::{
     CaseRule, ConfigOverrides, DenyReason, Denylist, Hypothesis, LevelTotals, Recommendations, RuleSet, rule_table,
@@ -19,6 +20,7 @@ use domovoi_testkit::{Fill, TempTree};
 use synthetic_tree::{FILE_ALLOCATION, NoSimulators, directory, file};
 
 const SHARED_CLONE_ID: u64 = 77;
+const LONG_AGO_SECONDS: u64 = 1_600_000_000;
 
 #[derive(Debug, PartialEq, Eq)]
 struct CardView {
@@ -30,8 +32,17 @@ struct CardView {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+struct ProjectView {
+    items: BTreeMap<PathBuf, Reclaimable>,
+    blocked: BTreeMap<PathBuf, DenyReason>,
+    reclaimable: Reclaimable,
+    last_work: Timestamp,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 struct View {
     cards: BTreeMap<&'static str, CardView>,
+    projects: BTreeMap<PathBuf, ProjectView>,
     totals: LevelTotals,
     hypotheses: BTreeMap<PathBuf, Reclaimable>,
 }
@@ -166,6 +177,27 @@ impl Workbench {
                     (self.rules.rule(card.rule).id, view)
                 })
                 .collect(),
+            projects: recommendations
+                .projects
+                .iter()
+                .map(|project| {
+                    let view = ProjectView {
+                        items: project
+                            .items
+                            .iter()
+                            .map(|item| (path(item.node), item.reclaimable))
+                            .collect(),
+                        blocked: project
+                            .blocked
+                            .iter()
+                            .map(|blocked| (path(blocked.node), blocked.reason.clone()))
+                            .collect(),
+                        reclaimable: project.reclaimable,
+                        last_work: project.last_work,
+                    };
+                    (path(project.root), view)
+                })
+                .collect(),
             totals: recommendations.totals,
             hypotheses: recommendations
                 .hypotheses
@@ -194,10 +226,19 @@ impl Workbench {
                 .cards
                 .is_sorted_by_key(|card| Reverse(card.reclaimable.bytes))
         );
+        assert!(
+            self.recommendations
+                .projects
+                .is_sorted_by_key(|project| Reverse(project.reclaimable.bytes))
+        );
     }
 
     fn card(&self, rule: &str) -> Option<CardView> {
         self.view(&self.recommendations).cards.remove(rule)
+    }
+
+    fn project(&self, relative: &str) -> Option<ProjectView> {
+        self.view(&self.recommendations).projects.remove(&self.path(relative))
     }
 }
 
@@ -235,7 +276,25 @@ fn workshop(with_cargo_manifest: bool) -> TempTree {
         .expect("directory is created")
         .file("todo.txt", 4_096, Fill::Byte(7))
         .expect("file is written");
+    age_files(tree.path());
     tree
+}
+
+fn age_files(folder: &Path) {
+    let long_ago: SystemTime = UNIX_EPOCH + Duration::from_secs(LONG_AGO_SECONDS);
+    for entry in fs::read_dir(folder).expect("the folder lists") {
+        let path = entry.expect("the entry reads").path();
+        if path.is_dir() {
+            age_files(&path);
+        } else {
+            File::options()
+                .write(true)
+                .open(&path)
+                .expect("the file opens")
+                .set_modified(long_ago)
+                .expect("the modification time is set");
+        }
+    }
 }
 
 fn set_flags(path: &Path, flags: u32) {
@@ -253,75 +312,88 @@ fn compressed_clone(name: &str) -> Node {
 }
 
 #[test]
-fn a_cargo_manifest_next_to_target_turns_it_into_a_card() {
+fn a_cargo_manifest_next_to_target_turns_it_into_a_project() {
     let mut bench = Workbench::scanned(workshop(false));
-    assert!(bench.card("cargo.target").is_none());
-    assert!(bench.card("dev.deps").is_some());
+    assert!(bench.project("engine").is_none());
+    assert!(bench.project("site").is_some());
     fs::write(bench.path("readme"), b"workshop").expect("a file appears in the root");
     bench.apply(&[""]);
     bench.assert_matches_a_full_build();
     fs::write(bench.path("engine/Cargo.toml"), b"[package]\n").expect("a marker appears");
     bench.apply(&["engine"]);
-    let card = bench.card("cargo.target").expect("the build folder is a card");
-    assert_eq!(card.items.keys().collect::<Vec<_>>(), [&bench.path("engine/target")]);
+    let project = bench
+        .project("engine")
+        .expect("the build folder belongs to its project");
+    assert_eq!(project.items.keys().collect::<Vec<_>>(), [&bench.path("engine/target")]);
+    assert!(bench.card("cargo.target").is_none());
     bench.assert_matches_a_full_build();
     fs::remove_file(bench.path("engine/Cargo.toml")).expect("the marker is removed");
     bench.apply(&["engine"]);
-    assert!(bench.card("cargo.target").is_none());
+    assert!(bench.project("engine").is_none());
     bench.assert_matches_a_full_build();
 }
 
 #[test]
-fn a_file_added_inside_target_grows_its_estimate() {
+fn a_file_added_inside_target_grows_the_project_but_not_its_last_work() {
     let mut bench = Workbench::scanned(workshop(true));
     let before = bench
-        .card("cargo.target")
-        .expect("the build folder is a card")
-        .reclaimable;
+        .project("engine")
+        .expect("the build folder belongs to its project");
     fs::write(bench.path("engine/target/debug/incremental.bin"), vec![9_u8; 50_000]).expect("a file is added");
     bench.apply(&["engine/target/debug"]);
-    let after = bench
-        .card("cargo.target")
-        .expect("the build folder stays a card")
-        .reclaimable;
-    assert!(after.bytes > before.bytes, "{after:?} after {before:?}");
+    let after = bench.project("engine").expect("the project stays");
+    assert!(
+        after.reclaimable.bytes > before.reclaimable.bytes,
+        "{after:?} after {before:?}"
+    );
+    assert_eq!(after.last_work, before.last_work);
     bench.assert_matches_a_full_build();
     fs::write(bench.path("engine/notes.md"), b"next to the build folder").expect("a file appears next to target");
     bench.apply(&["engine"]);
-    assert_eq!(
-        bench
-            .card("cargo.target")
-            .expect("the build folder stays a card")
-            .reclaimable,
-        after
-    );
+    let noted = bench.project("engine").expect("the project stays");
+    assert_eq!(noted.reclaimable, after.reclaimable);
+    assert!(noted.last_work > after.last_work, "{noted:?} after {after:?}");
     bench.assert_matches_a_full_build();
 }
 
 #[test]
-fn removing_node_modules_drops_the_dependencies_card() {
+fn editing_a_source_file_moves_the_last_work_of_its_project() {
     let mut bench = Workbench::scanned(workshop(true));
-    assert!(bench.card("dev.deps").is_some());
+    let before = bench
+        .project("engine")
+        .expect("the build folder belongs to its project");
+    fs::write(bench.path("engine/src/main.rs"), b"fn main() {}\n").expect("the source is edited");
+    bench.apply(&["engine/src"]);
+    let after = bench.project("engine").expect("the project stays");
+    assert!(after.last_work > before.last_work, "{after:?} after {before:?}");
+    assert_eq!(after.reclaimable, before.reclaimable);
+    bench.assert_matches_a_full_build();
+}
+
+#[test]
+fn removing_node_modules_drops_its_project() {
+    let mut bench = Workbench::scanned(workshop(true));
+    assert!(bench.project("site").is_some());
     fs::remove_dir_all(bench.path("site/node_modules")).expect("the dependencies are removed");
     bench.apply(&["site/node_modules"]);
-    assert!(bench.card("dev.deps").is_none());
-    assert!(bench.card("cargo.target").is_some());
+    assert!(bench.project("site").is_none());
+    assert!(bench.project("engine").is_some());
     bench.assert_matches_a_full_build();
 }
 
 #[test]
-fn a_protected_flag_inside_an_item_blocks_it() {
+fn a_protected_flag_inside_an_item_blocks_it_in_its_project() {
     let mut bench = Workbench::scanned(workshop(true));
     let locked = bench.path("site/node_modules/left-pad.js");
     set_flags(&locked, UF_IMMUTABLE);
     bench.apply(&["site/node_modules"]);
-    let card = bench.card("dev.deps");
+    let project = bench.project("site");
     let views = bench.views();
     set_flags(&locked, 0);
-    let card = card.expect("the dependencies stay on their card");
-    assert!(card.items.is_empty());
+    let project = project.expect("the dependencies stay in their project");
+    assert!(project.items.is_empty());
     assert_eq!(
-        card.blocked.values().collect::<Vec<_>>(),
+        project.blocked.values().collect::<Vec<_>>(),
         [&DenyReason::ProtectedFlag("UF_IMMUTABLE")]
     );
     assert_eq!(views.0, views.1);
@@ -347,14 +419,14 @@ fn a_clone_leaving_its_group_outside_an_item_frees_the_shared_blocks_of_the_item
         ],
     );
     let shared = bench
-        .card("cargo.target")
-        .expect("the build folder is a card")
+        .project("engine")
+        .expect("the build folder belongs to its project")
         .reclaimable;
     assert_eq!(shared.held_by_clones, FILE_ALLOCATION);
     bench.apply_entries("notes", vec![ListedEntry::Read(file("todo.txt"))]);
     let alone = bench
-        .card("cargo.target")
-        .expect("the build folder stays a card")
+        .project("engine")
+        .expect("the build folder stays in its project")
         .reclaimable;
     assert_eq!(
         alone,

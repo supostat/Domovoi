@@ -93,6 +93,10 @@ const RULE_FIXTURES: &[(&str, &str)] = &[
     ("/Users/igor/Projects/engram/target", "cargo.target"),
     ("/Users/igor/Projects/site/node_modules", "dev.deps"),
     ("/Users/igor/Projects/tool/.zig-cache", "dev.deps"),
+    ("/Users/igor/Projects/lab/.venv", "dev.python"),
+    ("/Users/igor/Projects/shop/.next", "dev.web-build"),
+    ("/Users/igor/Projects/phone/Pods", "dev.cocoapods"),
+    ("/Users/igor/Projects/kit/.build", "dev.swiftpm"),
     ("/Users/igor/Downloads/Figma.dmg", "downloads.installers"),
     ("/Users/igor/Downloads/Driver.pkg", "downloads.installers"),
     (
@@ -174,6 +178,10 @@ fn fixture_for_every_rule() -> (Vec<(&'static str, &'static str)>, Index) {
     roots.push(path_tree("/Users/igor/Projects/engram", file("Cargo.toml")));
     roots.push(path_tree("/Users/igor/Projects/site", file("package.json")));
     roots.push(path_tree("/Users/igor/Projects/tool", file("build.zig")));
+    roots.push(path_tree("/Users/igor/Projects/lab", file("pyproject.toml")));
+    roots.push(path_tree("/Users/igor/Projects/shop", file("next.config.mjs")));
+    roots.push(path_tree("/Users/igor/Projects/phone", file("Podfile")));
+    roots.push(path_tree("/Users/igor/Projects/kit", file("Package.swift")));
     (
         RULE_FIXTURES.to_vec(),
         data_volume_index_with(merge(roots), &installed_owners_and_a_screen_capture()),

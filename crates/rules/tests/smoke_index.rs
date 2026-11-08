@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 
 use domovoi_index::{Enrichment, Index, IndexRoot};
 use domovoi_rules::{CaseRule, ConfigOverrides, Denylist, Recommendations, RuleSet};
@@ -6,7 +7,7 @@ use domovoi_scanner::{ScanOptions, scan};
 use domovoi_testkit::{Fill, TempTree};
 
 #[test]
-fn a_real_index_yields_rule_cards_with_level_totals() {
+fn a_real_index_yields_projects_with_level_totals() {
     let tree = TempTree::new().expect("temp tree is created");
     let root = tree.root().expect("root opens");
     let site = root.directory("site").expect("directory is created");
@@ -37,18 +38,29 @@ fn a_real_index_yields_rule_cards_with_level_totals() {
     let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
     let recommendations = Recommendations::build(&index, &rules, &denylist, &BTreeSet::new(), Vec::new());
 
-    let ids: BTreeSet<&str> = recommendations
-        .cards
+    assert!(recommendations.cards.is_empty(), "{:?}", recommendations.cards);
+    let roots: BTreeSet<PathBuf> = recommendations
+        .projects
         .iter()
-        .map(|card| rules.rule(card.rule).id)
+        .map(|project| index.path(project.root))
         .collect();
-    assert_eq!(ids, BTreeSet::from(["cargo.target", "dev.deps"]));
-    for card in &recommendations.cards {
-        assert!(card.preselected);
-        assert!(card.reclaimable.bytes > 0);
-        assert!(card.blocked.is_empty());
+    assert_eq!(
+        roots,
+        BTreeSet::from([tree.path().join("engine"), tree.path().join("site")])
+    );
+    let mut artifacts: BTreeSet<&str> = BTreeSet::new();
+    for project in &recommendations.projects {
+        assert!(project.reclaimable.bytes > 0);
+        assert!(project.blocked.is_empty());
+        assert!(project.last_work.is_known());
+        artifacts.extend(project.items.iter().map(|item| rules.rule(item.rule).id));
     }
-    let card_total: u64 = recommendations.cards.iter().map(|card| card.reclaimable.bytes).sum();
-    assert_eq!(recommendations.totals.safe, card_total);
-    assert_eq!(recommendations.totals.total(), card_total);
+    assert_eq!(artifacts, BTreeSet::from(["cargo.target", "dev.deps"]));
+    let project_total: u64 = recommendations
+        .projects
+        .iter()
+        .map(|project| project.reclaimable.bytes)
+        .sum();
+    assert_eq!(recommendations.totals.safe, project_total);
+    assert_eq!(recommendations.totals.total(), project_total);
 }

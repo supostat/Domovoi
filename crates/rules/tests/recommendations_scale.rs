@@ -182,14 +182,15 @@ fn recommendations_over_half_a_million_files_sum_allocations_within_two_index_bu
         recommendations = Recommendations::build(&index, &rules, &denylist, &BTreeSet::new(), Vec::new());
     });
 
-    let card = recommendations
-        .cards
-        .iter()
-        .find(|card| rules.rule(card.rule).id == "cargo.target")
-        .expect("the build folder of the project is a card");
+    let [project] = recommendations.projects.as_slice() else {
+        panic!(
+            "the build folder belongs to one project: {:?}",
+            recommendations.projects
+        );
+    };
     let objects = u64::try_from(BUILD_UNITS * OBJECTS_PER_UNIT).expect("the object count fits in u64");
-    assert_eq!(card.reclaimable.bytes, objects * FILE_ALLOCATION);
-    assert_eq!(card.reclaimable.held_by_snapshots, 0);
+    assert_eq!(project.reclaimable.bytes, objects * FILE_ALLOCATION);
+    assert_eq!(project.reclaimable.held_by_snapshots, 0);
     assert!(
         recommendations_build <= index_build * INDEX_BUILDS_ALLOWED,
         "recommendations took {recommendations_build:?}, the index build {index_build:?}"
@@ -236,13 +237,14 @@ fn a_directory_delta_outside_the_cards_costs_at_most_a_hundredth_of_an_index_bui
 #[test]
 fn a_delta_inside_target_costs_at_most_one_recommendations_build() {
     let workshop = Workshop::new();
-    let cards: BTreeSet<&str> = workshop
+    let artifacts: BTreeSet<&str> = workshop
         .recommendations
-        .cards
+        .projects
         .iter()
-        .map(|card| workshop.rules.rule(card.rule).id)
+        .flat_map(|project| &project.items)
+        .map(|item| workshop.rules.rule(item.rule).id)
         .collect();
-    assert_eq!(cards, BTreeSet::from(["cargo.target", "dev.deps"]));
+    assert_eq!(artifacts, BTreeSet::from(["cargo.target", "dev.deps"]));
     let recommendations_build = fastest(|| {
         drop(Recommendations::build(
             &workshop.index,

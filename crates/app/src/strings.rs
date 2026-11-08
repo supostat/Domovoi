@@ -388,7 +388,7 @@ pub const INSTALL_NETWORK: &str = "загрузка прервалась";
 pub const INSTALL_REFUSED: &str = "источник отказал в загрузке";
 pub const INSTALL_DISK: &str = "файл не удалось записать";
 
-pub const RULE_TITLES: [(&str, &str); 49] = [
+pub const RULE_TITLES: [(&str, &str); 53] = [
     ("xcode.derived-data", "Xcode · DerivedData"),
     ("xcode.device-support", "iOS DeviceSupport"),
     ("xcode.simulators", "Симуляторы Xcode"),
@@ -399,6 +399,10 @@ pub const RULE_TITLES: [(&str, &str); 49] = [
     ("xcode.archives", "Архивы Xcode"),
     ("cargo.target", "Каталоги target/ (Rust)"),
     ("dev.deps", "node_modules и zig-cache"),
+    ("dev.python", "Окружения Python"),
+    ("dev.web-build", "Сборки Next.js, Nuxt и Turbo"),
+    ("dev.cocoapods", "Библиотеки CocoaPods"),
+    ("dev.swiftpm", "Сборки SwiftPM"),
     ("caches.user", "Кэши приложений"),
     ("apps.leftover-caches", "Кэши удалённых программ"),
     ("apps.leftover-data", "Данные удалённых программ"),

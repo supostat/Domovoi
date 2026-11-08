@@ -29,7 +29,7 @@ impl Recommendations {
             .iter()
             .flat_map(|spliced| spliced.kept.iter().map(|kept| (kept.previous, kept.current)))
             .collect();
-        let mut ledger = ClaimLedger::of_cards(mem::take(&mut self.cards));
+        let mut ledger = ClaimLedger::of_recommendations(mem::take(&mut self.cards), mem::take(&mut self.projects));
         ledger.relocate(&relocated);
         ledger.forget_detached(index);
         reclaim_spliced(&mut ledger, index, rules, directories);
@@ -39,7 +39,7 @@ impl Recommendations {
             }
         }
         ledger.settle(index, denylist);
-        (self.cards, self.totals) = ledger.into_cards(rules, running_bundle_ids);
+        (self.cards, self.projects, self.totals) = ledger.into_recommendations(index, rules, running_bundle_ids);
         if !hypotheses.is_empty() {
             let touched: HashSet<NodeId> = directories
                 .iter()

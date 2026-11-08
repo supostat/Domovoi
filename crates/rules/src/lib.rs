@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod app_removal;
+mod blocked_item;
 mod card_item;
 mod claim_frame;
 mod claim_ledger;
@@ -16,6 +17,8 @@ mod deny_reason;
 mod denylist;
 mod name_match;
 mod path_pattern;
+mod project_card;
+mod project_item;
 mod recommendations;
 mod recommendations_delta;
 mod rule;
@@ -28,6 +31,7 @@ mod tray;
 mod tray_application;
 
 pub use app_removal::{AppRemoval, RemovalReason};
+pub use blocked_item::BlockedItem;
 pub use card_item::CardItem;
 pub use config_overrides::ConfigOverrides;
 pub use delete_failure::DeleteFailure;
@@ -39,6 +43,8 @@ pub use delete_subject::DeleteSubject;
 pub use deny_reason::DenyReason;
 pub use denylist::Denylist;
 pub use name_match::CaseRule;
+pub use project_card::ProjectCard;
+pub use project_item::ProjectItem;
 pub use recommendations::{Hypothesis, HypothesisCard, LevelTotals, Recommendations, RuleCard};
 pub use rule::{Condition, Rule};
 pub use rule_set::{Claim, RuleSet};

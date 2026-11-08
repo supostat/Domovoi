@@ -7,6 +7,7 @@ use crate::card_item::CardItem;
 use crate::claim_ledger::ClaimLedger;
 use crate::deny_reason::DenyReason;
 use crate::denylist::Denylist;
+use crate::project_card::ProjectCard;
 use crate::rule_set::RuleSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -74,6 +75,7 @@ impl LevelTotals {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Recommendations {
     pub cards: Vec<RuleCard>,
+    pub projects: Vec<ProjectCard>,
     pub totals: LevelTotals,
     pub hypotheses: Vec<HypothesisCard>,
 }
@@ -88,9 +90,10 @@ impl Recommendations {
     ) -> Self {
         let mut ledger = ClaimLedger::of_claims(rules.claims(index));
         ledger.settle(index, denylist);
-        let (cards, totals) = ledger.into_cards(rules, running_bundle_ids);
+        let (cards, projects, totals) = ledger.into_recommendations(index, rules, running_bundle_ids);
         Self {
             cards,
+            projects,
             totals,
             hypotheses: hypotheses
                 .into_iter()

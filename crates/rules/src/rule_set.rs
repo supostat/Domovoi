@@ -8,9 +8,11 @@ use domovoi_apfs_sys::volume_capabilities;
 use domovoi_index::{App, Badges, Index, NodeId, NodeKind, SafetyLevel, SafetyLevels};
 
 use crate::claim_frame::ClaimFrame;
+use crate::claim_ledger::ancestry;
 use crate::claim_scope::ClaimScope;
 use crate::config_overrides::ConfigOverrides;
 use crate::name_match::{CaseRule, normalized};
+use crate::path_pattern::PathPattern;
 use crate::rule::{Condition, Rule};
 use crate::rule_table::rule_table;
 use crate::simulator_runtimes::{InstalledSimulatorRuntimes, SimulatorRuntimes};
@@ -174,6 +176,22 @@ impl RuleSet {
             .filter(|(length, _)| **length > components.len())
             .flat_map(|(_, patterns)| patterns)
             .any(|(rule, pattern)| self.rules[*rule].patterns[*pattern].prefix_matches(components))
+    }
+
+    pub(crate) fn project_folder(&self, index: &Index, claim: Claim) -> Option<NodeId> {
+        let patterns = &self.rules[claim.rule].patterns;
+        if !patterns.iter().any(PathPattern::has_project_marker) {
+            return None;
+        }
+        ancestry(index, claim.node).find_map(|member| {
+            let parent = index.parent(member)?;
+            let name = normalized(index.name(member), self.case);
+            let has_sibling = |marker: &str| index.child_named(parent, OsStr::new(marker)).is_some();
+            patterns
+                .iter()
+                .any(|pattern| pattern.marks_project(&name, has_sibling))
+                .then_some(parent)
+        })
     }
 
     pub fn claim_of(&self, index: &Index, node: NodeId) -> Option<Claim> {

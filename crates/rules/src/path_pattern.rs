@@ -90,6 +90,26 @@ impl PathPattern {
         }
     }
 
+    pub(crate) fn has_project_marker(&self) -> bool {
+        matches!(
+            self,
+            Self::AnyDepth {
+                sibling_marker: Some(_),
+                ..
+            }
+        )
+    }
+
+    pub(crate) fn marks_project(&self, name: &str, has_sibling: impl Fn(&str) -> bool) -> bool {
+        match self {
+            Self::AnyDepth {
+                name: pattern,
+                sibling_marker: Some(marker),
+            } => pattern.matches(name) && has_sibling(marker),
+            _ => false,
+        }
+    }
+
     pub(crate) fn matches(&self, components: &[String], has_sibling: impl Fn(&str) -> bool) -> bool {
         match self {
             Self::Anchored(segments) => {
