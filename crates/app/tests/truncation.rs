@@ -2,11 +2,11 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use domovoi_app::{
-    Breadcrumbs, CardModel, Crumb, DeleteStatus, DropHover, DropKind, HoverPanel, HoverTip, LevelRow, LevelRowView,
-    MainScreen, MemberModel, NARROW_WINDOW, ProjectRow, Provenance, PurgeFinish, PurgeModel, PurgeProgress,
-    PurgeReport, PurgeScreen, RecommendationCard, SafetyBadge, ScanningScreen, Screen, Section, ShellActions,
-    ShellFixture, ShellPalette, SidebarEntry, SidebarItemView, TrayModel, TrayRow, TrayScreen, TraySummary, WINDOW,
-    development_fonts, member_row, strings,
+    Breadcrumbs, CardModel, Crumb, DeleteStatus, DropHover, DropKind, DuplicatesScreen, DuplicatesState, HoverPanel,
+    HoverTip, LevelRow, LevelRowView, MainScreen, MemberModel, NARROW_WINDOW, ProjectRow, Provenance, PurgeFinish,
+    PurgeModel, PurgeProgress, PurgeReport, PurgeScreen, RecommendationCard, SafetyBadge, ScanningScreen, Screen,
+    SearchStage, Section, ShellActions, ShellFixture, ShellPalette, SidebarEntry, SidebarItemView, TrayModel, TrayRow,
+    TrayScreen, TraySummary, WINDOW, development_fonts, member_row, strings,
 };
 use domovoi_index::Category;
 use domovoi_render::{DiagramMode, register_fonts};
@@ -36,6 +36,8 @@ const IN_CLOUD_BYTES: u64 = 12_000_000_000;
 const PURGE_ESTIMATE: u64 = 8_400_000_000;
 const PURGE_FREED: u64 = 1_200_000_000;
 const PURGE_AVAILABLE: u64 = 10_000_000_000;
+const SEARCH_DONE: u64 = 2_025;
+const SEARCH_TOTAL: u64 = 40_000;
 const CRUMBS: [&str; 7] = [
     "Macintosh HD",
     "Пользователи · igor",
@@ -426,6 +428,23 @@ fn scanning(checks: &mut Checks, marker: MainThreadMarker) {
     checks.never_cut(&screen.engine, "scan engine line");
 }
 
+fn duplicate_search_progress(checks: &mut Checks, marker: MainThreadMarker) {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shell_state.json");
+    let mut data = ShellFixture::read(&fixture)
+        .and_then(|fixture| fixture.shell_data(Screen::Duplicates))
+        .expect("the fixture reads");
+    data.care.duplicates.state = DuplicatesState::Searching {
+        stage: SearchStage::Edges,
+        done: 0,
+        total: 0,
+    };
+    let actions = ShellActions::new(marker);
+    let screen = DuplicatesScreen::build(marker, &data, &palette(), &actions);
+    screen.show_progress(SearchStage::Contents.title(), SEARCH_DONE, SEARCH_TOTAL);
+    let (_, count, _) = screen.progress.as_ref().expect("a search shows its progress");
+    checks.never_cut(count, "duplicate search count after the search grows");
+}
+
 fn hover(checks: &mut Checks, marker: MainThreadMarker) {
     let panel = HoverPanel::new(marker);
     panel.fill(
@@ -724,6 +743,7 @@ fn main() -> ExitCode {
     crumbs(&mut checks, marker);
     head(&mut checks, marker);
     scanning(&mut checks, marker);
+    duplicate_search_progress(&mut checks, marker);
     hover(&mut checks, marker);
     recommendation_card(&mut checks, marker);
     project_rows(&mut checks, marker);

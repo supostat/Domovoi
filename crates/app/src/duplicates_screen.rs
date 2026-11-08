@@ -137,7 +137,7 @@ impl DuplicatesScreen {
         if let Some((bar, count, title)) = &self.progress {
             let share = done as f64 / total.max(1) as f64;
             bar.setFrameSize(NSSize::new(PROGRESS_WIDTH * share.clamp(0.0, 1.0), PROGRESS_HEIGHT));
-            count.setStringValue(&NSString::from_str(&progress_count(done, total)));
+            retext(count, &progress_count(done, total));
             title.setStringValue(&NSString::from_str(stage));
         }
     }
