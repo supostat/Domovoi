@@ -8,7 +8,7 @@ use crate::ffi::{code_signing, property_list_dictionary};
 use crate::property_list::text;
 
 const BUNDLE_SUFFIX: &[u8] = b".app";
-const INFO_PLIST: &str = "Contents/Info.plist";
+pub(crate) const INFO_PLIST: &str = "Contents/Info.plist";
 const IDENTIFIER_KEY: &str = "CFBundleIdentifier";
 const DISPLAY_NAME_KEY: &str = "CFBundleDisplayName";
 const NAME_KEY: &str = "CFBundleName";
