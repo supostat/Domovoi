@@ -133,6 +133,10 @@ name = "selection_after_scroll"
 harness = false
 
 [[test]]
+name = "tray_long_list"
+harness = false
+
+[[test]]
 name = "sidebar_rescan"
 harness = false
 

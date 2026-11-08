@@ -5,7 +5,7 @@ use domovoi_app::{
     Breadcrumbs, CardModel, Crumb, DeleteStatus, DropHover, DropKind, HoverPanel, HoverTip, LevelRow, LevelRowView,
     MainScreen, MemberModel, NARROW_WINDOW, ProjectRow, Provenance, PurgeFinish, PurgeModel, PurgeProgress,
     PurgeReport, PurgeScreen, RecommendationCard, SafetyBadge, ScanningScreen, Screen, Section, ShellActions,
-    ShellFixture, ShellPalette, SidebarEntry, SidebarItemView, TrayModel, TrayRow, TrayScreen, TraySummary,
+    ShellFixture, ShellPalette, SidebarEntry, SidebarItemView, TrayModel, TrayRow, TrayScreen, TraySummary, WINDOW,
     development_fonts, member_row, strings,
 };
 use domovoi_index::Category;
@@ -586,7 +586,7 @@ fn tray_application_group(checks: &mut Checks, marker: MainThreadMarker) {
         ..TrayModel::default()
     };
     let actions = ShellActions::new(marker);
-    let screen = TrayScreen::build(marker, &model, &palette(), &actions);
+    let screen = TrayScreen::build(marker, &model, &palette(), &actions, WINDOW.height);
     checks.expect(
         screen.details.len() == 4,
         "the group shows its files, the heading and the unmarked path",
@@ -608,7 +608,7 @@ fn tray_unmark_row(checks: &mut Checks, marker: MainThreadMarker) {
         ..TrayModel::default()
     };
     let actions = ShellActions::new(marker);
-    let screen = TrayScreen::build(marker, &model, &palette(), &actions);
+    let screen = TrayScreen::build(marker, &model, &palette(), &actions, WINDOW.height);
     let row = &screen.rows[0];
     let unmark = row.unmark.as_ref().expect("a confirmed row can be unmarked");
     checks.mode(&row.title, NSLineBreakMode::ByTruncatingTail, "tray row title");
@@ -634,7 +634,7 @@ fn tray_unmark_row(checks: &mut Checks, marker: MainThreadMarker) {
         files_done: 1,
         files_total: 2,
     });
-    let screen = TrayScreen::build(marker, &deleting, &palette(), &actions);
+    let screen = TrayScreen::build(marker, &deleting, &palette(), &actions, WINDOW.height);
     checks.expect(
         screen.rows.iter().all(|row| row.unmark.is_none()),
         "a row being deleted cannot be unmarked",
@@ -675,7 +675,7 @@ fn purge_sheet(checks: &mut Checks, marker: MainThreadMarker) {
     ];
     let actions = ShellActions::new(marker);
     for (name, model, primary) in states {
-        let screen = PurgeScreen::build(marker, &model, &palette(), &actions);
+        let screen = PurgeScreen::build(marker, &model, &palette(), &actions, WINDOW.height);
         let element = format!("purge sheet {name}");
         let title = screen.primary.title().to_string();
         checks.expect(title == primary, format!("{element}: primary button {title}"));

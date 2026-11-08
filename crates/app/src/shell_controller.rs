@@ -1147,9 +1147,16 @@ impl ShellController {
 
     fn show_tray(&self, model: &TrayModel, stitch: bool) {
         let palette = self.state.borrow().palette;
-        let screen = TrayScreen::build(self.marker, model, &palette, &self.actions);
+        let screen = TrayScreen::build(
+            self.marker,
+            model,
+            &palette,
+            &self.actions,
+            self.window.contentLayoutRect().size.height,
+        );
         let existing = self.state.borrow_mut().tray.take();
         let window = if let Some(sheet) = existing {
+            screen.keep_place_of(&sheet.screen);
             sheet.window
         } else {
             self.begin_sheet(screen.size())
@@ -1342,7 +1349,13 @@ impl ShellController {
 
     fn show_purge(&self, model: PurgeModel, stitch: bool) {
         let palette = self.state.borrow().palette;
-        let screen = PurgeScreen::build(self.marker, &model, &palette, &self.actions);
+        let screen = PurgeScreen::build(
+            self.marker,
+            &model,
+            &palette,
+            &self.actions,
+            self.window.contentLayoutRect().size.height,
+        );
         let existing = self.state.borrow_mut().purge.take();
         let (window, run) = match existing {
             Some(sheet) => (sheet.window, sheet.run),

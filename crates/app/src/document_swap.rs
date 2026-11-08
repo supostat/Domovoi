@@ -12,17 +12,21 @@ pub(crate) fn swap_document_following_bottom(scroll: &NSScrollView, document: &N
     swap_document(scroll, document, at_bottom);
 }
 
+pub(crate) fn scroll_to_offset_of(scroll: &NSScrollView, previous: &NSScrollView) {
+    scroll_to(scroll, previous.contentView().bounds().origin.y);
+}
+
 fn swap_document(scroll: &NSScrollView, document: &NSView, to_bottom: bool) {
-    let clip = scroll.contentView();
-    let visible = clip.bounds();
+    let top = scroll.contentView().bounds().origin.y;
     scroll.setDocumentView(Some(document));
-    let lowest = (document.frame().size.height - visible.size.height).max(0.0);
-    let top = if to_bottom {
-        lowest
-    } else {
-        visible.origin.y.min(lowest)
-    };
-    clip.scrollToPoint(NSPoint::new(0.0, top));
+    scroll_to(scroll, if to_bottom { f64::INFINITY } else { top });
+}
+
+fn scroll_to(scroll: &NSScrollView, top: f64) {
+    let clip = scroll.contentView();
+    let document = scroll.documentView().expect("a scrolled view has a document");
+    let lowest = (document.frame().size.height - clip.bounds().size.height).max(0.0);
+    clip.scrollToPoint(NSPoint::new(0.0, top.min(lowest)));
     scroll.reflectScrolledClipView(&clip);
 }
 

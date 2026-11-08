@@ -28,7 +28,13 @@ pub struct PurgeScreen {
 }
 
 impl PurgeScreen {
-    pub fn build(marker: MainThreadMarker, model: &PurgeModel, palette: &ShellPalette, actions: &ShellActions) -> Self {
+    pub fn build(
+        marker: MainThreadMarker,
+        model: &PurgeModel,
+        palette: &ShellPalette,
+        actions: &ShellActions,
+        parent_height: f64,
+    ) -> Self {
         let tokens = palette.tokens;
         let root = FillView::new(
             marker,
@@ -49,6 +55,7 @@ impl PurgeScreen {
             top: MARGIN,
             placed: Vec::new(),
             primary: None,
+            body: None,
         };
         column.paragraph(PURGE_TITLE, &interface_font(17.0, 600.0), &tokens.text.ns_color());
         column.top += GAP;
@@ -72,17 +79,16 @@ impl PurgeScreen {
                 released(&mut column, model, outcome.is_ok(), &mut lines)
             }
         };
-        let primary_frame = column.primary.expect("the primary button is placed");
-        let height = column.finish();
+        let layout = column.finish(parent_height - MARGIN);
         Self {
             root,
             primary,
             ornament,
             lines,
             probes: Probes {
-                window_background: [NARROW_WINDOW.width - 6.0, height - 6.0],
+                window_background: [NARROW_WINDOW.width - 6.0, layout.height - 6.0],
                 sidebar: None,
-                accent_button: Some(primary_frame),
+                accent_button: Some(layout.primary),
             },
         }
     }

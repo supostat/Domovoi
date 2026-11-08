@@ -211,6 +211,7 @@ mod tray_button;
 mod tray_column;
 mod tray_drop_button;
 mod tray_drop_look;
+mod tray_layout;
 mod tray_measure_job;
 mod tray_measured;
 mod tray_measurement;

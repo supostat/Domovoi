@@ -3,11 +3,12 @@ use domovoi_theme::format_size;
 use objc2::rc::Retained;
 
 use objc2::{MainThreadMarker, sel};
-use objc2_app_kit::{NSAccessibility, NSLineBreakMode, NSTextField, NSView};
+use objc2_app_kit::{NSAccessibility, NSLineBreakMode, NSScrollView, NSTextField, NSView};
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use crate::button_style::ButtonStyle;
 use crate::delete_outcome::DeleteOutcome;
+use crate::document_swap::scroll_to_offset_of;
 use crate::field_ornament::FieldOrnament;
 use crate::fill_view::{FillStyle, FillView};
 use crate::label::{label, measure_label};
@@ -41,11 +42,18 @@ pub struct TrayScreen {
     pub(crate) ornament: Option<Retained<FieldOrnament>>,
     pub details: Vec<Retained<NSTextField>>,
     pub rows: Vec<TrayRowViews>,
+    pub body: Option<Retained<NSScrollView>>,
     pub probes: Probes,
 }
 
 impl TrayScreen {
-    pub fn build(marker: MainThreadMarker, model: &TrayModel, palette: &ShellPalette, actions: &ShellActions) -> Self {
+    pub fn build(
+        marker: MainThreadMarker,
+        model: &TrayModel,
+        palette: &ShellPalette,
+        actions: &ShellActions,
+        parent_height: f64,
+    ) -> Self {
         let tokens = palette.tokens;
         let root = FillView::new(
             marker,
@@ -66,6 +74,7 @@ impl TrayScreen {
             top: MARGIN,
             placed: Vec::new(),
             primary: None,
+            body: None,
         };
         column.paragraph(TRAY, &interface_font(17.0, 600.0), &tokens.text.ns_color());
         column.top += GAP;
@@ -100,24 +109,30 @@ impl TrayScreen {
                 ])
             }
         };
-        let primary_frame = column.primary.expect("the primary button is placed");
-        let height = column.finish();
+        let layout = column.finish(parent_height - MARGIN);
         Self {
             root,
             primary,
             ornament,
             details,
             rows,
+            body: layout.body,
             probes: Probes {
-                window_background: [NARROW_WINDOW.width - 6.0, height - 6.0],
+                window_background: [NARROW_WINDOW.width - 6.0, layout.height - 6.0],
                 sidebar: None,
-                accent_button: Some(primary_frame),
+                accent_button: Some(layout.primary),
             },
         }
     }
 
     pub fn size(&self) -> NSSize {
         self.root.frame().size
+    }
+
+    pub fn keep_place_of(&self, previous: &Self) {
+        if let (Some(body), Some(previous_body)) = (&self.body, &previous.body) {
+            scroll_to_offset_of(body, previous_body);
+        }
     }
 }
 
@@ -127,10 +142,12 @@ fn deleted(column: &mut TrayColumn<'_>, outcome: &DeleteOutcome) -> (Retained<Sh
     column.paragraph(&outcome.line(), &interface_font(22.0, 600.0), &tokens.text.ns_color());
     if !outcome.failures.is_empty() {
         column.top += GAP;
+        let start = column.top;
         column.paragraph(NOT_DELETED, &interface_font(13.0, 600.0), &tokens.text.ns_color());
         for failure in &outcome.failures {
             column.paragraph(failure, &interface_font(12.5, 400.0), &tokens.mute.ns_color());
         }
+        column.mark_body(start);
     }
     column.top += SECTION_GAP;
     let primary = column.buttons(&[(CLOSE, sel!(closeTray:), TrayButton::Primary)]);
@@ -142,10 +159,12 @@ fn confirmation(column: &mut TrayColumn<'_>, model: &TrayModel) -> (Vec<Retained
     let unmarkable = model.deleting.is_none();
     let mut details = Vec::new();
     let mut rows = Vec::new();
+    let start = column.top;
     for (position, row) in model.rows.iter().enumerate() {
         rows.push(tray_row(column, row, unmarkable.then_some(position)));
         details.extend(row_details(column, row));
     }
+    column.mark_body(start);
     column.top += GAP;
     let total_text = if model.measuring.is_some() {
         format!("{ESTIMATE_MARK} {}", format_size(model.total()))
