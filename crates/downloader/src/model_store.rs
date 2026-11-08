@@ -190,6 +190,7 @@ impl ModelStore {
             measured_bytes: 0,
             indexed_files: 1,
             rule_id: None,
+            duplicate_of: None,
         };
         let report = delete(vec![subject], &CancelToken::default(), &|_| {});
         match report.failed.into_iter().next() {

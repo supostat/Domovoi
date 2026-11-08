@@ -1039,8 +1039,8 @@ impl ShellController {
             {
                 let mut state = self.state.borrow_mut();
                 let session = state.session.as_mut().expect("duplicates come from an open session");
-                for (_, copy) in &pairs {
-                    session.add_to_tray(*copy, None);
+                for (kept, copy) in &pairs {
+                    session.add_duplicate_copy_to_tray(*copy, *kept);
                 }
             }
             return self.open_tray();

@@ -8,6 +8,8 @@ pub enum DeleteFailure {
     Replaced,
     NoPermission,
     ReadOnlyVolume,
+    DiffersFromKept,
+    KeptCopyUnavailable,
     Other { code: isize, description: String },
 }
 

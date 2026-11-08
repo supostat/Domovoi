@@ -22,6 +22,7 @@ impl PendingReplacement {
             measured_bytes: self.alloc_size,
             indexed_files: 1,
             rule_id: None,
+            duplicate_of: None,
         }
     }
 }

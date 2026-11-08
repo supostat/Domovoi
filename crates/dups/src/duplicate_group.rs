@@ -61,7 +61,7 @@ impl DuplicateGroup {
                 self.copies.iter().any(|copy| copy.node == *node),
                 "only copies of the group are deleted"
             );
-            tray.add(index, *node, None);
+            tray.add_duplicate_copy(index, *node, self.keep);
         }
         let sizes = tray
             .items()

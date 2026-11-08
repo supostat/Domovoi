@@ -25,6 +25,7 @@ fn subject(location: &Path, measured_bytes: u64, indexed_files: usize) -> Delete
         measured_bytes,
         indexed_files: indexed_files as u64,
         rule_id: None,
+        duplicate_of: None,
     }
 }
 

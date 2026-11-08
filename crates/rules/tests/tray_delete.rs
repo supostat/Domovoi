@@ -61,6 +61,7 @@ fn taking_the_tray_separates_denied_items_from_subjects() {
             measured_bytes: sizes[0].bytes,
             indexed_files: 1,
             rule_id: Some(INSTALLER_RULE.to_owned()),
+            duplicate_of: None,
         }]
     );
     assert_eq!(

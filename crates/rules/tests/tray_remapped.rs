@@ -117,6 +117,7 @@ fn located(index: &Index, relative: &str) -> TrayItem {
         reason: None,
         application: None,
         project: None,
+        duplicate_of: None,
     }
 }
 

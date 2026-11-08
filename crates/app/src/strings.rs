@@ -159,6 +159,8 @@ pub const DENY_PARENT_NOT_WRITABLE: &str = "нет прав на папку";
 pub const DENY_PROTECTED_DATA: &str = "данные под защитой";
 pub const DENY_RUNNING_APPLICATION: &str = "приложение запущено";
 pub const DENY_OWN_APPLICATION: &str = "это сам Домовой";
+pub const DENY_KEPT_COPY_MARKED: &str = "оставляемый экземпляр тоже отмечен к удалению";
+pub const DENY_KEPT_COPY_MISSING: &str = "оставляемый экземпляр не найден";
 pub const NO_RECOMMENDATIONS: &str = "Правилам здесь нечего предложить. Диск выглядит аккуратно.";
 
 pub const FIND_DUPLICATES: &str = "Искать дубликаты";
@@ -267,6 +269,8 @@ pub const TRAY_EMPTY: &str = "Пока ничего не отмечено к у�
      отметьте рекомендации или копии дубликатов.";
 pub const DELETE_NO_PERMISSION: &str = "нет прав";
 pub const DELETE_READ_ONLY: &str = "том только для чтения";
+pub const DELETE_DIFFERS_FROM_KEPT: &str = "уже не совпадает с оставляемым экземпляром";
+pub const DELETE_KEPT_COPY_UNAVAILABLE: &str = "оставляемый экземпляр не читается";
 pub const DELETE_MISSING: &str = "файла уже нет";
 pub const DELETE_REPLACED: &str = "на его месте уже другой файл";
 pub const DELETE_OTHER: &str = "macOS отказала";

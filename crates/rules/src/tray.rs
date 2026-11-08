@@ -5,8 +5,10 @@ use domovoi_index::{Index, NodeId, Reclaimable};
 use crate::app_removal::{AppRemoval, RemovalReason};
 use crate::delete_refusal::DeleteRefusal;
 use crate::delete_subject::DeleteSubject;
+use crate::deny_reason::DenyReason;
 use crate::denylist::Denylist;
 use crate::tray_application::TrayApplication;
+use crate::tray_mark::TrayMark;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TrayItem {
@@ -17,6 +19,7 @@ pub struct TrayItem {
     pub reason: Option<RemovalReason>,
     pub application: Option<String>,
     pub project: Option<PathBuf>,
+    pub duplicate_of: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -27,23 +30,50 @@ pub struct Tray {
 
 impl Tray {
     pub fn add(&mut self, index: &Index, node: NodeId, rule_id: Option<&str>) {
-        self.insert(index, node, rule_id.map(str::to_owned), None, None, None);
+        self.insert(
+            index,
+            node,
+            TrayMark {
+                rule_id: rule_id.map(str::to_owned),
+                ..TrayMark::default()
+            },
+        );
     }
 
     pub fn add_project_artifact(&mut self, index: &Index, node: NodeId, rule_id: &str, project: &Path) {
         self.insert(
             index,
             node,
-            Some(rule_id.to_owned()),
-            None,
-            None,
-            Some(project.to_path_buf()),
+            TrayMark {
+                rule_id: Some(rule_id.to_owned()),
+                project: Some(project.to_path_buf()),
+                ..TrayMark::default()
+            },
+        );
+    }
+
+    pub fn add_duplicate_copy(&mut self, index: &Index, copy: NodeId, kept: NodeId) {
+        self.insert(
+            index,
+            copy,
+            TrayMark {
+                duplicate_of: Some(index.path(kept)),
+                ..TrayMark::default()
+            },
         );
     }
 
     pub fn add_application(&mut self, index: &Index, removal: &AppRemoval) {
         for (node, reason) in &removal.items {
-            self.insert(index, *node, None, Some(*reason), Some(removal.bundle_id.clone()), None);
+            self.insert(
+                index,
+                *node,
+                TrayMark {
+                    reason: Some(*reason),
+                    application: Some(removal.bundle_id.clone()),
+                    ..TrayMark::default()
+                },
+            );
         }
         self.applications
             .retain(|application| application.bundle_id != removal.bundle_id);
@@ -54,15 +84,7 @@ impl Tray {
         });
     }
 
-    fn insert(
-        &mut self,
-        index: &Index,
-        node: NodeId,
-        rule_id: Option<String>,
-        reason: Option<RemovalReason>,
-        application: Option<String>,
-        project: Option<PathBuf>,
-    ) {
+    fn insert(&mut self, index: &Index, node: NodeId, mark: TrayMark) {
         let path = index.path(node);
         if self.covers(&path) {
             return;
@@ -72,10 +94,11 @@ impl Tray {
             node,
             physical: index.physical_path(node),
             path,
-            rule_id,
-            reason,
-            application,
-            project,
+            rule_id: mark.rule_id,
+            reason: mark.reason,
+            application: mark.application,
+            project: mark.project,
+            duplicate_of: mark.duplicate_of,
         });
     }
 
@@ -90,10 +113,13 @@ impl Tray {
                 tray.insert(
                     index,
                     node,
-                    item.rule_id.clone(),
-                    item.reason,
-                    item.application.clone(),
-                    item.project.clone(),
+                    TrayMark {
+                        rule_id: item.rule_id.clone(),
+                        reason: item.reason,
+                        application: item.application.clone(),
+                        project: item.project.clone(),
+                        duplicate_of: item.duplicate_of.clone(),
+                    },
                 );
             }
         }
@@ -136,15 +162,26 @@ impl Tray {
         assert_eq!(sizes.len(), self.items.len(), "every item of the tray is measured");
         let mut subjects = Vec::with_capacity(self.items.len());
         let mut refusals = Vec::new();
+        let verdicts: Vec<Result<Option<PathBuf>, DenyReason>> = self
+            .items
+            .iter()
+            .map(|item| match denylist.verdict(index, item.node) {
+                Some(reason) => Err(reason),
+                None => self.kept_copy_of(index, item),
+            })
+            .collect();
         self.applications.clear();
-        for (item, size) in std::mem::take(&mut self.items).into_iter().zip(sizes) {
-            if let Some(reason) = denylist.verdict(index, item.node) {
-                refusals.push(DeleteRefusal {
-                    path: item.path,
-                    reason,
-                });
-                continue;
-            }
+        for ((item, size), verdict) in std::mem::take(&mut self.items).into_iter().zip(sizes).zip(verdicts) {
+            let duplicate_of = match verdict {
+                Ok(duplicate_of) => duplicate_of,
+                Err(reason) => {
+                    refusals.push(DeleteRefusal {
+                        path: item.path,
+                        reason,
+                    });
+                    continue;
+                }
+            };
             subjects.push(DeleteSubject {
                 path: item.path,
                 physical: item.physical,
@@ -152,8 +189,22 @@ impl Tray {
                 measured_bytes: size.bytes,
                 indexed_files: u64::from(index.node(item.node).files),
                 rule_id: item.rule_id,
+                duplicate_of,
             });
         }
         (subjects, refusals)
+    }
+
+    fn kept_copy_of(&self, index: &Index, item: &TrayItem) -> Result<Option<PathBuf>, DenyReason> {
+        let Some(kept) = &item.duplicate_of else {
+            return Ok(None);
+        };
+        if self.covers(kept) {
+            return Err(DenyReason::KeptCopyMarked);
+        }
+        index
+            .find(kept)
+            .map(|node| Some(index.physical_path(node)))
+            .ok_or(DenyReason::KeptCopyMissing)
     }
 }

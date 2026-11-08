@@ -4,8 +4,8 @@ use serde::Deserialize;
 
 use crate::deny_reason_text::deny_reason_text;
 use crate::strings::{
-    DELETE_MISSING, DELETE_NO_PERMISSION, DELETE_OTHER, DELETE_READ_ONLY, DELETE_REPLACED, DELETED, FREED, NOT_STARTED,
-    OBJECTS, STOPPED_MIDWAY,
+    DELETE_DIFFERS_FROM_KEPT, DELETE_KEPT_COPY_UNAVAILABLE, DELETE_MISSING, DELETE_NO_PERMISSION, DELETE_OTHER,
+    DELETE_READ_ONLY, DELETE_REPLACED, DELETED, FREED, NOT_STARTED, OBJECTS, STOPPED_MIDWAY,
 };
 use crate::tilde::tilde;
 
@@ -64,6 +64,8 @@ fn failure_text(failure: &DeleteFailure) -> &'static str {
         DeleteFailure::Replaced => DELETE_REPLACED,
         DeleteFailure::NoPermission => DELETE_NO_PERMISSION,
         DeleteFailure::ReadOnlyVolume => DELETE_READ_ONLY,
+        DeleteFailure::DiffersFromKept => DELETE_DIFFERS_FROM_KEPT,
+        DeleteFailure::KeptCopyUnavailable => DELETE_KEPT_COPY_UNAVAILABLE,
         DeleteFailure::Other { .. } => DELETE_OTHER,
     }
 }

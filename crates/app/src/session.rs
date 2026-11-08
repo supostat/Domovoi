@@ -337,6 +337,14 @@ impl Session {
         self.tray.add(index, node, rule_id);
     }
 
+    pub fn add_duplicate_copy_to_tray(&mut self, copy: NodeId, kept: NodeId) {
+        let index = self
+            .index
+            .as_ref()
+            .expect("the tray collects nodes of a scanned volume");
+        self.tray.add_duplicate_copy(index, copy, kept);
+    }
+
     pub fn add_target_to_tray(&mut self, target: &TrayTarget) {
         let index = self
             .index

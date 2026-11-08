@@ -1,17 +1,20 @@
 use std::ffi::{OsStr, OsString};
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::Path;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
 
 use domovoi_apfs_sys::sys::{DIR_MNTSTATUS_MNTPOINT, DIR_MNTSTATUS_TRIGGER, SF_FIRMLINK};
 use domovoi_apfs_sys::{
-    AccessError, AttributeSet, BulkListing, EntryAttributes, ObjectKind, link_id, open_at, unlink_at,
+    AccessError, AttributeSet, BulkListing, EntryAttributes, ObjectKind, link_id, open_at, set_nocache, unlink_at,
 };
 use domovoi_scanner::CancelToken;
 
+use crate::content_comparison::ContentComparison;
 use crate::delete_failure::DeleteFailure;
 use crate::delete_progress::DeleteProgress;
 use crate::delete_report::DeleteReport;
@@ -150,6 +153,13 @@ fn remove_subject(item: &Planned, cancel: &CancelToken, tally: &Tally<'_>) -> Re
     let parent = File::open(physical.parent().expect("a deleted item has a parent"))
         .map_err(|error| DeleteFailure::from_io(&error))?;
     if !item.is_directory {
+        if let Some(kept) = &item.subject.duplicate_of {
+            match compare_with_kept(physical, kept, cancel)? {
+                ContentComparison::Same => {}
+                ContentComparison::Different => return Err(DeleteFailure::DiffersFromKept),
+                ContentComparison::Stopped => return Ok(Removal::Stopped),
+            }
+        }
         unlink(parent.as_fd(), name, 0)?;
         tally.step();
         return Ok(Removal::Removed);
@@ -189,6 +199,26 @@ fn remove_subject(item: &Planned, cancel: &CancelToken, tally: &Tally<'_>) -> Re
     drop(directory);
     unlink(parent.as_fd(), name, libc::AT_REMOVEDIR)?;
     Ok(Removal::Removed)
+}
+
+fn compare_with_kept(copy: &Path, kept: &Path, cancel: &CancelToken) -> Result<ContentComparison, DeleteFailure> {
+    let copy = open_for_comparison(copy).map_err(|error| DeleteFailure::from_io(&error))?;
+    let kept = open_for_comparison(kept).map_err(|_| DeleteFailure::KeptCopyUnavailable)?;
+    let size = copy.metadata().map_err(|error| DeleteFailure::from_io(&error))?.len();
+    let kept_size = kept.metadata().map_err(|_| DeleteFailure::KeptCopyUnavailable)?.len();
+    if kept_size != size {
+        return Ok(ContentComparison::Different);
+    }
+    ContentComparison::of(&copy, &kept, size, cancel).map_err(|error| DeleteFailure::from_io(&error))
+}
+
+fn open_for_comparison(path: &Path) -> io::Result<File> {
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)?;
+    set_nocache(file.as_fd())?;
+    Ok(file)
 }
 
 fn remove_child(

@@ -40,23 +40,6 @@ pub(crate) fn open_without_cache(path: &Path) -> io::Result<File> {
     Ok(file)
 }
 
-pub(crate) fn same_contents(first: &File, second: &File, size: u64) -> io::Result<bool> {
-    let chunk = usize::try_from(size.min(READ_CHUNK_BYTES)).expect("a read chunk fits in usize");
-    let mut first_buffer = vec![0_u8; chunk];
-    let mut second_buffer = vec![0_u8; chunk];
-    let mut offset = 0;
-    while offset < size {
-        let length = usize::try_from((size - offset).min(READ_CHUNK_BYTES)).expect("a read chunk fits in usize");
-        first.read_exact_at(&mut first_buffer[..length], offset)?;
-        second.read_exact_at(&mut second_buffer[..length], offset)?;
-        if first_buffer[..length] != second_buffer[..length] {
-            return Ok(false);
-        }
-        offset += length as u64;
-    }
-    Ok(true)
-}
-
 fn open_unchanged(path: &Path, size: u64) -> Result<File, SkipReason> {
     let file = open_without_cache(path).map_err(|error| SkipReason::of(&error))?;
     let metadata = file.metadata().map_err(|error| SkipReason::of(&error))?;

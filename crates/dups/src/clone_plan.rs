@@ -19,7 +19,7 @@ use domovoi_apfs_sys::{
     rename_swap, set_nocache, stream_identity, user_access, volume_capabilities,
 };
 use domovoi_index::{Index, NodeId};
-use domovoi_rules::{Denylist, delete};
+use domovoi_rules::{ContentComparison, Denylist, delete};
 use domovoi_scanner::CancelToken;
 use objc2_app_kit::NSWorkspace;
 use objc2_foundation::{NSFileCoordinator, NSFileCoordinatorWritingOptions, NSString, NSURL, NSUUID};
@@ -29,7 +29,7 @@ use crate::clone_refusal::CloneRefusal;
 use crate::clone_replace_error::CloneReplaceError;
 use crate::clone_replaced::CloneReplaced;
 use crate::cloud_folders::CloudFolders;
-use crate::content_digest::{open_without_cache, same_contents};
+use crate::content_digest::open_without_cache;
 use crate::mount_point::mount_point_of;
 use crate::pending_replacement::{PendingReplacement, TEMPORARY_PREFIX};
 
@@ -203,7 +203,8 @@ impl ClonePlan {
             && opened.modified()? == self.copy_modified
             && self.copy_is_untouched()?
             && clone_file.metadata()?.len() == self.copy_size
-            && same_contents(&copy_file, &clone_file, self.copy_size)?;
+            && ContentComparison::of(&copy_file, &clone_file, self.copy_size, &CancelToken::default())?
+                == ContentComparison::Same;
         if unchanged {
             Ok(())
         } else {
