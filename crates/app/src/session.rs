@@ -494,13 +494,7 @@ impl Session {
             Remapping::Detached if index.is_live(node) => Some(node),
             Remapping::Detached | Remapping::Everything => index.find(path),
         };
-        let mut tray = Tray::default();
-        for item in self.tray.items() {
-            if let Some(node) = resolve(item.node, &item.path) {
-                tray.add(index, node, item.rule_id.as_deref());
-            }
-        }
-        self.tray = tray;
+        self.tray = self.tray.remapped(index, resolve);
         if let (Some(groups), Some(duplicates)) = (duplicate_paths, self.duplicates.as_mut()) {
             let mut remapped = Vec::new();
             for (group, paths) in mem::take(&mut duplicates.groups).into_iter().zip(groups) {

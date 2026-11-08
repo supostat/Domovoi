@@ -79,8 +79,34 @@ impl Tray {
         });
     }
 
+    #[must_use]
+    pub fn remapped(&self, index: &Index, resolve: impl Fn(NodeId, &Path) -> Option<NodeId>) -> Self {
+        let mut tray = Self {
+            items: Vec::with_capacity(self.items.len()),
+            applications: self.applications.clone(),
+        };
+        for item in &self.items {
+            if let Some(node) = resolve(item.node, &item.path) {
+                tray.insert(
+                    index,
+                    node,
+                    item.rule_id.clone(),
+                    item.reason,
+                    item.application.clone(),
+                    item.project.clone(),
+                );
+            }
+        }
+        tray.drop_applications_without_items();
+        tray
+    }
+
     pub fn remove(&mut self, node: NodeId) {
         self.items.retain(|item| item.node != node);
+        self.drop_applications_without_items();
+    }
+
+    fn drop_applications_without_items(&mut self) {
         let items = &self.items;
         self.applications.retain(|application| {
             items
