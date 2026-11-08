@@ -77,8 +77,7 @@ pub fn write_snapshot(
     });
     if let Some((slot, state)) = built.diagram(data, &palette) {
         let mut atlas = GlyphAtlas::default();
-        let mut scene = state.scene(Instant::now(), scale as f32, &mut atlas);
-        scene.clear = tokens.bg.premultiplied();
+        let scene = state.scene(Instant::now(), scale as f32, &mut atlas);
         let frame = renderer.render_offscreen(&scene, &atlas).image;
         let left = (slot.origin.x * scale).round() as usize;
         let top = ((size.height - slot.origin.y - slot.size.height) * scale).round() as usize;

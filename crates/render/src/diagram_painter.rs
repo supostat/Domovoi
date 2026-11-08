@@ -237,7 +237,7 @@ impl DiagramPainter<'_> {
             height,
             scale: self.scale,
             progress,
-            clear: self.palette.surface.premultiplied(),
+            clear: self.palette.bg.premultiplied(),
             shapes: Vec::new(),
             glyphs: Vec::new(),
         }
