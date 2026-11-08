@@ -328,19 +328,67 @@
      "selected": true
     },
     {
-     "title": "Каталоги target/ (Rust)",
+     "title": "Проекты разработки",
      "paths": [
       "~/Projects/engram/target",
-      "~/Projects/quartz/target"
+      "~/Projects/quartz/target",
+      "~/Projects/facet/zig-cache",
+      "~/Projects/boss/node_modules",
+      "~/Projects/clavis/node_modules"
      ],
-     "explanation": "Результаты сборки Rust-проекта. cargo соберёт их заново, исходники не пострадают.",
+     "explanation": "Зависимости и результаты сборки проектов. Вернутся после установки зависимостей и сборки. Заранее отмечены проекты без изменений больше месяца.",
      "level": "safe",
-     "provenance": {
-      "rule": "cargo.target"
-     },
-     "amount": 24000000000,
-     "selected": true,
-     "held_by_clones": 1200000000
+     "provenance": "projects",
+     "amount": 31200000000,
+     "selected": false,
+     "held_by_clones": 1200000000,
+     "rows": [
+      {
+       "name": "quartz",
+       "path": "~/Projects/quartz",
+       "artifacts": ["target"],
+       "age": "4 месяца назад",
+       "stale": true,
+       "amount": 9800000000,
+       "selected": true
+      },
+      {
+       "name": "facet",
+       "path": "~/Projects/facet",
+       "artifacts": ["zig-cache"],
+       "age": "1 год назад",
+       "stale": true,
+       "amount": 3400000000,
+       "selected": true
+      },
+      {
+       "name": "clavis",
+       "path": "~/Projects/clavis",
+       "artifacts": ["node_modules"],
+       "age": "8 месяцев назад",
+       "stale": true,
+       "amount": 1700000000,
+       "selected": true
+      },
+      {
+       "name": "engram",
+       "path": "~/Projects/engram",
+       "artifacts": ["target"],
+       "age": "2 дня назад",
+       "stale": false,
+       "amount": 14200000000,
+       "selected": false
+      },
+      {
+       "name": "boss",
+       "path": "~/Projects/boss",
+       "artifacts": ["node_modules"],
+       "age": "3 недели назад",
+       "stale": false,
+       "amount": 2100000000,
+       "selected": false
+      }
+     ]
     },
     {
      "title": "Архивы Xcode",
@@ -451,21 +499,6 @@
      },
      "amount": 11400000000,
      "selected": false
-    },
-    {
-     "title": "node_modules и zig-cache",
-     "paths": [
-      "~/Projects/boss/node_modules",
-      "~/Projects/clavis/node_modules",
-      "~/Projects/facet/zig-cache"
-     ],
-     "explanation": "Зависимости и кэш сборки проекта. Вернутся после установки зависимостей и сборки.",
-     "level": "safe",
-     "provenance": {
-      "rule": "dev.deps"
-     },
-     "amount": 7200000000,
-     "selected": true
     },
     {
      "title": "Данные удалённых программ",

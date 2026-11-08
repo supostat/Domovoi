@@ -134,6 +134,15 @@ impl RecommendationsScreen {
         self.send.setEnabled(model.selected_total() > 0);
     }
 
+    pub fn show_rows(&self, model: &RecommendationsModel) {
+        self.show_selection(model);
+        if let Some((collection, source)) = &self.collection
+            && source.show(&model.cards, source.asks())
+        {
+            collection.reloadData();
+        }
+    }
+
     fn show(&self, model: &RecommendationsModel, ask_enabled: bool) {
         let head = NSSize::new(WindowFrame::pane_size().width, HEAD_HEIGHT);
         retext(&self.total, &model.total_line());

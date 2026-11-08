@@ -270,16 +270,7 @@ impl ShellState {
             .map(|recommendations| RecommendationsModel::build(index, session.rules(), recommendations, now))
             .unwrap_or_default();
         if let Some(previous) = previous {
-            for card in recommendations.cards.iter_mut().filter(|card| card.selectable()) {
-                if let Some(old) = previous
-                    .recommendations
-                    .cards
-                    .iter()
-                    .find(|old| old.provenance == card.provenance && old.paths == card.paths)
-                {
-                    card.selected = old.selected;
-                }
-            }
+            recommendations.keep_selection(&previous.recommendations);
         }
         let mut duplicates = match (&self.search, session.duplicates(), self.duplicate_summary) {
             (Some(job), _, _) => DuplicatesModel {

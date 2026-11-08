@@ -18,7 +18,7 @@ mod rgba;
 mod shadow;
 mod size;
 
-pub use age::{DateSource, format_age};
+pub use age::{DateSource, format_age, format_elapsed};
 pub use appearance::palette_for;
 pub use count::format_count;
 pub use digits::{NO_BREAK_SPACE, group_thousands};

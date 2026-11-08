@@ -63,7 +63,7 @@ fn scanned() -> Scanned {
     }
 }
 
-fn rule_card(scanned: &Scanned) -> CardModel {
+fn projects_card(scanned: &Scanned) -> CardModel {
     RecommendationsModel::build(
         &scanned.index,
         &scanned.rules,
@@ -72,8 +72,8 @@ fn rule_card(scanned: &Scanned) -> CardModel {
     )
     .cards
     .into_iter()
-    .find(|card| card.provenance == Provenance::Rule(RULE.to_owned()))
-    .expect("the build folder makes a card")
+    .find(|card| card.provenance == Provenance::Projects)
+    .expect("the build folder makes a projects card")
 }
 
 fn loaded_fake(replies: Vec<String>) -> FakeBackend {
@@ -95,16 +95,16 @@ fn say(response: &serde_json::Value) -> String {
 }
 
 #[test]
-fn a_rule_card_names_its_rule_level_paths_and_size() {
+fn the_projects_card_carries_its_artifact_paths_and_no_rule() {
     let scanned = scanned();
-    let card = rule_card(&scanned);
+    let card = projects_card(&scanned);
     let focus = card_focus(&card);
-    assert_eq!(focus.rule.as_deref(), Some(RULE));
-    assert_eq!(focus.title, card.title);
+    assert_eq!(focus.rule, None);
+    assert_eq!(focus.title, strings::PROJECTS_TITLE);
     assert_eq!(focus.level, SafetyLevel::Safe);
     assert_eq!(focus.paths, card.paths);
     assert!(
-        focus.paths.iter().any(|path| path.ends_with("target")),
+        focus.paths.iter().any(|path| path.ends_with("engine/target")),
         "{:?}",
         focus.paths
     );
@@ -129,6 +129,7 @@ fn a_hypothesis_card_has_no_rule_and_asks_to_be_checked() {
         vendor_command: None,
         age: None,
         selected: false,
+        rows: Vec::new(),
         targets: Vec::new(),
     };
     let focus = card_focus(&card);
@@ -140,7 +141,7 @@ fn a_hypothesis_card_has_no_rule_and_asks_to_be_checked() {
 #[test]
 fn the_real_agent_receives_the_card_as_data_of_the_overview() {
     let scanned = scanned();
-    let card = rule_card(&scanned);
+    let card = projects_card(&scanned);
     let focus = FocusContext {
         card: Some(card_focus(&card)),
         ..FocusContext::default()
@@ -167,7 +168,7 @@ fn the_real_agent_receives_the_card_as_data_of_the_overview() {
     let question_at = prompt.rfind(QUESTION_MARK).expect("the prompt carries the question");
     let (overview, question) = prompt.split_at(question_at);
     assert!(overview.contains(r#""card":"#), "{prompt}");
-    assert!(overview.contains(&format!(r#""rule":"{RULE}""#)), "{prompt}");
+    assert!(overview.contains(strings::PROJECTS_TITLE), "{prompt}");
     for path in &card.paths {
         assert!(
             overview.contains(path.as_str()),

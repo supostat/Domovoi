@@ -41,6 +41,7 @@ use crate::assistant_settings::AssistantSettings;
 use crate::bundle_resources::diagram_metallib;
 use crate::cache_opening::CacheOpening;
 use crate::cached_tray_summary::CachedTraySummary;
+use crate::card_model::CardModel;
 use crate::care_models::CareModels;
 #[cfg(feature = "claude-code")]
 use crate::claude_search::installed_claude_code;
@@ -73,7 +74,9 @@ use crate::node_facts::NodeFacts;
 use crate::notification_center::ScanNotifier;
 use crate::preview_source::PreviewSource;
 use crate::preview_targets::PreviewTargets;
+use crate::project_row::ProjectRow;
 use crate::properties_panel::PropertiesPanel;
+use crate::provenance::Provenance;
 use crate::purge_job::{PURGE_TIMEOUT, PurgeJob, available_capacity};
 use crate::purge_model::PurgeModel;
 use crate::purge_progress::PurgeProgress;
@@ -890,11 +893,37 @@ impl ShellController {
     fn toggle_card(&self, position: usize) {
         let mut state = self.state.borrow_mut();
         let model = &mut state.care_mut().recommendations;
-        if let Some(card) = model.cards.get_mut(position).filter(|card| card.selectable()) {
+        let Some(card) = model.cards.get_mut(position).filter(|card| card.selectable()) else {
+            return;
+        };
+        let has_rows = !card.rows.is_empty();
+        if has_rows {
+            card.toggle_rows();
+        } else {
             card.selected = !card.selected;
         }
         if let Some(ScreenViews::Recommendations(screen)) = &state.views {
-            screen.show_selection(&state.care().recommendations);
+            if has_rows {
+                screen.show_rows(&state.care().recommendations);
+            } else {
+                screen.show_selection(&state.care().recommendations);
+            }
+        }
+    }
+
+    fn change_projects(&self, change: impl FnOnce(&mut CardModel)) {
+        let mut state = self.state.borrow_mut();
+        let model = &mut state.care_mut().recommendations;
+        let Some(card) = model
+            .cards
+            .iter_mut()
+            .find(|card| card.provenance == Provenance::Projects)
+        else {
+            return;
+        };
+        change(card);
+        if let Some(ScreenViews::Recommendations(screen)) = &state.views {
+            screen.show_rows(&state.care().recommendations);
         }
     }
 
@@ -906,15 +935,14 @@ impl ShellController {
                 .recommendations
                 .cards
                 .iter()
-                .filter(|card| card.selected && card.selectable())
-                .flat_map(|card| card.targets.clone())
+                .flat_map(CardModel::selected_targets)
                 .collect();
             let session = state
                 .session
                 .as_mut()
                 .expect("recommendations come from an open session");
-            for target in targets {
-                session.add_to_tray(target.node, target.rule_id.as_deref());
+            for target in &targets {
+                session.add_target_to_tray(target);
             }
         }
         self.open_tray();
@@ -1394,6 +1422,18 @@ impl ShellController {
         self.show_purge(PurgeModel::Released(outcome), true);
     }
 
+    fn stop_scan(&self) {
+        if let Some(job) = &self.state.borrow().scan {
+            job.stop();
+        }
+    }
+
+    fn stop_delete(&self) {
+        if let Some(run) = &self.state.borrow().delete {
+            run.stop();
+        }
+    }
+
     fn stop_purge(&self) {
         if let Some(run) = self.state.borrow().purge.as_ref().and_then(|sheet| sheet.run.as_ref()) {
             run.stop();
@@ -1706,11 +1746,7 @@ impl ActionHandler for ShellController {
             }
             ShellAction::Relaunch => self.relaunch(),
             ShellAction::Rescan => self.rescan(),
-            ShellAction::StopScan => {
-                if let Some(job) = &self.state.borrow().scan {
-                    job.stop();
-                }
-            }
+            ShellAction::StopScan => self.stop_scan(),
             ShellAction::ChangeMode(mode) => self.change_mode(mode),
             ShellAction::ToggleSmallGroups => self.toggle_small_groups(),
             ShellAction::Focus(node) => self.focus_on(node),
@@ -1756,17 +1792,17 @@ impl ActionHandler for ShellController {
             ShellAction::Navigate(section) => self.navigate(section),
             ShellAction::OpenTray => self.open_tray(),
             ShellAction::ToggleCard(position) => self.toggle_card(position),
+            ShellAction::ToggleProjectRow(position) => self.change_projects(|card| card.toggle_row(position)),
+            ShellAction::ToggleProjectGroup(group) => {
+                self.change_projects(|card| card.toggle_group(group == ProjectRow::STALE_GROUP));
+            }
             ShellAction::SendCardsToTray => self.send_cards_to_tray(),
             ShellAction::ToggleDuplicateSearch => self.toggle_duplicate_search(),
             ShellAction::SelectDuplicateAction(clone) => self.select_duplicate_action(clone),
             ShellAction::ToggleCopy(tag) => self.toggle_copy(tag),
             ShellAction::ApplyDuplicates => self.apply_duplicates(),
             ShellAction::DeleteTray => self.delete_tray(),
-            ShellAction::StopDelete => {
-                if let Some(run) = &self.state.borrow().delete {
-                    run.stop();
-                }
-            }
+            ShellAction::StopDelete => self.stop_delete(),
             ShellAction::CloseTray => self.close_tray(),
             ShellAction::UnmarkTrayRow(position) => self.unmark_tray_row(position),
             ShellAction::DragFromList => self.drag_from_list(),

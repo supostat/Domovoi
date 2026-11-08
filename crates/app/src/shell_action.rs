@@ -27,6 +27,8 @@ pub enum ShellAction {
     Navigate(Section),
     OpenTray,
     ToggleCard(usize),
+    ToggleProjectRow(usize),
+    ToggleProjectGroup(usize),
     SendCardsToTray,
     ToggleDuplicateSearch,
     SelectDuplicateAction(bool),

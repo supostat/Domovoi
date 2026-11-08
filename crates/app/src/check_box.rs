@@ -2,8 +2,8 @@ use objc2::rc::Retained;
 use objc2::runtime::Sel;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{
-    NSAccessibility, NSBezierPath, NSButton, NSButtonType, NSControl, NSControlStateValueOff, NSControlStateValueOn,
-    NSLineCapStyle, NSLineJoinStyle, NSView,
+    NSAccessibility, NSBezierPath, NSButton, NSButtonType, NSControl, NSControlStateValueMixed, NSControlStateValueOff,
+    NSControlStateValueOn, NSLineCapStyle, NSLineJoinStyle, NSView,
 };
 use objc2_foundation::{NSInteger, NSPoint, NSRect, NSSize, NSString};
 
@@ -28,6 +28,7 @@ define_class!(
         fn draw_rect(&self, _dirty: NSRect) {
             let style = self.ivars();
             let checked = self.state() == NSControlStateValueOn;
+            let mixed = self.state() == NSControlStateValueMixed;
             let alpha = if self.isEnabled() { 1.0 } else { DISABLED_ALPHA };
             let bounds = self.bounds();
             let rect = NSRect::new(
@@ -35,7 +36,17 @@ define_class!(
                 NSSize::new(bounds.size.width - 1.0, bounds.size.height - 1.0),
             );
             let box_path = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(rect, RADIUS, RADIUS);
-            if checked {
+            if mixed {
+                style.on.colorWithAlphaComponent(alpha).setFill();
+                box_path.fill();
+                let dash = NSBezierPath::bezierPath();
+                dash.moveToPoint(NSPoint::new(bounds.size.width * 0.28, bounds.size.height * 0.50));
+                dash.lineToPoint(NSPoint::new(bounds.size.width * 0.72, bounds.size.height * 0.50));
+                dash.setLineWidth(MARK_WIDTH);
+                dash.setLineCapStyle(NSLineCapStyle::Round);
+                style.on_mark.colorWithAlphaComponent(alpha).setStroke();
+                dash.stroke();
+            } else if checked {
                 style.on.colorWithAlphaComponent(alpha).setFill();
                 box_path.fill();
                 let mark = NSBezierPath::bezierPath();
@@ -92,5 +103,10 @@ impl CheckBox {
             this.setAction(Some(selector));
         }
         this
+    }
+
+    pub(crate) fn show_mixed(&self) {
+        self.setAllowsMixedState(true);
+        self.setState(NSControlStateValueMixed);
     }
 }

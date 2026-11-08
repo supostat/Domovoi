@@ -40,6 +40,7 @@ use crate::session_error::SessionError;
 use crate::session_paths::SessionPaths;
 use crate::tray_model::TrayModel;
 use crate::tray_summary::TraySummary;
+use crate::tray_target::TrayTarget;
 
 const LOG_SUBSYSTEM: &CStr = c"com.domovoi.app";
 const LOG_CATEGORY: &CStr = c"session";
@@ -334,6 +335,17 @@ impl Session {
             .as_ref()
             .expect("the tray collects nodes of a scanned volume");
         self.tray.add(index, node, rule_id);
+    }
+
+    pub fn add_target_to_tray(&mut self, target: &TrayTarget) {
+        let index = self
+            .index
+            .as_ref()
+            .expect("the tray collects nodes of a scanned volume");
+        match (&target.project, &target.rule_id) {
+            (Some(project), Some(rule_id)) => self.tray.add_project_artifact(index, target.node, rule_id, project),
+            _ => self.tray.add(index, target.node, target.rule_id.as_deref()),
+        }
     }
 
     pub fn add_application_to_tray(&mut self, bundle: NodeId) -> bool {

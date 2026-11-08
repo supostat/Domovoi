@@ -48,7 +48,11 @@ impl DateSource {
 }
 
 pub fn format_age(then: SystemTime, now: SystemTime, source: DateSource) -> String {
-    format!("{} {}", source.label(), age(LocalDate::of(then), LocalDate::of(now)))
+    format!("{} {}", source.label(), format_elapsed(then, now))
+}
+
+pub fn format_elapsed(then: SystemTime, now: SystemTime) -> String {
+    age(LocalDate::of(then), LocalDate::of(now))
 }
 
 fn age(then: LocalDate, now: LocalDate) -> String {

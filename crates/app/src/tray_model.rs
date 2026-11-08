@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use domovoi_index::{Index, NodeId, Reclaimable};
 use domovoi_rules::{Tray, TrayItem};
@@ -55,9 +55,11 @@ impl TrayModel {
             held += reclaimable;
             let size = reclaimable.bytes;
             let group = RowGroup::of(item);
-            let detail = item
-                .reason
-                .map(|reason| format!("{} · {}", tilde(&item.path), removal_phrase(reason)));
+            let detail = match (item.reason, &item.project) {
+                (Some(reason), _) => Some(format!("{} · {}", tilde(&item.path), removal_phrase(reason))),
+                (None, Some(_)) => Some(tilde(&item.path)),
+                (None, None) => None,
+            };
             if let Some((_, row, nodes)) = rows
                 .iter_mut()
                 .find(|(existing, _, _)| group.is_some() && *existing == group)
@@ -154,19 +156,24 @@ impl TrayModel {
 enum RowGroup {
     Rule(String),
     Application(String),
+    Project(PathBuf),
 }
 
 impl RowGroup {
     fn of(item: &TrayItem) -> Option<Self> {
-        match (&item.application, &item.rule_id) {
-            (Some(application), _) => Some(Self::Application(application.clone())),
-            (None, Some(rule)) => Some(Self::Rule(rule.clone())),
-            (None, None) => None,
+        match (&item.application, &item.project, &item.rule_id) {
+            (Some(application), _, _) => Some(Self::Application(application.clone())),
+            (None, Some(project), _) => Some(Self::Project(project.clone())),
+            (None, None, Some(rule)) => Some(Self::Rule(rule.clone())),
+            (None, None, None) => None,
         }
     }
 }
 
 fn row_title(tray: &Tray, item: &TrayItem) -> String {
+    if let Some(project) = &item.project {
+        return file_name(project);
+    }
     if let Some(application) = &item.application {
         let name = tray
             .applications()

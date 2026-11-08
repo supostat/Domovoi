@@ -3,10 +3,10 @@ use std::process::ExitCode;
 
 use domovoi_app::{
     Breadcrumbs, CardModel, Crumb, DeleteStatus, DropHover, DropKind, HoverPanel, HoverTip, LevelRow, LevelRowView,
-    MainScreen, MemberModel, NARROW_WINDOW, Provenance, PurgeFinish, PurgeModel, PurgeProgress, PurgeReport,
-    PurgeScreen, RecommendationCard, SafetyBadge, ScanningScreen, Screen, Section, ShellActions, ShellFixture,
-    ShellPalette, SidebarEntry, SidebarItemView, TrayModel, TrayRow, TrayScreen, TraySummary, development_fonts,
-    member_row, strings,
+    MainScreen, MemberModel, NARROW_WINDOW, ProjectRow, Provenance, PurgeFinish, PurgeModel, PurgeProgress,
+    PurgeReport, PurgeScreen, RecommendationCard, SafetyBadge, ScanningScreen, Screen, Section, ShellActions,
+    ShellFixture, ShellPalette, SidebarEntry, SidebarItemView, TrayModel, TrayRow, TrayScreen, TraySummary,
+    development_fonts, member_row, strings,
 };
 use domovoi_index::Category;
 use domovoi_render::{DiagramMode, register_fonts};
@@ -446,6 +446,84 @@ fn hover(checks: &mut Checks, marker: MainThreadMarker) {
     checks.mode(&panel.note, NSLineBreakMode::ByWordWrapping, "hover note");
 }
 
+fn project_rows(checks: &mut Checks, marker: MainThreadMarker) {
+    let row = |stale: bool| ProjectRow {
+        name: LONG_NAME.to_owned(),
+        path: LONG_PATH.to_owned(),
+        artifacts: vec![
+            "node_modules ×3".to_owned(),
+            ".next".to_owned(),
+            ".turbo".to_owned(),
+            "__pycache__".to_owned(),
+        ],
+        age: "11 месяцев назад".to_owned(),
+        stale,
+        amount: 393_200_000_000,
+        selected: stale,
+        targets: Vec::new(),
+    };
+    let card = CardModel {
+        title: strings::PROJECTS_TITLE.to_owned(),
+        paths: vec![LONG_PATH.to_owned()],
+        path_reasons: Vec::new(),
+        explanation: strings::PROJECTS_EXPLANATION.to_owned(),
+        level: SafetyBadge::Safe,
+        provenance: Provenance::Projects,
+        amount: 786_400_000_000,
+        held_by_snapshots: 0,
+        held_by_clones: 0,
+        held_by_hard_links: 0,
+        owner_running: None,
+        blocked: None,
+        vendor_command: None,
+        age: None,
+        selected: false,
+        rows: vec![row(true), row(false)],
+        targets: Vec::new(),
+    };
+    let actions = ShellActions::new(marker);
+    let view = RecommendationCard::build(marker, &card, 0, CARD_WIDTH, &palette(), &actions, true);
+    checks.expect(view.rows.len() == card.rows.len(), "every project has its row");
+    checks.never_cut(&view.amount, "projects card selected amount");
+    checks.never_cut(
+        view.total.as_ref().expect("a projects card shows its whole amount"),
+        "projects card total",
+    );
+    for (index, parts) in view.rows.iter().enumerate() {
+        let element = format!("project row {index}");
+        let source = &card.rows[index];
+        checks.mode(
+            &parts.name,
+            NSLineBreakMode::ByTruncatingMiddle,
+            &format!("{element}, name"),
+        );
+        checks.truncated_with_full_text(&parts.name, &source.name, &format!("{element}, name"));
+        checks.mode(
+            &parts.path,
+            NSLineBreakMode::ByTruncatingMiddle,
+            &format!("{element}, path"),
+        );
+        checks.truncated_with_full_text(&parts.path, &source.path, &format!("{element}, path"));
+        checks.truncated_with_full_text(
+            &parts.artifacts,
+            &source.artifacts.join(" · "),
+            &format!("{element}, artifacts"),
+        );
+        checks.never_cut(&parts.age, &format!("{element}, age"));
+        checks.never_cut(&parts.size, &format!("{element}, size"));
+        let right = |field: &NSTextField| field.frame().origin.x + field.frame().size.width;
+        checks.expect(
+            right(&parts.name) <= parts.age.frame().origin.x
+                && right(&parts.age) <= parts.size.frame().origin.x
+                && right(&parts.path) <= parts.artifacts.frame().origin.x
+                && right(&parts.size) <= CARD_WIDTH
+                && parts.name.frame().size.width > 0.0
+                && parts.path.frame().size.width > 0.0,
+            format!("{element}: name, age and size on top, path and artifacts below, side by side"),
+        );
+    }
+}
+
 fn recommendation_card(checks: &mut Checks, marker: MainThreadMarker) {
     let card = CardModel {
         title: format!("{LONG_NAME} {LONG_NAME}"),
@@ -466,6 +544,7 @@ fn recommendation_card(checks: &mut Checks, marker: MainThreadMarker) {
         vendor_command: None,
         age: None,
         selected: true,
+        rows: Vec::new(),
         targets: Vec::new(),
     };
     let actions = ShellActions::new(marker);
@@ -647,6 +726,7 @@ fn main() -> ExitCode {
     scanning(&mut checks, marker);
     hover(&mut checks, marker);
     recommendation_card(&mut checks, marker);
+    project_rows(&mut checks, marker);
     duplicate_rows(&mut checks, marker);
     tray_application_group(&mut checks, marker);
     tray_unmark_row(&mut checks, marker);

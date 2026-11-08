@@ -122,7 +122,7 @@ fn indexed(session: &Session, path: &Path) -> bool {
 fn cards(session: &Session) -> (CardsView, u64) {
     let index = session.index().expect("the volume is scanned");
     let recommendations = session.recommendations().expect("a scan builds recommendations");
-    let view = recommendations
+    let mut view: CardsView = recommendations
         .cards
         .iter()
         .map(|card| {
@@ -135,6 +135,17 @@ fn cards(session: &Session) -> (CardsView, u64) {
             (session.rules().rule(card.rule).id, (items, blocked, card.reclaimable))
         })
         .collect();
+    for project in &recommendations.projects {
+        for item in &project.items {
+            let entry = view.entry(session.rules().rule(item.rule).id).or_default();
+            entry.0.insert(index.path(item.node), item.reclaimable);
+            entry.2 += item.reclaimable;
+        }
+        for blocked in &project.blocked {
+            let entry = view.entry(session.rules().rule(blocked.rule).id).or_default();
+            entry.1.insert(index.path(blocked.node));
+        }
+    }
     (view, recommendations.totals.total())
 }
 

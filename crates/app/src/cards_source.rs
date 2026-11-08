@@ -80,6 +80,10 @@ impl CardsSource {
         self.ivars().measurements.get()
     }
 
+    pub(crate) fn asks(&self) -> bool {
+        self.ivars().ask_enabled.get()
+    }
+
     pub(crate) fn show(&self, cards: &[CardModel], ask_enabled: bool) -> bool {
         let model = self.ivars();
         let same_cards = model.cards.borrow().as_slice() == cards;

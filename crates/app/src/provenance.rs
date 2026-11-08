@@ -1,12 +1,13 @@
 use serde::Deserialize;
 
-use crate::strings::{MODEL_HYPOTHESIS, RULE_PROVENANCE};
+use crate::strings::{MODEL_HYPOTHESIS, PROJECTS_PROVENANCE, RULE_PROVENANCE};
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Provenance {
     Rule(String),
     Hypothesis,
+    Projects,
 }
 
 impl Provenance {
@@ -14,6 +15,7 @@ impl Provenance {
         match self {
             Self::Rule(id) => format!("{RULE_PROVENANCE} · {id}"),
             Self::Hypothesis => MODEL_HYPOTHESIS.to_owned(),
+            Self::Projects => PROJECTS_PROVENANCE.to_owned(),
         }
     }
 }

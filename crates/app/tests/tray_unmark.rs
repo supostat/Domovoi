@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use domovoi_app::TrayModel;
 use domovoi_index::{Enrichment, Index, IndexRoot, NodeId, OwnerEvidence};
@@ -7,6 +7,8 @@ use domovoi_scanner::{ScanOptions, scan};
 use domovoi_testkit::{Fill, TempTree};
 
 const BUILD_RULE: &str = "cargo.target";
+const DEPENDENCIES_RULE: &str = "dev.deps";
+const WEB_BUILD_RULE: &str = "dev.web-build";
 const BUNDLE_ID: &str = "com.domovoi.tiny";
 
 struct Marked {
@@ -17,6 +19,8 @@ struct Marked {
     second_build: NodeId,
     bundle: NodeId,
     container: NodeId,
+    site_modules: NodeId,
+    site_build: NodeId,
 }
 
 impl Marked {
@@ -37,6 +41,17 @@ impl Marked {
                 .file("payload.bin", 4_096, Fill::Noise(3))
                 .expect("file is written");
         }
+        let site = tree
+            .root()
+            .expect("root opens")
+            .directory("site")
+            .expect("directory is created");
+        for artifact in ["node_modules", ".next"] {
+            site.directory(artifact)
+                .expect("directory is created")
+                .file("payload.bin", 4_096, Fill::Noise(3))
+                .expect("file is written");
+        }
         let index = index_of(tree.path());
         let marked = Self {
             loose: find(&index, "loose"),
@@ -44,6 +59,8 @@ impl Marked {
             second_build: find(&index, "second/target"),
             bundle: find(&index, "Tiny.app"),
             container: find(&index, "Containers/com.domovoi.tiny"),
+            site_modules: find(&index, "site/node_modules"),
+            site_build: find(&index, "site/.next"),
             index,
             _tree: tree,
         };
@@ -63,6 +80,9 @@ impl Marked {
                 name_only: Vec::new(),
             },
         );
+        let site = tree_path(&marked.index, "site");
+        tray.add_project_artifact(&marked.index, marked.site_modules, DEPENDENCIES_RULE, &site);
+        tray.add_project_artifact(&marked.index, marked.site_build, WEB_BUILD_RULE, &site);
         (marked, tray)
     }
 
@@ -87,6 +107,10 @@ fn find(index: &Index, relative: &str) -> NodeId {
         .unwrap_or_else(|| panic!("{relative} is indexed"))
 }
 
+fn tree_path(index: &Index, relative: &str) -> PathBuf {
+    index.path(find(index, relative))
+}
+
 fn unmark_row(tray: &mut Tray, model: &TrayModel, row: usize) {
     for node in &model.row_nodes[row] {
         tray.remove(*node);
@@ -101,8 +125,8 @@ fn each_row_of_the_sheet_knows_the_nodes_it_stands_for() {
 
     assert_eq!(
         model.rows.len(),
-        3,
-        "a loose folder, one rule group and one application"
+        4,
+        "a loose folder, one rule group, one application and one project"
     );
     assert_eq!(
         model.row_nodes,
@@ -110,6 +134,7 @@ fn each_row_of_the_sheet_knows_the_nodes_it_stands_for() {
             vec![marked.loose],
             vec![marked.first_build, marked.second_build],
             vec![marked.bundle, marked.container],
+            vec![marked.site_modules, marked.site_build],
         ]
     );
 }
@@ -124,11 +149,19 @@ fn unmarking_a_rule_row_takes_every_folder_of_the_rule_and_the_rest_stays() {
     let after = marked.model(&tray);
     assert_eq!(
         after.row_nodes,
-        [vec![marked.loose], vec![marked.bundle, marked.container]]
+        [
+            vec![marked.loose],
+            vec![marked.bundle, marked.container],
+            vec![marked.site_modules, marked.site_build],
+        ]
     );
     assert_eq!(after.rows[0], model.rows[0], "the loose folder keeps its row");
     assert_eq!(after.rows[1], model.rows[2], "the application keeps its row");
-    assert_eq!(after.total(), model.rows[0].size + model.rows[2].size);
+    assert_eq!(after.rows[2], model.rows[3], "the project keeps its row");
+    assert_eq!(
+        after.total(),
+        model.rows[0].size + model.rows[2].size + model.rows[3].size
+    );
 }
 
 #[test]
@@ -143,13 +176,42 @@ fn unmarking_an_application_row_drops_the_application_with_its_files() {
         tray.items().iter().all(|item| item.application.is_none()),
         "no file of the application stays marked"
     );
-    assert_eq!(marked.model(&tray).rows.len(), 2);
+    assert_eq!(marked.model(&tray).rows.len(), 3);
+}
+
+#[test]
+fn a_project_row_names_the_project_and_lists_its_artifacts() {
+    let (marked, tray) = Marked::tray();
+
+    let model = marked.model(&tray);
+
+    let row = &model.rows[3];
+    assert_eq!(row.title, "site");
+    assert_eq!(row.details.len(), 2, "{:?}", row.details);
+    assert!(row.details[0].ends_with("site/node_modules"), "{:?}", row.details);
+    assert!(row.details[1].ends_with("site/.next"), "{:?}", row.details);
+}
+
+#[test]
+fn unmarking_a_project_row_takes_every_artifact_of_the_project() {
+    let (marked, mut tray) = Marked::tray();
+    let model = marked.model(&tray);
+
+    unmark_row(&mut tray, &model, 3);
+
+    assert!(
+        tray.items().iter().all(|item| item.project.is_none()),
+        "no artifact of the project stays marked"
+    );
+    let after = marked.model(&tray);
+    assert_eq!(after.rows.len(), 3);
+    assert_eq!(after.rows[..], model.rows[..3]);
 }
 
 #[test]
 fn unmarking_the_last_row_leaves_an_empty_sheet() {
     let (marked, mut tray) = Marked::tray();
-    for _ in 0..3 {
+    for _ in 0..4 {
         let model = marked.model(&tray);
         unmark_row(&mut tray, &model, 0);
     }

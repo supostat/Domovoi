@@ -9,13 +9,15 @@ use crate::check_box::{CheckBox, SIDE};
 use crate::fill_view::{FillStyle, FillView};
 use crate::label::{label, measure_label};
 use crate::pill_badge::pill_badge;
+use crate::project_row_view::ProjectRowView;
+use crate::project_rows::project_rows;
 use crate::provenance::Provenance;
 use crate::provenance_tag::provenance_tag;
 use crate::shell_actions::ShellActions;
 use crate::shell_button::ShellButton;
 use crate::shell_palette::ShellPalette;
 use crate::stacked_column::StackedColumn;
-use crate::strings::ASK_DOMOVOI;
+use crate::strings::{ASK_DOMOVOI, OUT_OF};
 use crate::ui_font::{interface_font, mono_font};
 
 const PADDING_X: f64 = 18.0;
@@ -31,6 +33,7 @@ const TAG_SPACING: f64 = 6.0;
 const CHECK_OFFSET: f64 = 3.0;
 const ASK_GAP: f64 = 12.0;
 const ASK_HEIGHT: f64 = 26.0;
+const TOTAL_GAP: f64 = 3.0;
 
 #[derive(Debug)]
 pub struct RecommendationCard {
@@ -40,6 +43,8 @@ pub struct RecommendationCard {
     pub path: Retained<NSTextField>,
     pub reasons: Option<Retained<NSTextField>>,
     pub amount: Retained<NSTextField>,
+    pub total: Option<Retained<NSTextField>>,
+    pub rows: Vec<ProjectRowView>,
     pub ask: Retained<ShellButton>,
     pub height: f64,
 }
@@ -82,17 +87,22 @@ impl RecommendationCard {
                 NSInteger::try_from(position).expect("cards are few"),
             ),
         );
-        let amount = measure_label(
-            marker,
-            &domovoi_theme::format_size(card.amount),
-            &mono_font(17.0, 600.0),
-            &tokens.text.ns_color(),
-        );
-        let amount_size = amount.fittingSize();
+        if card.some_row_selected() && !card.every_row_selected() {
+            check.show_mixed();
+        }
+        let (amount, total) = amount_labels(marker, card, palette);
+        let amount_column = total.as_ref().map_or(amount.fittingSize().width, |total| {
+            amount.fittingSize().width.max(total.fittingSize().width)
+        });
         let content_x = PADDING_X + SIDE + COLUMN_GAP;
-        let content_width = (width - content_x - COLUMN_GAP - amount_size.width - PADDING_X).max(0.0);
+        let content_width = (width - content_x - COLUMN_GAP - amount_column - PADDING_X).max(0.0);
         let mut column = StackedColumn::new(content_x, content_width, PADDING_Y);
         let (title, path, reasons) = content(marker, card, &mut column, palette);
+        let rows = if card.rows.is_empty() {
+            Vec::new()
+        } else {
+            project_rows(marker, card, &mut column, palette, actions)
+        };
         let ask = ask_button(marker, position, ask_enabled, palette, actions);
         column.skip(ASK_GAP);
         let ask_size = ask.frame().size;
@@ -104,11 +114,7 @@ impl RecommendationCard {
         column.place_into(&view, height);
         check.setFrameOrigin(NSPoint::new(PADDING_X, height - PADDING_Y - CHECK_OFFSET - SIDE));
         view.addSubview(&check);
-        amount.setFrameOrigin(NSPoint::new(
-            width - PADDING_X - amount_size.width,
-            height - PADDING_Y - amount_size.height,
-        ));
-        view.addSubview(&amount);
+        place_amount(&view, &amount, total.as_ref(), width, height);
         Self {
             view,
             check,
@@ -116,9 +122,59 @@ impl RecommendationCard {
             path,
             reasons,
             amount,
+            total,
+            rows,
             ask,
             height,
         }
+    }
+}
+
+fn amount_labels(
+    marker: MainThreadMarker,
+    card: &CardModel,
+    palette: &ShellPalette,
+) -> (Retained<NSTextField>, Option<Retained<NSTextField>>) {
+    let tokens = palette.tokens;
+    let shown = if card.rows.is_empty() {
+        card.amount
+    } else {
+        card.selected_amount()
+    };
+    let amount = measure_label(
+        marker,
+        &domovoi_theme::format_size(shown),
+        &mono_font(17.0, 600.0),
+        &tokens.text.ns_color(),
+    );
+    let total = (!card.rows.is_empty()).then(|| {
+        measure_label(
+            marker,
+            &format!("{OUT_OF} {}", domovoi_theme::format_size(card.amount)),
+            &mono_font(11.0, 500.0),
+            &tokens.dim.ns_color(),
+        )
+    });
+    (amount, total)
+}
+
+fn place_amount(view: &FillView, amount: &NSTextField, total: Option<&Retained<NSTextField>>, width: f64, height: f64) {
+    let amount_size = amount.fittingSize();
+    amount.setFrameOrigin(NSPoint::new(
+        width - PADDING_X - amount_size.width,
+        height - PADDING_Y - amount_size.height,
+    ));
+    view.addSubview(amount);
+    if let Some(total) = total {
+        let total_size = total.fittingSize();
+        total.setFrame(NSRect::new(
+            NSPoint::new(
+                width - PADDING_X - total_size.width,
+                height - PADDING_Y - amount_size.height - TOTAL_GAP - total_size.height,
+            ),
+            total_size,
+        ));
+        view.addSubview(total);
     }
 }
 
@@ -170,7 +226,7 @@ fn content(
     if let Some(cell) = title.cell() {
         cell.setTruncatesLastVisibleLine(true);
     }
-    let joined = card.paths.join(", ");
+    let joined = card.path_line();
     let path = label(
         marker,
         &joined,

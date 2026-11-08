@@ -381,7 +381,7 @@ impl EndToEnd {
             .flat_map(|card| card.targets)
             .collect();
         for target in &targets {
-            self.session_mut().add_to_tray(target.node, target.rule_id.as_deref());
+            self.session_mut().add_target_to_tray(target);
         }
         let (measured, measured_files, sizes) = self.measured_tray()?;
         let expected = measured.total();

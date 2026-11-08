@@ -79,6 +79,16 @@ define_class!(
             self.dispatch(ShellAction::ToggleCard(tag_of(sender)));
         }
 
+        #[unsafe(method(toggleProjectRow:))]
+        fn toggle_project_row(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::ToggleProjectRow(tag_of(sender)));
+        }
+
+        #[unsafe(method(toggleProjectGroup:))]
+        fn toggle_project_group(&self, sender: &AnyObject) {
+            self.dispatch(ShellAction::ToggleProjectGroup(tag_of(sender)));
+        }
+
         #[unsafe(method(sendCardsToTray:))]
         fn send_cards_to_tray(&self, _sender: Option<&AnyObject>) {
             self.dispatch(ShellAction::SendCardsToTray);

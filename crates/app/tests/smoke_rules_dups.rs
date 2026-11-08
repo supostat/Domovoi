@@ -4,8 +4,8 @@ use std::process::Command;
 use std::time::SystemTime;
 
 use domovoi_app::{
-    DeleteOutcome, DuplicatesModel, Provenance, RecommendationsModel, SafetyBadge, Session, SessionPaths,
-    TrayMeasureJob, TrayModel, strings,
+    CardModel, DeleteOutcome, DuplicatesModel, ProjectRow, Provenance, RecommendationsModel, SafetyBadge, Session,
+    SessionPaths, TrayMeasureJob, TrayModel, strings,
 };
 use domovoi_index::Reclaimable;
 use domovoi_rules::delete;
@@ -39,6 +39,40 @@ fn populate(root: &Path) {
         .status()
         .expect("cp starts");
     assert!(cloned.success(), "the clone is made");
+}
+
+fn the_demo_project(recommendations: &RecommendationsModel) -> (&CardModel, &ProjectRow) {
+    let card = recommendations
+        .cards
+        .iter()
+        .find(|card| card.provenance == Provenance::Projects)
+        .expect("the Rust build output is recommended as a project");
+    assert_eq!(card.title, strings::PROJECTS_TITLE);
+    assert_eq!(card.level, SafetyBadge::Safe);
+    assert!(card.amount >= BUILD_OUTPUT as u64, "{} bytes", card.amount);
+    assert!(card.paths[0].ends_with("Projects/demo/target"), "{:?}", card.paths);
+    let [demo] = card.rows.as_slice() else {
+        panic!("the demo project has one row: {:?}", card.rows);
+    };
+    assert_eq!(demo.name, "demo");
+    assert!(demo.path.ends_with("Projects/demo"), "{}", demo.path);
+    assert_eq!(demo.artifacts, ["target"]);
+    assert!(
+        !demo.stale && !demo.selected,
+        "a project changed today is not preselected"
+    );
+    assert!(
+        demo.targets
+            .iter()
+            .all(|target| target.rule_id.as_deref() == Some("cargo.target")
+                && target
+                    .project
+                    .as_ref()
+                    .is_some_and(|root| root.ends_with("Projects/demo"))),
+        "{:?}",
+        demo.targets
+    );
+    (card, demo)
 }
 
 fn estimated_then_measured_tray(session: &Session, title: &str) -> (TrayModel, TrayModel, Vec<Reclaimable>) {
@@ -88,20 +122,12 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
         session.recommendations().expect("a scan builds recommendations"),
         SystemTime::now(),
     );
-    let card = recommendations
-        .cards
-        .iter()
-        .find(|card| card.provenance == Provenance::Rule("cargo.target".to_owned()))
-        .expect("the Rust build output is recommended");
+    let (card, demo) = the_demo_project(&recommendations);
     assert_eq!(
-        card.title,
-        strings::rule_title("cargo.target").expect("the rule has a title")
+        recommendations.selected_total() + card.amount,
+        recommendations.safe,
+        "every other safe card stays preselected"
     );
-    assert_eq!(card.level, SafetyBadge::Safe);
-    assert!(card.selected, "safe cards are preselected");
-    assert!(card.amount >= BUILD_OUTPUT as u64, "{} bytes", card.amount);
-    assert!(card.paths[0].ends_with("Projects/demo/target"), "{:?}", card.paths);
-    assert_eq!(recommendations.selected_total(), recommendations.safe);
 
     session
         .find_duplicates(None, CancelToken::default())
@@ -130,9 +156,9 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
 
     let targets = card.targets.clone();
     for target in &targets {
-        session.add_to_tray(target.node, target.rule_id.as_deref());
+        session.add_target_to_tray(target);
     }
-    let (estimated, measured, sizes) = estimated_then_measured_tray(&session, &card.title);
+    let (estimated, measured, sizes) = estimated_then_measured_tray(&session, &demo.name);
     let expected = measured.total();
     let (subjects, refusals) = session.take_tray_for_delete(&sizes);
     assert!(refusals.is_empty(), "{refusals:?}");

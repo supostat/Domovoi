@@ -126,6 +126,18 @@ pub const CARD_QUESTION: &str =
     "Разбери эту карточку: что лежит по её путям, почему она в рекомендациях, можно ли удалять и что останется занято.";
 pub const RULE_PROVENANCE: &str = "правило";
 pub const MODEL_HYPOTHESIS: &str = "гипотеза модели";
+pub const PROJECTS_PROVENANCE: &str = "правила проектов";
+pub const PROJECTS_TITLE: &str = "Проекты разработки";
+pub const PROJECTS_EXPLANATION: &str = "Зависимости и результаты сборки проектов. Вернутся после установки зависимостей и сборки. \
+     Заранее отмечены проекты без изменений больше месяца.";
+pub const PROJECTS: PluralForms = PluralForms {
+    one: "проект",
+    few: "проекта",
+    many: "проектов",
+};
+pub const STALE_PROJECTS: &str = "Без изменений больше месяца";
+pub const FRESH_PROJECTS: &str = "Менялись за последний месяц";
+pub const OUT_OF: &str = "из";
 pub const HELD_PREFIX: &str = "Останется занято:";
 pub const HELD_BY_SNAPSHOTS: &str = "держат снапшоты";
 pub const HELD_BY_CLONES: &str = "держат клоны";

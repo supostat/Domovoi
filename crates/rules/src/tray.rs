@@ -16,6 +16,7 @@ pub struct TrayItem {
     pub rule_id: Option<String>,
     pub reason: Option<RemovalReason>,
     pub application: Option<String>,
+    pub project: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -26,12 +27,23 @@ pub struct Tray {
 
 impl Tray {
     pub fn add(&mut self, index: &Index, node: NodeId, rule_id: Option<&str>) {
-        self.insert(index, node, rule_id.map(str::to_owned), None, None);
+        self.insert(index, node, rule_id.map(str::to_owned), None, None, None);
+    }
+
+    pub fn add_project_artifact(&mut self, index: &Index, node: NodeId, rule_id: &str, project: &Path) {
+        self.insert(
+            index,
+            node,
+            Some(rule_id.to_owned()),
+            None,
+            None,
+            Some(project.to_path_buf()),
+        );
     }
 
     pub fn add_application(&mut self, index: &Index, removal: &AppRemoval) {
         for (node, reason) in &removal.items {
-            self.insert(index, *node, None, Some(*reason), Some(removal.bundle_id.clone()));
+            self.insert(index, *node, None, Some(*reason), Some(removal.bundle_id.clone()), None);
         }
         self.applications
             .retain(|application| application.bundle_id != removal.bundle_id);
@@ -49,6 +61,7 @@ impl Tray {
         rule_id: Option<String>,
         reason: Option<RemovalReason>,
         application: Option<String>,
+        project: Option<PathBuf>,
     ) {
         let path = index.path(node);
         if self.covers(&path) {
@@ -62,6 +75,7 @@ impl Tray {
             rule_id,
             reason,
             application,
+            project,
         });
     }
 

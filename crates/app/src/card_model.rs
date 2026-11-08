@@ -1,11 +1,13 @@
 use std::fmt::Write;
 
+use domovoi_theme::format_count;
 use serde::Deserialize;
 
 use crate::held_line::held_line;
+use crate::project_row::ProjectRow;
 use crate::provenance::Provenance;
 use crate::safety_badge::SafetyBadge;
-use crate::strings::{AND_MORE, CLOSE_OWNER, CLOSE_OWNER_SUFFIX};
+use crate::strings::{AND_MORE, CLOSE_OWNER, CLOSE_OWNER_SUFFIX, PROJECTS};
 
 const REASON_LINES: usize = 3;
 use crate::tray_target::TrayTarget;
@@ -37,6 +39,8 @@ pub struct CardModel {
     pub age: Option<String>,
     #[serde(default)]
     pub selected: bool,
+    #[serde(default)]
+    pub rows: Vec<ProjectRow>,
     #[serde(skip)]
     pub targets: Vec<TrayTarget>,
 }
@@ -44,6 +48,77 @@ pub struct CardModel {
 impl CardModel {
     pub fn selectable(&self) -> bool {
         self.owner_running.is_none() && self.vendor_command.is_none() && self.amount > 0
+    }
+
+    pub fn selected_amount(&self) -> u64 {
+        if self.rows.is_empty() {
+            if self.selected && self.selectable() {
+                self.amount
+            } else {
+                0
+            }
+        } else {
+            self.rows.iter().filter(|row| row.selected).map(|row| row.amount).sum()
+        }
+    }
+
+    pub fn selected_targets(&self) -> Vec<TrayTarget> {
+        if self.rows.is_empty() {
+            if self.selected && self.selectable() {
+                self.targets.clone()
+            } else {
+                Vec::new()
+            }
+        } else {
+            self.rows
+                .iter()
+                .filter(|row| row.selected)
+                .flat_map(|row| row.targets.iter().cloned())
+                .collect()
+        }
+    }
+
+    pub fn path_line(&self) -> String {
+        if self.rows.is_empty() {
+            self.paths.join(", ")
+        } else {
+            format_count(self.rows.len() as u64, &PROJECTS)
+        }
+    }
+
+    pub fn every_row_selected(&self) -> bool {
+        !self.rows.is_empty() && self.rows.iter().all(|row| row.selected)
+    }
+
+    pub fn some_row_selected(&self) -> bool {
+        self.rows.iter().any(|row| row.selected)
+    }
+
+    pub fn toggle_rows(&mut self) {
+        let selected = !self.every_row_selected();
+        for row in &mut self.rows {
+            row.selected = selected;
+        }
+        self.selected = self.every_row_selected();
+    }
+
+    pub fn toggle_row(&mut self, position: usize) {
+        if let Some(row) = self.rows.get_mut(position) {
+            row.selected = !row.selected;
+        }
+        self.selected = self.every_row_selected();
+    }
+
+    pub fn toggle_group(&mut self, stale: bool) {
+        let selected = !self
+            .rows
+            .iter()
+            .filter(|row| row.stale == stale)
+            .all(|row| row.selected);
+        for row in self.rows.iter_mut().filter(|row| row.stale == stale) {
+            row.selected = selected;
+        }
+        self.selected = self.every_row_selected();
     }
 
     pub fn held_line(&self) -> Option<String> {
