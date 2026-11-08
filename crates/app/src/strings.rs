@@ -170,7 +170,7 @@ pub const GROUPS: PluralForms = PluralForms {
     few: "группы",
     many: "групп",
 };
-pub const WILL_FREE: &str = "освободится";
+pub const MAY_FREE: &str = "можно освободить";
 pub const CHECKED: &str = "проверено";
 pub const CANDIDATES: PluralForms = PluralForms {
     one: "кандидат",

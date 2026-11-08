@@ -7,7 +7,7 @@ use crate::clone_refusal_text::clone_refusal_text;
 use crate::duplicates_state::DuplicatesState;
 use crate::group_model::GroupModel;
 use crate::member_model::MemberModel;
-use crate::strings::{CANDIDATES, CHECKED, GROUPS, MINUTES_SHORT, SECONDS_SHORT, WILL_FREE};
+use crate::strings::{CANDIDATES, CHECKED, GROUPS, MAY_FREE, MINUTES_SHORT, SECONDS_SHORT};
 use crate::tilde::tilde;
 
 const SECONDS_PER_MINUTE: u64 = 60;
@@ -44,7 +44,7 @@ impl DuplicatesModel {
                     size: group.size,
                     frees,
                     clone: copy.shares_blocks,
-                    checked: copy.is_removable(),
+                    checked: false,
                     refusal: None,
                     package: copy
                         .package
@@ -103,6 +103,16 @@ impl DuplicatesModel {
             .sum()
     }
 
+    pub fn can_free(&self) -> u64 {
+        let clone_mode = self.clone_mode;
+        self.groups()
+            .iter()
+            .flat_map(|group| &group.copies)
+            .filter(|copy| copy.can_check(clone_mode))
+            .map(|copy| copy.frees)
+            .sum()
+    }
+
     pub fn checked_copies(&self) -> Vec<(NodeId, NodeId)> {
         let clone_mode = self.clone_mode;
         self.groups()
@@ -121,9 +131,9 @@ impl DuplicatesModel {
         let groups = self.groups();
         matches!(self.state, DuplicatesState::Found { .. }).then(|| {
             format!(
-                "{} · {WILL_FREE} {}",
+                "{} · {MAY_FREE} {}",
                 format_count(groups.len() as u64, &GROUPS),
-                format_size(self.will_free())
+                format_size(self.can_free())
             )
         })
     }

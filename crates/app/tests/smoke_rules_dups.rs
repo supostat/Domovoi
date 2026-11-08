@@ -110,6 +110,37 @@ fn estimated_then_measured_tray(session: &Session, title: &str) -> (TrayModel, T
     (estimated, measured, exact)
 }
 
+fn searched_with_the_own_copy_checked(session: &mut Session) -> DuplicatesModel {
+    session
+        .find_duplicates(None, CancelToken::default())
+        .expect("duplicates are searched");
+    let index = session.index().expect("the index stays");
+    let mut duplicates =
+        DuplicatesModel::found(index, session.duplicates().expect("the search stores duplicates"), 3, 1)
+            .expect("the duplicates model builds");
+    assert_eq!(duplicates.groups().len(), 1);
+    let group = &duplicates.groups()[0];
+    assert_eq!(group.copies.len(), 2);
+    assert_eq!(
+        group.copies.iter().filter(|copy| copy.clone).count(),
+        1,
+        "the APFS clone is recognised"
+    );
+    assert!(
+        duplicates.checked_copies().is_empty() && duplicates.will_free() == 0,
+        "no copy is checked before the user checks it"
+    );
+    assert!(duplicates.can_free() >= DUPLICATE as u64);
+    duplicates.groups_mut()[0]
+        .copies
+        .iter_mut()
+        .find(|member| !member.clone)
+        .expect("one copy keeps its own blocks")
+        .checked = true;
+    assert_eq!(duplicates.will_free(), duplicates.can_free());
+    duplicates
+}
+
 #[test]
 fn session_turns_real_rules_and_duplicates_into_screen_models() {
     let volume = ImageVolume::create(VolumeFormat::Apfs, Visibility::Hidden).expect("the image attaches");
@@ -143,22 +174,7 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
         "nothing is checked before the user checks it"
     );
 
-    session
-        .find_duplicates(None, CancelToken::default())
-        .expect("duplicates are searched");
-    let index = session.index().expect("the index stays");
-    let mut duplicates =
-        DuplicatesModel::found(index, session.duplicates().expect("the search stores duplicates"), 3, 1)
-            .expect("the duplicates model builds");
-    assert_eq!(duplicates.groups().len(), 1);
-    let group = &duplicates.groups()[0];
-    assert_eq!(group.copies.len(), 2);
-    assert_eq!(
-        group.copies.iter().filter(|copy| copy.clone).count(),
-        1,
-        "the APFS clone is recognised"
-    );
-    assert!(duplicates.will_free() >= DUPLICATE as u64);
+    let mut duplicates = searched_with_the_own_copy_checked(&mut session);
     duplicates.assess_clones(|keep, copy| session.clone_plan(keep, copy).map(drop));
     let (keep, copy) = duplicates.checked_copies()[0];
     let eligible = duplicates.groups()[0]
@@ -209,5 +225,5 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
         replaced.groups()[0].copies.iter().all(|member| member.clone),
         "every copy now shares blocks with the kept file"
     );
-    assert_eq!(replaced.will_free(), 0);
+    assert_eq!(replaced.can_free(), 0, "nothing is left to free");
 }

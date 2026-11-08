@@ -740,20 +740,20 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">06</span><h4>Дубликаты</h4><p>Отдельный проход по запросу: размер → частичный хэш → BLAKE3. Клоны APFS распознаются. Строки участников выделяются, пробел открывает Quick Look.</p></div>
+    <div class="screen-cap"><span class="n">06</span><h4>Дубликаты</h4><p>Отдельный проход по запросу: размер → частичный хэш → BLAKE3. Клоны APFS распознаются. Заранее ничего не отмечено: копии отмечает человек, заголовок показывает, сколько можно освободить. Строки участников выделяются, пробел открывает Quick Look.</p></div>
     <div class="mock"><div class="win">
       <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Дубликаты</div></div>
       <div class="win-body fixed">
         <div class="side" id="side-dup"></div>
         <div class="pane">
-          <div class="pane-head"><div><h5>3 группы · освободится 4,3 ГБ</h5><small>проверено 18 406 кандидатов · 2 мин 14 с</small></div>
+          <div class="pane-head"><div><h5>3 группы · можно освободить 4,3 ГБ</h5><small>проверено 18 406 кандидатов · 2 мин 14 с</small></div>
             <div class="seg-ctl" role="group" aria-label="Действие"><button aria-pressed="true">Удалить</button><button aria-pressed="false">Заменить клоном</button></div></div>
           <div style="display:grid;gap:12px">
             <div class="dup">
               <div class="dup-h"><b>IMG_4471.MOV</b><span>3 копии · 2,1 ГБ каждая · освободит 4,2 ГБ</span></div>
               <div class="dup-r"><span class="keep">оставить</span><code>~/Movies/Записи/IMG_4471.MOV</code><span class="mono">2,1 ГБ</span></div>
-              <div class="dup-r"><input type="checkbox" checked aria-label="Удалить копию"><code>~/Downloads/IMG_4471.MOV</code><span class="mono">2,1 ГБ</span></div>
-              <div class="dup-r"><input type="checkbox" checked aria-label="Удалить копию"><code>~/Downloads/AirDrop/IMG_4471.MOV</code><span class="mono">2,1 ГБ</span></div>
+              <div class="dup-r"><input type="checkbox" aria-label="Удалить копию"><code>~/Downloads/IMG_4471.MOV</code><span class="mono">2,1 ГБ</span></div>
+              <div class="dup-r"><input type="checkbox" aria-label="Удалить копию"><code>~/Downloads/AirDrop/IMG_4471.MOV</code><span class="mono">2,1 ГБ</span></div>
             </div>
             <div class="dup">
               <div class="dup-h"><b>ubuntu-24.04-desktop-arm64.iso</b><span>2 копии · освободит 0 Б</span></div>
@@ -763,7 +763,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
             <div class="dup">
               <div class="dup-h"><b>thesis-final-v3.pdf</b><span>4 копии · освободит 46 МБ</span></div>
               <div class="dup-r"><span class="keep">оставить</span><code>~/Documents/Учёба/thesis-final-v3.pdf</code><span class="mono">15 МБ</span></div>
-              <div class="dup-r"><input type="checkbox" checked aria-label="Удалить копию"><code>~/Downloads/thesis-final-v3.pdf</code><span class="mono">15 МБ</span></div>
+              <div class="dup-r"><input type="checkbox" aria-label="Удалить копию"><code>~/Downloads/thesis-final-v3.pdf</code><span class="mono">15 МБ</span></div>
             </div>
           </div>
           <div class="note" style="margin-top:16px">По умолчанию копии удаляются окончательно. «Заменить клоном» — явное действие для группы: доступно, когда копия одна на своём иноде, принадлежит вам, не открыта и не лежит в пакете или облачной папке.</div>

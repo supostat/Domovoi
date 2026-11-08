@@ -153,7 +153,7 @@ impl ShellData {
             selected: false,
         };
         let recommendations = self.care.recommendations.total();
-        let duplicates = self.care.duplicates.will_free();
+        let duplicates = self.care.duplicates.can_free();
         vec![
             group(
                 DISK_GROUP,

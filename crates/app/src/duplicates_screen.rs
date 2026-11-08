@@ -148,15 +148,15 @@ impl DuplicatesScreen {
             apply.retitle(&apply_title(model));
             apply.setEnabled(model.will_free() > 0);
         }
+        if let Some((outline, source)) = &self.outline {
+            source.show(outline, model.groups());
+        }
     }
 
     fn show(&self, model: &DuplicatesModel) {
         self.show_selection(model);
         if let DuplicatesState::Searching { stage, done, total } = &model.state {
             self.show_progress(stage.title(), *done, *total);
-        }
-        if let Some((outline, source)) = &self.outline {
-            source.show(outline, model.groups());
         }
     }
 
