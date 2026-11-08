@@ -80,15 +80,12 @@ impl RecommendationsModel {
 
     pub fn keep_selection(&mut self, previous: &Self) {
         for card in self.cards.iter_mut().filter(|card| card.selectable()) {
+            let Some(old) = previous.cards.iter().find(|old| old.is_same_card_as(card)) else {
+                continue;
+            };
             if card.rows.is_empty() {
-                if let Some(old) = previous
-                    .cards
-                    .iter()
-                    .find(|old| old.provenance == card.provenance && old.paths == card.paths)
-                {
-                    card.selected = old.selected;
-                }
-            } else if let Some(old) = previous.cards.iter().find(|old| old.provenance == card.provenance) {
+                card.selected = old.selected;
+            } else {
                 for row in &mut card.rows {
                     if let Some(old_row) = old.rows.iter().find(|old_row| old_row.path == row.path) {
                         row.selected = old_row.selected && row.amount > 0;

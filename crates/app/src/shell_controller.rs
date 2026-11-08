@@ -896,18 +896,13 @@ impl ShellController {
         let Some(card) = model.cards.get_mut(position).filter(|card| card.selectable()) else {
             return;
         };
-        let has_rows = !card.rows.is_empty();
-        if has_rows {
-            card.toggle_rows();
-        } else {
+        if card.rows.is_empty() {
             card.selected = !card.selected;
+        } else {
+            card.toggle_rows();
         }
         if let Some(ScreenViews::Recommendations(screen)) = &state.views {
-            if has_rows {
-                screen.show_rows(&state.care().recommendations);
-            } else {
-                screen.show_selection(&state.care().recommendations);
-            }
+            screen.show_selection(&state.care().recommendations);
         }
     }
 
@@ -923,7 +918,7 @@ impl ShellController {
         };
         change(card);
         if let Some(ScreenViews::Recommendations(screen)) = &state.views {
-            screen.show_rows(&state.care().recommendations);
+            screen.show_selection(&state.care().recommendations);
         }
     }
 

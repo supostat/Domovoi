@@ -130,17 +130,17 @@ impl RecommendationsScreen {
     }
 
     pub fn show_selection(&self, model: &RecommendationsModel) {
-        self.send.retitle(&send_title(model));
-        self.send.setEnabled(model.selected_total() > 0);
-    }
-
-    pub fn show_rows(&self, model: &RecommendationsModel) {
-        self.show_selection(model);
+        self.show_send(model);
         if let Some((collection, source)) = &self.collection
             && source.show(&model.cards, source.asks())
         {
             collection.reloadData();
         }
+    }
+
+    fn show_send(&self, model: &RecommendationsModel) {
+        self.send.retitle(&send_title(model));
+        self.send.setEnabled(model.selected_total() > 0);
     }
 
     fn show(&self, model: &RecommendationsModel, ask_enabled: bool) {
@@ -159,7 +159,7 @@ impl RecommendationsScreen {
             )
             .origin,
         );
-        self.show_selection(model);
+        self.show_send(model);
         if let Some((collection, source)) = &self.collection
             && source.show(&model.cards, ask_enabled)
         {

@@ -46,6 +46,13 @@ pub struct CardModel {
 }
 
 impl CardModel {
+    pub fn is_same_card_as(&self, other: &Self) -> bool {
+        match (&self.provenance, &other.provenance) {
+            (Provenance::Hypothesis, Provenance::Hypothesis) => self.paths == other.paths,
+            (provenance, other_provenance) => provenance == other_provenance,
+        }
+    }
+
     pub fn selectable(&self) -> bool {
         self.owner_running.is_none() && self.vendor_command.is_none() && self.amount > 0
     }

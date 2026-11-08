@@ -129,6 +129,10 @@ name = "cards_layout"
 harness = false
 
 [[test]]
+name = "selection_after_scroll"
+harness = false
+
+[[test]]
 name = "sidebar_rescan"
 harness = false
 
