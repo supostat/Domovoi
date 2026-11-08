@@ -47,7 +47,6 @@ const TINY_BUNDLE: &str = "Applications/Tiny.app";
 const TINY_AGENT: &str = "LaunchAgents/com.domovoi.tiny.helper.plist";
 const NESTED_MUSIC: &str = "Music ▸ Music";
 const ANGLE_TOLERANCE: f64 = 1e-3;
-const CARD_RULE: &str = "cargo.target";
 const LOGS: &str = "Logs";
 const TOOL_LOGS: &str = "Logs/Tool";
 const USER_CRASH_REPORTS: &str = "Logs/DiagnosticReports";
@@ -100,6 +99,24 @@ fn populate(root: &Path) {
         &root.join("Projects/site/node_modules/left-pad/index.js"),
         &noise(MEGABYTE, 3),
     );
+    write(&root.join("Projects/site/next.config.js"), b"module.exports = {};\n");
+    write(
+        &root.join("Projects/site/.next/cache/chunk.js"),
+        &noise(MEGABYTE / 2, 6),
+    );
+    write(&root.join("Projects/mono/.git/HEAD"), b"ref: refs/heads/main\n");
+    for package in ["a", "b"] {
+        write(
+            &root.join(format!("Projects/mono/packages/{package}/package.json")),
+            b"{\"name\": \"package\"}\n",
+        );
+        write(
+            &root.join(format!(
+                "Projects/mono/packages/{package}/node_modules/dependency/index.js"
+            )),
+            &noise(MEGABYTE / 2, 7),
+        );
+    }
     write(
         &root.join("Projects/frozen/Cargo.toml"),
         b"[package]\nname = \"frozen\"\n",
@@ -328,7 +345,7 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
             },
             {
                 "step": "ask_about_card",
-                "rule": CARD_RULE,
+                "card": "projects",
                 "max_tokens_per_step": RANDOM_MODEL_TOKENS_PER_STEP,
             },
             {"step": "delete_recommendations", "level": "safe"},
@@ -413,8 +430,14 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
         .iter()
         .filter_map(Value::as_str)
         .collect();
-    assert!(cards.iter().any(|card| card.ends_with("cargo.target")), "{cards:?}");
-    assert!(cards.iter().any(|card| card.ends_with("dev.deps")), "{cards:?}");
+    assert!(cards.contains(&strings::PROJECTS_PROVENANCE), "{cards:?}");
+    assert!(
+        !cards
+            .iter()
+            .any(|card| card.ends_with("cargo.target") || card.ends_with("dev.deps")),
+        "project artifacts leave the cards of their rules: {cards:?}"
+    );
+    assert_projects(recommendations);
     assert!(
         recommendations["blocked"]
             .as_array()
@@ -433,6 +456,54 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
     assert_delete_and_clone(report, mount_point);
     assert_application_removal(report, mount_point);
     assert_cleanup_cards(report, mount_point);
+}
+
+fn assert_projects(recommendations: &Value) {
+    let rows = recommendations["projects"]
+        .as_array()
+        .expect("the recommendations list the rows of the projects card");
+    let row = |name: &str| {
+        rows.iter()
+            .find(|row| row["name"] == name)
+            .unwrap_or_else(|| panic!("{name} is a project row: {recommendations:#}"))
+    };
+    assert_eq!(row("engine")["artifacts"], json!(["target"]), "{recommendations:#}");
+    assert_eq!(
+        row("site")["artifacts"],
+        json!(["node_modules", ".next"]),
+        "{recommendations:#}"
+    );
+    assert_eq!(
+        row("mono")["artifacts"],
+        json!(["node_modules ×2"]),
+        "the packages of a repository are one row: {recommendations:#}"
+    );
+    assert!(
+        rows.iter()
+            .all(|row| !row["name"].as_str().is_some_and(|name| name == "a" || name == "b")),
+        "no package of the repository has its own row: {recommendations:#}"
+    );
+    assert_eq!(
+        row("frozen")["amount"],
+        0,
+        "the locked build folder frees nothing: {recommendations:#}"
+    );
+    for name in ["engine", "site", "mono"] {
+        let project = row(name);
+        assert_eq!(project["stale"], false, "{project:#}");
+        assert_eq!(
+            project["selected"], false,
+            "a project changed today is not preselected: {project:#}"
+        );
+        assert!(
+            project["amount"].as_u64().is_some_and(|amount| amount > 0),
+            "{project:#}"
+        );
+        assert!(
+            project["path"].as_str().is_some_and(|path| path.ends_with(name)),
+            "{project:#}"
+        );
+    }
 }
 
 fn delete_steps(report: &Value) -> [&Value; 3] {
@@ -597,6 +668,14 @@ fn assert_delete_and_clone(report: &Value, mount_point: &Path) {
     );
     assert!(!mount_point.join("Projects/engine/target").exists());
     assert!(!mount_point.join("Projects/site/node_modules").exists());
+    assert!(!mount_point.join("Projects/site/.next").exists());
+    for package in ["a", "b"] {
+        assert!(
+            !mount_point
+                .join(format!("Projects/mono/packages/{package}/node_modules"))
+                .exists()
+        );
+    }
     assert!(mount_point.join("Projects/frozen/target/debug/frozen").exists());
     let library = mount_point.join(LIBRARY);
     assert!(
@@ -816,7 +895,7 @@ fn assert_model_and_answer(report: &Value, server: &HfServer) {
     );
     let card = step(report, "ask_about_card");
     assert_eq!(card["question"], strings::CARD_QUESTION, "{card:#}");
-    assert_eq!(card["card_rule"], CARD_RULE, "{card:#}");
+    assert_eq!(card["card"], strings::PROJECTS_PROVENANCE, "{card:#}");
     assert_eq!(card["history_turns"], 0, "the card question opens the chat: {card:#}");
     assert!(
         card["tools"].as_array().is_some_and(|tools| !tools.is_empty()),

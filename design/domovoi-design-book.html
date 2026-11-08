@@ -198,6 +198,20 @@ select.sel{font:500 13px var(--f-ui);padding:7px 10px;border-radius:7px;backgrou
 .rec .amt{font:600 17px/1.2 var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .rec.hyp{border-style:dashed;border-color:var(--wax)}
 .rec .ask{margin-top:12px}
+.rec .amt small{display:block;font:500 11px/1.4 var(--f-mono);color:var(--dim);margin-top:3px}
+.prows{margin-top:14px;border-top:1px solid var(--line-soft)}
+.pgrp{display:flex;align-items:center;gap:10px;padding:12px 0 6px;font:600 11.5px var(--f-ui);color:var(--dim)}
+.pgrp input,.prow input{accent-color:var(--wax);width:15px;height:15px;margin:0}
+.pgrp .gsum{margin-left:auto;font:500 11.5px var(--f-mono)}
+.prow{display:grid;grid-template-columns:15px minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line-soft)}
+.prow .pname{font:600 13.5px/1.25 var(--f-ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow.off .pname{color:var(--mute)}
+.prow .pmeta{display:flex;gap:12px;justify-content:flex-end;align-items:baseline;white-space:nowrap}
+.prow .page{font:400 11.5px var(--f-mono);color:var(--dim)}
+.prow .psize{font:600 13px var(--f-mono);font-variant-numeric:tabular-nums}
+.prow .ppath{grid-column:2;font:400 11px/1.3 var(--f-mono);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow .parts{grid-column:3;font:500 10.5px var(--f-mono);color:var(--mute);text-align:right;white-space:nowrap}
+.prow input{grid-row:span 2}
 
 /* прогресс */
 .prog{height:8px;border-radius:4px;background:var(--line-soft);overflow:hidden}
@@ -678,7 +692,7 @@ pre.tokens{margin:0;padding:18px 20px;border:1px solid var(--line-soft);border-r
   </div>
 
   <div class="screen">
-    <div class="screen-cap"><span class="n">04</span><h4>Рекомендации</h4><p>Сначала итог, потом детали. Безопасное отмечено заранее, остальное — по выбору. «Спросить Домового» на карточке открывает разговор, где Домовой разбирает именно её. У карточек остатков удалённых программ под путями видна причина: метаданные контейнера, Team ID в имени группы.</p></div>
+    <div class="screen-cap"><span class="n">04</span><h4>Рекомендации</h4><p>Сначала итог, потом детали. Безопасное отмечено заранее, остальное — по выбору. Сборки и зависимости проектов собраны в карточку «Проекты разработки»: строка — проект с артефактами, давностью и размером; проекты без изменений больше месяца отмечены заранее, недавние — нет. «Спросить Домового» на карточке открывает разговор, где Домовой разбирает именно её. У карточек остатков удалённых программ под путями видна причина: метаданные контейнера, Team ID в имени группы.</p></div>
     <div class="mock"><div class="win">
       <div class="win-bar"><i></i><i></i><i></i><div class="ttl">Рекомендации</div></div>
       <div class="win-body fixed">
@@ -1152,11 +1166,9 @@ sizeList($('#sample-rows'),BY['Developer'].parent,null,4,new Set([BY['Caches']])
 
 const RULES=[
   {id:'xcode.derived-data',t:'Xcode · DerivedData',nodes:['Xcode · DerivedData'],s:'safe',p:'~/Library/Developer/Xcode/DerivedData',why:'Промежуточные результаты сборки. Xcode пересоздаст их при следующей сборке.'},
-  {id:'cargo.target',t:'Каталоги target/ (Rust)',nodes:['engram · target','quartz · target'],s:'safe',p:'~/Projects/*/target',why:'Артефакты сборки cargo. Восстанавливаются командой cargo build.'},
   {id:'downloads.installers',t:'Установщики в Загрузках',nodes:['Установщики .dmg и .pkg'],s:'recover',p:'~/Downloads/*.dmg, *.pkg',why:'Установщики программ, которые уже установлены.'},
   {id:'xcode.device-support',t:'iOS DeviceSupport',nodes:['iOS DeviceSupport'],s:'recover',p:'~/Library/Developer/Xcode/iOS DeviceSupport',why:'Символы для отладки на устройствах. Загрузятся снова при подключении устройства.'},
   {id:'caches.user',t:'Кэши приложений',nodes:['Homebrew','com.spotify.client','org.swift.swiftpm','Yarn','Safari'],s:'safe',p:'~/Library/Caches',why:'Приложения пересоздадут кэши сами. Первый запуск может быть медленнее.'},
-  {id:'dev.deps',t:'node_modules и zig-cache',nodes:['boss · node_modules','clavis · node_modules','facet · zig-cache'],s:'safe',p:'~/Projects/*/node_modules, zig-cache',why:'Зависимости и кэш сборки. Восстанавливаются bun install и zig build.'},
   {id:'xcode.simulators',t:'Симуляторы Xcode',nodes:['CoreSimulator · Devices'],s:'check',p:'~/Library/Developer/CoreSimulator/Devices',why:'Симуляторы скачиваются заново, но данные приложений внутри них пропадут.'},
   {id:'docker.vm',t:'Диск Docker',nodes:['Docker'],s:'check',p:'~/Library/Containers/com.docker.docker',why:'Внутри все образы и тома. Лучше чистить средствами Docker.'},
   {id:'ios.backups',t:'Резервные копии iPhone и iPad',nodes:['MobileSync · Backup'],s:'check',p:'~/Library/Application Support/MobileSync/Backup',why:'Удаляйте, только если есть копия в iCloud.'},
@@ -1170,17 +1182,36 @@ function hypCard(){const n=BY['com.tinyapp.helper'];const d=document.createEleme
   d.innerHTML=`<input type="checkbox" aria-label="Выбрать com.tinyapp.helper"><div style="min-width:0"><h5>com.tinyapp.helper</h5><div class="path">~/Library/Application Support/com.tinyapp.helper</div><p class="why">Похоже на остаток удалённого приложения TinyApp. Последнее обращение 14 месяцев назад.</p><div class="tags"><span class="badge b-check">Проверьте сами</span><span class="prov model">гипотеза модели</span></div><button class="btn sm ask">Спросить Домового</button></div><div class="amt">${fmt(n.size)}</div>`;return d;}
 $('#sample-recs').append(recCard(RULES[0],true),hypCard());
 
+const PROJECTS=[
+  {n:'quartz',node:'quartz · target',a:['target'],age:'4 месяца назад',stale:true},
+  {n:'facet',node:'facet · zig-cache',a:['zig-cache'],age:'1 год назад',stale:true},
+  {n:'clavis',node:'clavis · node_modules',a:['node_modules'],age:'8 месяцев назад',stale:true},
+  {n:'engram',node:'engram · target',a:['target'],age:'2 дня назад',stale:false},
+  {n:'boss',node:'boss · node_modules',a:['node_modules'],age:'3 недели назад',stale:false}
+];
+PROJECTS.forEach(p=>{p.size=BY[p.node].size;p.cat=BY[p.node].cat;});
+const sumOf=list=>list.reduce((s,p)=>s+p.size,0);
+const staleProjects=PROJECTS.filter(p=>p.stale),freshProjects=PROJECTS.filter(p=>!p.stale);
+function projRow(p){return `<div class="prow ${p.stale?'':'off'}"><input type="checkbox" ${p.stale?'checked':''} aria-label="Выбрать ${p.n}"><div class="pname">${p.n}</div><div class="pmeta"><span class="page">${p.age}</span><span class="psize">${fmt(p.size)}</span></div><div class="ppath">~/Projects/${p.n}</div><div class="parts">${p.a.join(' · ')}</div></div>`;}
+function projGroup(title,list,checked){return `<div class="pgrp"><input type="checkbox" ${checked?'checked':''} aria-label="${title}">${title}<span class="gsum">${list.length} ${list.length===1?'проект':list.length<5?'проекта':'проектов'} · ${fmt(sumOf(list))}</span></div>`+list.map(projRow).join('');}
+function projCard(){const d=document.createElement('div');d.className='rec';
+  d.innerHTML=`<input type="checkbox" class="proj-all" aria-label="Выбрать проекты разработки"><div style="min-width:0"><h5>Проекты разработки</h5><div class="path">${PROJECTS.length} проектов</div><p class="why">Зависимости и результаты сборки проектов. Вернутся после установки зависимостей и сборки. Заранее отмечены проекты без изменений больше месяца.</p><div class="tags"><span class="badge b-safe">Безопасно</span><span class="prov">правила проектов</span></div><div class="prows">${projGroup('Без изменений больше месяца',staleProjects,true)}${projGroup('Менялись за последний месяц',freshProjects,false)}</div><button class="btn sm ask">Спросить Домового</button></div><div class="amt">${fmt(sumOf(staleProjects))}<small>из ${fmt(sumOf(PROJECTS))}</small></div>`;
+  d.querySelector('.proj-all').indeterminate=true;return d;}
+
 const recHost=$('#recs');
-RULES.forEach(r=>recHost.appendChild(recCard(r,r.s==='safe')));recHost.appendChild(hypCard());
-const tot={safe:0,recover:0,check:0};RULES.forEach(r=>tot[r.s]+=r.size);
+RULES.forEach((r,i)=>{recHost.appendChild(recCard(r,r.s==='safe'));if(i===0)recHost.appendChild(projCard());});recHost.appendChild(hypCard());
+const tot={safe:sumOf(PROJECTS),recover:0,check:0};RULES.forEach(r=>tot[r.s]+=r.size);
 const all=tot.safe+tot.recover+tot.check;
+const preselected=tot.safe-sumOf(freshProjects);
 $('#recs-total').textContent='Можно освободить '+fmt(all);
 $('#recs-split').textContent=`безопасно ${fmt(tot.safe)} · восстановимо ${fmt(tot.recover)} · проверьте ${fmt(tot.check)}`;
-$('#recs-btn').textContent='Отметить к удалению · '+fmt(tot.safe);
+$('#recs-btn').textContent='Отметить к удалению · '+fmt(preselected);
 
-const tray=$('#tray');RULES.filter(r=>r.s==='safe').forEach(r=>{const d=document.createElement('div');d.className='tray-row';
+const tray=$('#tray');
+const trayRows=RULES.filter(r=>r.s==='safe').map(r=>({t:r.t,size:r.size,cat:r.cat})).concat(staleProjects.map(p=>({t:p.n,size:p.size,cat:p.cat})));
+trayRows.forEach(r=>{const d=document.createElement('div');d.className='tray-row';
   d.innerHTML=`<i style="background:${catColor(r.cat)}"></i><span style="color:var(--text);font-family:var(--f-ui);font-size:13.5px">${r.t}</span><span>${fmt(r.size)}</span><b title="Снять отметку">×</b>`;tray.appendChild(d);});
-$('#tray-sum').textContent=fmt(tot.safe);
+$('#tray-sum').textContent=fmt(preselected);
 
 /* ---------- сайдбары макетов ---------- */
 const used=ROOT.size,free=DISK-used;

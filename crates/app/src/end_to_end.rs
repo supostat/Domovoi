@@ -163,19 +163,7 @@ impl EndToEnd {
                 Duration::from_secs(*timeout_seconds),
                 heavy_nodes.unwrap_or(HEAVY_DELTA_NODES),
             ),
-            ScenarioStep::Recommendations => {
-                let model = self.recommendations();
-                let rules: Vec<String> = model.cards.iter().map(|card| card.provenance.label()).collect();
-                let paths: Vec<&[String]> = model.cards.iter().map(|card| card.paths.as_slice()).collect();
-                let blocked: Vec<&str> = model.cards.iter().filter_map(|card| card.blocked.as_deref()).collect();
-                Ok(json!({
-                    "step": "recommendations",
-                    "cards": rules,
-                    "card_paths": paths,
-                    "blocked": blocked,
-                    "total": model.total()
-                }))
-            }
+            ScenarioStep::Recommendations => Ok(self.recommendations_report()),
             ScenarioStep::DeleteRecommendations { level } => self.delete_recommendations(*level),
             ScenarioStep::RemoveApplication { path } => self.remove_application(path),
             ScenarioStep::MarkFromList { paths } => self.mark_from_list(paths),
@@ -205,9 +193,9 @@ impl EndToEnd {
                 max_tokens_per_step,
             } => self.ask_assistant(question, FocusContext::default(), *max_tokens_per_step),
             ScenarioStep::AskAboutCard {
-                rule,
+                card,
                 max_tokens_per_step,
-            } => self.ask_about_card(rule, *max_tokens_per_step),
+            } => self.ask_about_card(card, *max_tokens_per_step),
             ScenarioStep::ScrollDiskList { path } => self.scroll_disk_list(marker, path),
             ScenarioStep::UpdateDiskScreen => self.update_disk_screen(),
             ScenarioStep::Snapshots { directory, scale } => {
@@ -343,6 +331,37 @@ impl EndToEnd {
 
     fn session_mut(&mut self) -> &mut Session {
         self.session.as_mut().expect(SESSION_BETWEEN_STEPS)
+    }
+
+    fn recommendations_report(&self) -> Value {
+        let model = self.recommendations();
+        let rules: Vec<String> = model.cards.iter().map(|card| card.provenance.label()).collect();
+        let paths: Vec<&[String]> = model.cards.iter().map(|card| card.paths.as_slice()).collect();
+        let blocked: Vec<&str> = model.cards.iter().filter_map(|card| card.blocked.as_deref()).collect();
+        let projects: Vec<Value> = model
+            .cards
+            .iter()
+            .flat_map(|card| &card.rows)
+            .map(|row| {
+                json!({
+                    "name": row.name,
+                    "path": row.path,
+                    "artifacts": row.artifacts,
+                    "age": row.age,
+                    "stale": row.stale,
+                    "selected": row.selected,
+                    "amount": row.amount,
+                })
+            })
+            .collect();
+        json!({
+            "step": "recommendations",
+            "cards": rules,
+            "card_paths": paths,
+            "blocked": blocked,
+            "projects": projects,
+            "total": model.total()
+        })
     }
 
     fn recommendations(&self) -> RecommendationsModel {
@@ -596,13 +615,13 @@ impl EndToEnd {
         Ok(report)
     }
 
-    fn ask_about_card(&mut self, rule: &str, max_tokens_per_step: Option<u32>) -> Result<Value, String> {
+    fn ask_about_card(&mut self, provenance: &Provenance, max_tokens_per_step: Option<u32>) -> Result<Value, String> {
         let card = self
             .recommendations()
             .cards
             .into_iter()
-            .find(|card| card.provenance == Provenance::Rule(rule.to_owned()))
-            .ok_or_else(|| format!("no card of the rule {rule}"))?;
+            .find(|card| &card.provenance == provenance)
+            .ok_or_else(|| format!("no card of {}", provenance.label()))?;
         let focus = FocusContext {
             card: Some(card_focus(&card)),
             ..FocusContext::default()
@@ -610,7 +629,7 @@ impl EndToEnd {
         let mut report = self.ask_assistant(CARD_QUESTION, focus, max_tokens_per_step)?;
         report["step"] = "ask_about_card".into();
         report["question"] = CARD_QUESTION.into();
-        report["card_rule"] = rule.into();
+        report["card"] = provenance.label().into();
         Ok(report)
     }
 
