@@ -58,7 +58,7 @@ pub struct ClonePlan {
     copy_size: u64,
     copy_modified: SystemTime,
     copy_generation: u32,
-    directory_modified: SystemTime,
+    directory_modified: Option<SystemTime>,
     pending: PendingReplacement,
 }
 
@@ -189,7 +189,7 @@ impl ClonePlan {
             copy_size: metadata.len(),
             copy_modified: metadata.modified()?,
             copy_generation: gen_count(&checked.copy)?,
-            directory_modified: fs::metadata(&checked.directory)?.modified()?,
+            directory_modified: own_directory_modified(&checked.directory)?,
             original: checked.original,
             copy: checked.copy,
             pending,
@@ -227,8 +227,10 @@ impl ClonePlan {
                 failure,
             });
         }
-        directory.set_modified(self.directory_modified)?;
         clone_journal.settle(&temporary)?;
+        if let Some(modified) = self.directory_modified {
+            directory.set_modified(modified)?;
+        }
         Ok(CloneReplaced {
             freed_bytes: report.freed_bytes,
         })
@@ -340,6 +342,14 @@ fn inside_sync_root(index: &Index, node: NodeId) -> bool {
         current = index.parent(ancestor);
     }
     false
+}
+
+fn own_directory_modified(directory: &Path) -> io::Result<Option<SystemTime>> {
+    let metadata = fs::metadata(directory)?;
+    if metadata.uid() != current_user_id() {
+        return Ok(None);
+    }
+    metadata.modified().map(Some)
 }
 
 fn other_processes_holding(path: &Path) -> io::Result<Vec<libc::pid_t>> {
