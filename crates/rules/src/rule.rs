@@ -21,6 +21,7 @@ pub struct Rule {
     pub owner_bundle: Option<&'static str>,
     pub vendor_command: Option<&'static str>,
     pub condition: Option<Condition>,
+    pub(crate) folders_only: bool,
     pub(crate) patterns: Vec<PathPattern>,
     paths: Vec<String>,
 }
@@ -34,6 +35,7 @@ impl Rule {
             owner_bundle: None,
             vendor_command: None,
             condition: None,
+            folders_only: false,
             patterns: patterns.iter().map(|pattern| PathPattern::parse(pattern)).collect(),
             paths: patterns.iter().map(|pattern| (*pattern).to_owned()).collect(),
         }
@@ -51,6 +53,11 @@ impl Rule {
 
     pub(crate) fn when(mut self, condition: Condition) -> Self {
         self.condition = Some(condition);
+        self
+    }
+
+    pub(crate) fn folders_only(mut self) -> Self {
+        self.folders_only = true;
         self
     }
 

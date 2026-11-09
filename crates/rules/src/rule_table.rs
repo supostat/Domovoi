@@ -64,6 +64,7 @@ pub fn rule_table(overrides: &ConfigOverrides) -> Vec<Rule> {
             "Симулятор версии системы, которой больше нет в Xcode. Запустить его уже нельзя.",
         )
         .when(Condition::SimulatorRuntimeMissing)
+        .folders_only()
         .owned_by(SIMULATOR),
         Rule::new(
             "xcode.simulators",
@@ -71,6 +72,7 @@ pub fn rule_table(overrides: &ConfigOverrides) -> Vec<Rule> {
             &["~/Library/Developer/CoreSimulator/Devices/*"],
             "Симулятор Xcode. Внутри живут установленные в нём приложения и их данные.",
         )
+        .folders_only()
         .owned_by(SIMULATOR),
         Rule::new(
             "xcode.dyld-cache",

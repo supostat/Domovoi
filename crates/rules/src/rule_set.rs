@@ -235,12 +235,15 @@ impl RuleSet {
                 .is_some()
         };
         let hosts_projects = OnceCell::new();
+        let is_folder = index.node(node).kind == NodeKind::Directory;
         let anchored = self.anchored_by_length.get(&components.len()).into_iter().flatten();
         let mut matching: Vec<usize> = anchored
             .chain(self.any_depth.iter())
             .filter(|(rule, pattern)| {
-                let pattern = &self.rules[*rule].patterns[*pattern];
-                pattern.matches(components, has_sibling)
+                let rule = &self.rules[*rule];
+                let pattern = &rule.patterns[*pattern];
+                (is_folder || !rule.folders_only)
+                    && pattern.matches(components, has_sibling)
                     && (!pattern.has_project_marker()
                         || *hosts_projects.get_or_init(|| self.hosts_projects(index, node, components)))
             })
