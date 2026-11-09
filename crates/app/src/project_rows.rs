@@ -52,7 +52,8 @@ pub(crate) fn project_rows(
         if rows.is_empty() {
             continue;
         }
-        push_header(marker, column, (palette, &fonts), actions, (group, title), &rows);
+        let every = card.every_group_row_selected(group == ProjectRow::STALE_GROUP);
+        push_header(marker, column, (palette, &fonts), actions, (group, title, every), &rows);
         for (position, row) in rows {
             views.push(push_row(marker, column, (palette, &fonts), actions, (position, row)));
             push_separator(marker, column, palette);
@@ -66,17 +67,16 @@ fn push_header(
     column: &mut StackedColumn,
     (palette, fonts): (&ShellPalette, &ProjectRowFonts),
     actions: &ShellActions,
-    (group, title): (usize, &str),
+    (group, title, every): (usize, &str, bool),
     rows: &[(usize, &ProjectRow)],
 ) {
     let tokens = palette.tokens;
-    let every = rows.iter().all(|(_, row)| row.selected);
     let some = rows.iter().any(|(_, row)| row.selected);
     let check = CheckBox::new(
         marker,
         title,
         every,
-        rows.iter().any(|(_, row)| row.amount > 0),
+        rows.iter().any(|(_, row)| row.selectable()),
         palette,
         (
             actions,
@@ -132,7 +132,7 @@ fn push_row(
         marker,
         &row.name,
         row.selected,
-        row.amount > 0,
+        row.selectable(),
         palette,
         (
             actions,

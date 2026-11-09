@@ -88,7 +88,7 @@ impl RecommendationsModel {
             } else {
                 for row in &mut card.rows {
                     if let Some(old_row) = old.rows.iter().find(|old_row| old_row.path == row.path) {
-                        row.selected = old_row.selected && row.amount > 0;
+                        row.selected = old_row.selected && row.selectable();
                     }
                 }
                 card.selected = card.every_row_selected();

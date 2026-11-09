@@ -21,6 +21,10 @@ impl ProjectRow {
     pub const STALE_GROUP: usize = 0;
     pub const FRESH_GROUP: usize = 1;
 
+    pub fn selectable(&self) -> bool {
+        self.amount > 0
+    }
+
     pub fn group(&self) -> usize {
         if self.stale {
             Self::STALE_GROUP

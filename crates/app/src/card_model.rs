@@ -94,7 +94,11 @@ impl CardModel {
     }
 
     pub fn every_row_selected(&self) -> bool {
-        !self.rows.is_empty() && self.rows.iter().all(|row| row.selected)
+        every_selectable_selected(self.rows.iter())
+    }
+
+    pub fn every_group_row_selected(&self, stale: bool) -> bool {
+        every_selectable_selected(self.rows.iter().filter(|row| row.stale == stale))
     }
 
     pub fn some_row_selected(&self) -> bool {
@@ -103,26 +107,26 @@ impl CardModel {
 
     pub fn toggle_rows(&mut self) {
         let selected = !self.every_row_selected();
-        for row in &mut self.rows {
+        for row in self.rows.iter_mut().filter(|row| row.selectable()) {
             row.selected = selected;
         }
         self.selected = self.every_row_selected();
     }
 
     pub fn toggle_row(&mut self, position: usize) {
-        if let Some(row) = self.rows.get_mut(position) {
+        if let Some(row) = self.rows.get_mut(position).filter(|row| row.selectable()) {
             row.selected = !row.selected;
         }
         self.selected = self.every_row_selected();
     }
 
     pub fn toggle_group(&mut self, stale: bool) {
-        let selected = !self
+        let selected = !self.every_group_row_selected(stale);
+        for row in self
             .rows
-            .iter()
-            .filter(|row| row.stale == stale)
-            .all(|row| row.selected);
-        for row in self.rows.iter_mut().filter(|row| row.stale == stale) {
+            .iter_mut()
+            .filter(|row| row.stale == stale && row.selectable())
+        {
             row.selected = selected;
         }
         self.selected = self.every_row_selected();
@@ -154,4 +158,9 @@ impl CardModel {
             .as_ref()
             .map(|owner| format!("{CLOSE_OWNER} {owner}, {CLOSE_OWNER_SUFFIX}"))
     }
+}
+
+fn every_selectable_selected<'rows>(rows: impl Iterator<Item = &'rows ProjectRow>) -> bool {
+    let mut selectable = rows.filter(|row| row.selectable()).peekable();
+    selectable.peek().is_some() && selectable.all(|row| row.selected)
 }
