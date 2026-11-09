@@ -103,6 +103,7 @@ print_stderr = "allow"
 
 [profile.dev]
 debug = "line-tables-only"
+split-debuginfo = "packed"
 
 [profile.release]
 lto = "thin"
