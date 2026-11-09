@@ -2,7 +2,8 @@ use domovoi_rules::DenyReason;
 
 use crate::strings::{
     DENY_FIRMLINK, DENY_KEPT_COPY_MARKED, DENY_KEPT_COPY_MISSING, DENY_OTHER_VOLUME, DENY_OWN_APPLICATION,
-    DENY_PARENT_NOT_WRITABLE, DENY_PROTECTED_DATA, DENY_PROTECTED_FLAG, DENY_RUNNING_APPLICATION, DENY_SYSTEM_VOLUME,
+    DENY_OWNER_RUNNING, DENY_PARENT_NOT_WRITABLE, DENY_PROTECTED_DATA, DENY_PROTECTED_FLAG, DENY_RUNNING_APPLICATION,
+    DENY_SYSTEM_VOLUME,
 };
 
 pub(crate) fn deny_reason_text(reason: &DenyReason) -> &'static str {
@@ -17,5 +18,6 @@ pub(crate) fn deny_reason_text(reason: &DenyReason) -> &'static str {
         DenyReason::OwnApplication => DENY_OWN_APPLICATION,
         DenyReason::KeptCopyMarked => DENY_KEPT_COPY_MARKED,
         DenyReason::KeptCopyMissing => DENY_KEPT_COPY_MISSING,
+        DenyReason::OwnerRunning => DENY_OWNER_RUNNING,
     }
 }

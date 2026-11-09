@@ -407,12 +407,24 @@ impl Session {
         }
     }
 
-    pub fn take_tray_for_delete(&mut self, sizes: &[Reclaimable]) -> (Vec<DeleteSubject>, Vec<DeleteRefusal>) {
+    pub fn take_tray_for_delete(
+        &mut self,
+        sizes: &[Reclaimable],
+    ) -> io::Result<(Vec<DeleteSubject>, Vec<DeleteRefusal>)> {
+        self.denylist.refresh()?;
+        let running = running_bundle_ids();
         let index = self
             .index
             .as_ref()
             .expect("the tray collects nodes of a scanned volume");
-        self.tray.take_for_delete(index, &self.denylist, sizes)
+        let rules = self.rules.rules();
+        Ok(self.tray.take_for_delete(index, &self.denylist, sizes, |rule_id| {
+            rules
+                .iter()
+                .find(|rule| rule.id == rule_id)
+                .and_then(|rule| rule.owner_bundle)
+                .is_some_and(|owner| running.contains(owner))
+        }))
     }
 
     pub fn settle_delete(&mut self, report: &DeleteReport) -> Result<(), SessionError> {

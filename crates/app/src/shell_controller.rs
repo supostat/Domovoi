@@ -105,8 +105,8 @@ use crate::shell_state::ShellState;
 use crate::stage::Stage;
 use crate::strings::{
     APP_NAME, CANCEL, CLONED, DELETE, DELETE_CONFIRM, DELETE_CONFIRM_HINT, DIAGRAM, FAILURE_CLOSE, FAILURE_TITLE,
-    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, OPEN_DISK_UTILITY, TERMINAL_MISSING, TMUTIL_COPIED, UNRESPONSIVE_TITLE,
-    UPDATING_INDEX, csv_file_name, unresponsive_body,
+    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, OPEN_DISK_UTILITY, PROTECTION_UNCHECKED, TERMINAL_MISSING, TMUTIL_COPIED,
+    UNRESPONSIVE_TITLE, UPDATING_INDEX, csv_file_name, unresponsive_body,
 };
 use crate::tilde::tilde;
 use crate::tmutil_commands::tmutil_commands;
@@ -1210,7 +1210,7 @@ impl ShellController {
         if count == 0 || !self.confirm_delete(count) {
             return;
         }
-        let (subjects, refusals) = {
+        let taken = {
             let mut state = self.state.borrow_mut();
             let sizes = state.tray_measurement.take().map(|measurement| {
                 measurement
@@ -1223,6 +1223,10 @@ impl ShellController {
                 TrayModel::estimated_sizes(index, session.tray())
             });
             session.take_tray_for_delete(&sizes)
+        };
+        let (subjects, refusals) = match taken {
+            Ok(taken) => taken,
+            Err(error) => return self.inform(&format!("{PROTECTION_UNCHECKED} {error}")),
         };
         let timer = self.repeating(DELETE_TICK, ShellController::delete_tick);
         self.state.borrow_mut().delete = Some(DeleteRun::start(DeleteJob::start(subjects), refusals, timer));

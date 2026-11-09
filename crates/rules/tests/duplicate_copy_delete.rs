@@ -49,7 +49,7 @@ fn taken(index: &Index, tray: &mut Tray) -> (Vec<DeleteSubject>, Vec<DeleteRefus
         .map(|item| index.reclaimable(item.node).expect("the item is measured"))
         .collect();
     let denylist = Denylist::new(CaseRule::Insensitive).expect("the denylist is prepared");
-    tray.take_for_delete(index, &denylist, &sizes)
+    tray.take_for_delete(index, &denylist, &sizes, |_| false)
 }
 
 fn marked_copy(index: &Index) -> Tray {

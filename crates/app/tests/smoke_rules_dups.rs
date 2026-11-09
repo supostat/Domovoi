@@ -190,7 +190,9 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
     }
     let (estimated, measured, sizes) = estimated_then_measured_tray(&session, &demo.name);
     let expected = measured.total();
-    let (subjects, refusals) = session.take_tray_for_delete(&sizes);
+    let (subjects, refusals) = session
+        .take_tray_for_delete(&sizes)
+        .expect("running programs are checked");
     assert!(refusals.is_empty(), "{refusals:?}");
     assert!(session.tray().items().is_empty(), "taking empties the tray");
     let report = delete(subjects.clone(), &CancelToken::default(), &|_| {});

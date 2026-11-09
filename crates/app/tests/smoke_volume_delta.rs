@@ -106,7 +106,9 @@ fn delete_folder(session: &mut Session, path: &Path) {
     let node = index.find(path).expect("the folder is indexed");
     session.add_to_tray(node, None);
     let sizes = TrayModel::estimated_sizes(session.index().expect("the volume is scanned"), session.tray());
-    let (subjects, refusals) = session.take_tray_for_delete(&sizes);
+    let (subjects, refusals) = session
+        .take_tray_for_delete(&sizes)
+        .expect("running programs are checked");
     assert!(refusals.is_empty(), "{refusals:?}");
     let report = delete(subjects, &CancelToken::default(), &|_| {});
     assert!(report.failed.is_empty(), "{report:?}");

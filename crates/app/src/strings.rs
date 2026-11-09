@@ -161,6 +161,8 @@ pub const DENY_RUNNING_APPLICATION: &str = "приложение запущен�
 pub const DENY_OWN_APPLICATION: &str = "это сам Домовой";
 pub const DENY_KEPT_COPY_MARKED: &str = "оставляемый экземпляр тоже отмечен к удалению";
 pub const DENY_KEPT_COPY_MISSING: &str = "оставляемый экземпляр не найден";
+pub const DENY_OWNER_RUNNING: &str = "работает программа, которой принадлежат эти файлы";
+pub const PROTECTION_UNCHECKED: &str = "Удаление не начато: не удалось проверить, какие программы сейчас запущены.";
 pub const NO_RECOMMENDATIONS: &str = "Правилам здесь нечего предложить. Диск выглядит аккуратно.";
 
 pub const FIND_DUPLICATES: &str = "Искать дубликаты";

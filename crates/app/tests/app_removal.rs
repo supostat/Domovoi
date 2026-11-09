@@ -60,6 +60,28 @@ fn populate(root: &Path) {
     assert!(locked.success(), "the launch agent is locked");
 }
 
+fn leftover_card_names_its_reasons(session: &Session, now: SystemTime) {
+    let index = session.index().expect("the volume is indexed");
+    let model = RecommendationsModel::build(
+        index,
+        session.rules(),
+        session.recommendations().expect("recommendations are built"),
+        now,
+    );
+    let leftover = model
+        .cards
+        .iter()
+        .find(|card| card.provenance == Provenance::Rule("apps.leftover-data".to_owned()))
+        .expect("the removed application leaves a card");
+    assert_eq!(leftover.paths.len(), leftover.path_reasons.len());
+    assert!(
+        leftover
+            .reasons_line()
+            .is_some_and(|line| line.contains(strings::OWNER_CONTAINER_METADATA)),
+        "the leftover card names why its folders belong to a removed application"
+    );
+}
+
 #[test]
 fn removing_an_application_takes_its_files_with_reasons_and_leaves_a_name_match_unmarked() {
     let volume = ImageVolume::create(VolumeFormat::Apfs, Visibility::Hidden).expect("the image attaches");
@@ -80,24 +102,7 @@ fn removing_an_application_takes_its_files_with_reasons_and_leaves_a_name_match_
         IndexFacts::of(index, container, now).owner.as_deref(),
         Some(format!("{} TinyApp · {}", strings::OWNER, strings::OWNER_CONTAINER_METADATA).as_str())
     );
-    let model = RecommendationsModel::build(
-        index,
-        session.rules(),
-        session.recommendations().expect("recommendations are built"),
-        now,
-    );
-    let leftover = model
-        .cards
-        .iter()
-        .find(|card| card.provenance == Provenance::Rule("apps.leftover-data".to_owned()))
-        .expect("the removed application leaves a card");
-    assert_eq!(leftover.paths.len(), leftover.path_reasons.len());
-    assert!(
-        leftover
-            .reasons_line()
-            .is_some_and(|line| line.contains(strings::OWNER_CONTAINER_METADATA)),
-        "the leftover card names why its folders belong to a removed application"
-    );
+    leftover_card_names_its_reasons(&session, now);
 
     assert!(session.add_application_to_tray(bundle));
     let index = session.index().expect("the volume is indexed");
@@ -155,7 +160,9 @@ fn removing_an_application_takes_its_files_with_reasons_and_leaves_a_name_match_
     );
     assert_eq!(group.unmarked.len(), 1);
 
-    let (subjects, refusals) = session.take_tray_for_delete(&sizes);
+    let (subjects, refusals) = session
+        .take_tray_for_delete(&sizes)
+        .expect("running programs are checked");
     assert_eq!(refusals.len(), 1, "{refusals:?}");
     assert_eq!(refusals[0].path, library(&root, LAUNCH_AGENT));
     assert!(matches!(refusals[0].reason, DenyReason::ProtectedFlag(_)));

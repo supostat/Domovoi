@@ -76,7 +76,7 @@ impl DuplicateGroup {
             .iter()
             .map(|item| index.reclaimable(item.node))
             .collect::<io::Result<Vec<Reclaimable>>>()?;
-        Ok(tray.take_for_delete(index, denylist, &sizes))
+        Ok(tray.take_for_delete(index, denylist, &sizes, |_| false))
     }
 }
 

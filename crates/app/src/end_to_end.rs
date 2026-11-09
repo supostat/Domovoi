@@ -407,7 +407,10 @@ impl EndToEnd {
         let free_before = DiskOverview::measure(&self.root)
             .map_err(|error| error.to_string())?
             .free_bytes();
-        let (subjects, refusals) = self.session_mut().take_tray_for_delete(&sizes);
+        let (subjects, refusals) = self
+            .session_mut()
+            .take_tray_for_delete(&sizes)
+            .map_err(|error| error.to_string())?;
         let taken: Vec<PathBuf> = subjects.iter().map(|subject| subject.physical.clone()).collect();
         let job = DeleteJob::start(subjects);
         while !job.is_finished() {
@@ -457,7 +460,10 @@ impl EndToEnd {
             .flat_map(|application| application.name_only.clone())
             .collect();
         let (_, _, sizes) = self.measured_tray()?;
-        let (subjects, refusals) = self.session_mut().take_tray_for_delete(&sizes);
+        let (subjects, refusals) = self
+            .session_mut()
+            .take_tray_for_delete(&sizes)
+            .map_err(|error| error.to_string())?;
         let taken: Vec<PathBuf> = subjects.iter().map(|subject| subject.physical.clone()).collect();
         let job = DeleteJob::start(subjects);
         while !job.is_finished() {

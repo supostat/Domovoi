@@ -49,7 +49,7 @@ fn taking_the_tray_separates_denied_items_from_subjects() {
     let sizes = measured(&index, &tray);
     let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
 
-    let (subjects, refusals) = tray.take_for_delete(&index, &denylist, &sizes);
+    let (subjects, refusals) = tray.take_for_delete(&index, &denylist, &sizes, |_| false);
 
     assert!(tray.items().is_empty(), "the tray is emptied by taking");
     assert_eq!(
@@ -89,7 +89,7 @@ fn taken_subjects_delete_while_denied_items_stay() {
     tray.add(&index, child(&index, VOLUME_SERVICE_FOLDER), None);
     let sizes = measured(&index, &tray);
     let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
-    let (subjects, refusals) = tray.take_for_delete(&index, &denylist, &sizes);
+    let (subjects, refusals) = tray.take_for_delete(&index, &denylist, &sizes, |_| false);
 
     let report = delete(subjects.clone(), &CancelToken::default(), &|_| {});
 
@@ -118,7 +118,7 @@ fn a_taken_folder_carries_the_number_of_its_files_from_the_index() {
     let sizes = measured(&index, &tray);
     let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
 
-    let (subjects, _) = tray.take_for_delete(&index, &denylist, &sizes);
+    let (subjects, _) = tray.take_for_delete(&index, &denylist, &sizes, |_| false);
 
     assert_eq!(
         subjects[0].indexed_files, BUILD_FILES,
@@ -153,5 +153,29 @@ fn the_tray_covers_an_item_and_its_inside_but_not_a_neighbour_sharing_the_start_
     assert!(
         !tray.covers(&index.path(neighbour)),
         "a neighbour whose name starts the same is not inside the marked folder"
+    );
+}
+
+#[test]
+fn an_item_whose_rule_belongs_to_a_running_program_is_refused() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.root().expect("root opens");
+    root.file("report.pdf", 8_192, Fill::Noise(1)).expect("file is written");
+    let index = index_of(tree.path());
+    let report = child(&index, "report.pdf");
+    let mut tray = Tray::default();
+    tray.add(&index, report, Some(INSTALLER_RULE));
+    let sizes = measured(&index, &tray);
+    let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
+
+    let (subjects, refusals) = tray.take_for_delete(&index, &denylist, &sizes, |rule| rule == INSTALLER_RULE);
+
+    assert!(subjects.is_empty(), "{subjects:?}");
+    assert_eq!(
+        refusals,
+        [DeleteRefusal {
+            path: index.path(report),
+            reason: DenyReason::OwnerRunning,
+        }]
     );
 }

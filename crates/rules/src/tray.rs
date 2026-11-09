@@ -158,6 +158,7 @@ impl Tray {
         index: &Index,
         denylist: &Denylist,
         sizes: &[Reclaimable],
+        owner_running: impl Fn(&str) -> bool,
     ) -> (Vec<DeleteSubject>, Vec<DeleteRefusal>) {
         assert_eq!(sizes.len(), self.items.len(), "every item of the tray is measured");
         let mut subjects = Vec::with_capacity(self.items.len());
@@ -167,6 +168,7 @@ impl Tray {
             .iter()
             .map(|item| match denylist.verdict(index, item.node) {
                 Some(reason) => Err(reason),
+                None if item.rule_id.as_deref().is_some_and(&owner_running) => Err(DenyReason::OwnerRunning),
                 None => self.kept_copy_of(index, item),
             })
             .collect();

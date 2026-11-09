@@ -137,6 +137,10 @@ name = "copy_selection_after_reload"
 harness = false
 
 [[test]]
+name = "program_started_after_open"
+harness = false
+
+[[test]]
 name = "tray_long_list"
 harness = false
 

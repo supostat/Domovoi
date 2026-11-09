@@ -12,4 +12,5 @@ pub enum DenyReason {
     OwnApplication,
     KeptCopyMarked,
     KeptCopyMissing,
+    OwnerRunning,
 }

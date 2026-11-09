@@ -49,7 +49,7 @@ fn a_delete_job_removes_the_taken_tray_and_reports_its_progress() {
         .map(|item| index.reclaimable(item.node).expect("the item is measured"))
         .collect();
     let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
-    let (subjects, refusals) = tray.take_for_delete(&index, &denylist, &sizes);
+    let (subjects, refusals) = tray.take_for_delete(&index, &denylist, &sizes, |_| false);
     assert!(refusals.is_empty(), "{refusals:?}");
     let taken: Vec<PathBuf> = subjects.iter().map(|subject| subject.physical.clone()).collect();
 
