@@ -20,7 +20,12 @@ impl Recommendations {
         applied: &DeltaApplied,
     ) {
         let hypotheses = mem::take(&mut self.hypotheses);
-        let DeltaApplied::Spliced { directories, regrouped } = applied else {
+        let DeltaApplied::Spliced {
+            directories,
+            regrouped,
+            owners_reassessed: false,
+        } = applied
+        else {
             let hypotheses = hypotheses.into_iter().map(|card| card.hypothesis).collect();
             *self = Self::build(index, rules, denylist, running_bundle_ids, hypotheses);
             return;

@@ -98,9 +98,8 @@ impl Index {
                 vanished: splice.vanished,
             });
         }
-        if bundles_moved || !changed_bundles.is_empty() {
-            self.reassess_bundles(&changed_bundles, enrichment);
-        }
+        let owners_reassessed =
+            (bundles_moved || !changed_bundles.is_empty()) && self.reassess_bundles(&changed_bundles, enrichment);
         if !spliced.is_empty() {
             self.advance_generation();
         }
@@ -118,6 +117,7 @@ impl Index {
         Ok(DeltaApplied::Spliced {
             directories,
             regrouped: regrouped.into_iter().filter(|id| self.is_live(*id)).collect(),
+            owners_reassessed,
         })
     }
 
@@ -233,15 +233,16 @@ impl Index {
             .any(|id| self.node(*id).kind == NodeKind::Directory && InstalledBundle::is_bundle_name(self.name(*id)))
     }
 
-    fn reassess_bundles(&mut self, changed: &[PathBuf], enrichment: &Enrichment) {
+    fn reassess_bundles(&mut self, changed: &[PathBuf], enrichment: &Enrichment) -> bool {
         let discovered = self.discover_bundles(&self.bundles, changed);
         if discovered == self.bundles {
-            return;
+            return false;
         }
         self.bundles = discovered;
         let live = self.subtree(self.root());
         self.assign_categories_and_owners(&live, enrichment);
         self.mark_models(enrichment);
+        true
     }
 
     fn name_changes(&self, directory: NodeId, placements: &[Placement<'_>]) -> (Vec<OsString>, Vec<OsString>) {

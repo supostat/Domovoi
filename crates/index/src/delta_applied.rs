@@ -6,6 +6,7 @@ pub enum DeltaApplied {
     Spliced {
         directories: Vec<SplicedDirectory>,
         regrouped: Vec<NodeId>,
+        owners_reassessed: bool,
     },
     Compacted {
         directories: Vec<NodeId>,

@@ -6,12 +6,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use app_fixture::volume_index;
-use domovoi_index::{Category, ChangedPath, Enrichment, Index, IndexRoot, Installation, StaleDelta};
+use domovoi_index::{Category, ChangedPath, DeltaApplied, Enrichment, Index, IndexRoot, Installation, StaleDelta};
 use domovoi_scanner::{ScanOptions, scan};
 use domovoi_testkit::{Fill, TempTree, application_bundle};
 
 const UNREADABLE: libc::mode_t = 0o000;
 const SHARED_HOME: &str = "/Users/Shared";
+const ARCHIVED_FILES: usize = 64;
 
 fn index_of(root: &Path) -> Index {
     let report = scan(root, &ScanOptions::default()).expect("the tree scans");
@@ -30,7 +31,7 @@ fn change(index: &Index, relative: &str, subtree: bool) -> ChangedPath {
     }
 }
 
-fn apply(index: &mut Index, changed: &[(&str, bool)]) {
+fn apply(index: &mut Index, changed: &[(&str, bool)]) -> DeltaApplied {
     let changed: Vec<ChangedPath> = changed
         .iter()
         .map(|(relative, subtree)| change(index, relative, *subtree))
@@ -55,6 +56,14 @@ fn apply(index: &mut Index, changed: &[(&str, bool)]) {
     reported.sort();
     targets.sort();
     assert_eq!(reported, targets);
+    applied
+}
+
+fn owners_reassessed(applied: &DeltaApplied) -> bool {
+    let DeltaApplied::Spliced { owners_reassessed, .. } = applied else {
+        panic!("a small delta splices the index: {applied:?}");
+    };
+    *owners_reassessed
 }
 
 fn assert_matches_a_fresh_build(index: &Index, root: &Path) {
@@ -256,5 +265,51 @@ fn a_bundle_that_appears_and_vanishes_moves_its_files_between_installed_and_left
     fs::remove_dir_all(under(&root, "Applications/Tiny.app")).expect("the bundle is removed");
     apply(&mut index, &[("Applications", false)]);
     assert_eq!(installation(&index), Installation::Missing);
+    assert_matches(&index, &volume_index(&root));
+}
+
+#[test]
+fn only_a_change_of_the_bundle_set_reports_reassessed_owners() {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.path().to_path_buf();
+    fs::create_dir_all(under(&root, "Applications")).expect("the applications folder is created");
+    fs::create_dir_all(under(&root, "Users/tester/Library/Containers/com.domovoi.tiny/Data"))
+        .expect("a container is created");
+    fs::create_dir_all(under(&root, "Documents")).expect("a documents folder is created");
+    fs::create_dir_all(under(&root, "Archive")).expect("an archive folder is created");
+    for number in 0..ARCHIVED_FILES {
+        fs::write(under(&root, &format!("Archive/file-{number}")), vec![3_u8; 4_096])
+            .expect("an archived file is written");
+    }
+    let mut index = volume_index(&root);
+
+    application_bundle(&under(&root, "Applications"), "Tiny", "com.domovoi.tiny", &[])
+        .expect("the application is built");
+    assert!(
+        owners_reassessed(&apply(&mut index, &[("Applications", false)])),
+        "an installed application reassigns the owners"
+    );
+
+    fs::write(under(&root, "Documents/note.txt"), vec![1_u8; 4_096]).expect("a document is written");
+    assert!(
+        !owners_reassessed(&apply(&mut index, &[("Documents", false)])),
+        "a file outside the bundles keeps the owners"
+    );
+
+    fs::write(
+        under(&root, "Applications/Tiny.app/Contents/notes.txt"),
+        vec![2_u8; 4_096],
+    )
+    .expect("a file inside the bundle is written");
+    assert!(
+        !owners_reassessed(&apply(&mut index, &[("Applications/Tiny.app/Contents", false)])),
+        "a file inside an unchanged bundle keeps the owners"
+    );
+
+    fs::remove_dir_all(under(&root, "Applications/Tiny.app")).expect("the bundle is removed");
+    assert!(
+        owners_reassessed(&apply(&mut index, &[("Applications", false)])),
+        "a removed application reassigns the owners"
+    );
     assert_matches(&index, &volume_index(&root));
 }
