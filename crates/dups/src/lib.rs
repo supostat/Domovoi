@@ -3,6 +3,7 @@
 mod bucket;
 mod candidate;
 mod clone_journal;
+mod clone_journal_error;
 mod clone_plan;
 mod clone_refusal;
 mod clone_replace_error;
@@ -27,6 +28,7 @@ mod skip_reason;
 mod skipped_file;
 
 pub use clone_journal::CloneJournal;
+pub use clone_journal_error::CloneJournalError;
 pub use clone_plan::ClonePlan;
 pub use clone_refusal::CloneRefusal;
 pub use clone_replace_error::CloneReplaceError;

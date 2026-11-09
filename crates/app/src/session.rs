@@ -11,8 +11,8 @@ use domovoi_agent::{Agent, AgentAnswer, AgentContext, AgentError, AgentLimits, T
 use domovoi_agent::{ClaudeAnswer, ClaudeCode, ClaudeCodeError};
 use domovoi_downloader::CatalogEntry;
 use domovoi_dups::{
-    CloneJournal, ClonePlan, CloneReplaceError, CloneReplaced, CloudFolders, DuplicateGroup, DuplicateOptions,
-    DuplicateProgress, Duplicates, HashingPool, SearchError, find_duplicates,
+    CloneJournal, CloneJournalError, ClonePlan, CloneReplaceError, CloneReplaced, CloudFolders, DuplicateGroup,
+    DuplicateOptions, DuplicateProgress, Duplicates, HashingPool, SearchError, find_duplicates,
 };
 use domovoi_index::{
     CacheError, CacheHeader, ChangedPath, DeltaApplied, DirectoryListing, Enrichment, Index, IndexRoot, ModelEvent,
@@ -69,7 +69,7 @@ pub struct Session {
 impl Session {
     pub fn open(root: &Path, paths: &SessionPaths, app_version: &str) -> io::Result<Self> {
         paths.create_directories()?;
-        let mut clone_journal = CloneJournal::open(&paths.clone_journal)?;
+        let mut clone_journal = open_clone_journal(&paths.clone_journal)?;
         clone_journal.sweep()?;
         Ok(Self {
             root: root.to_path_buf(),
@@ -574,6 +574,18 @@ impl Session {
             }
             duplicates.groups = remapped;
         }
+    }
+}
+
+fn open_clone_journal(path: &Path) -> io::Result<CloneJournal> {
+    match CloneJournal::open(path) {
+        Ok(clone_journal) => Ok(clone_journal),
+        Err(CloneJournalError::Corrupt(reason)) => {
+            SystemLog::new(LOG_SUBSYSTEM, LOG_CATEGORY)
+                .error(&format!("The clone journal is corrupt and is set aside: {reason}"));
+            CloneJournal::set_aside(path)
+        }
+        Err(CloneJournalError::Io(error)) => Err(error),
     }
 }
 

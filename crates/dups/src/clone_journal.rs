@@ -9,9 +9,11 @@ use domovoi_rules::{DeleteFailure, DeleteReport, DeleteSubject, delete};
 use domovoi_scanner::CancelToken;
 use rkyv::rancor;
 
+use crate::clone_journal_error::CloneJournalError;
 use crate::pending_replacement::PendingReplacement;
 
 const JOURNAL_PATH: &str = "Library/Application Support/com.domovoi.app/clone-journal";
+const SET_ASIDE_EXTENSION: &str = "broken";
 
 #[derive(Debug)]
 pub struct CloneJournal {
@@ -26,20 +28,28 @@ impl CloneJournal {
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "home directory is unknown"))
     }
 
-    pub fn open(path: &Path) -> io::Result<Self> {
+    pub fn open(path: &Path) -> Result<Self, CloneJournalError> {
         let pending = match fs::read(path) {
             Ok(bytes) => {
                 let mut aligned = rkyv::util::AlignedVec::<16>::new();
                 aligned.extend_from_slice(&bytes);
                 rkyv::from_bytes::<Vec<PendingReplacement>, rancor::Error>(&aligned)
-                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?
+                    .map_err(|error| CloneJournalError::Corrupt(error.to_string()))?
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
-            Err(error) => return Err(error),
+            Err(error) => return Err(CloneJournalError::Io(error)),
         };
         Ok(Self {
             path: path.to_path_buf(),
             pending,
+        })
+    }
+
+    pub fn set_aside(path: &Path) -> io::Result<Self> {
+        fs::rename(path, path.with_extension(SET_ASIDE_EXTENSION))?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            pending: Vec::new(),
         })
     }
 
