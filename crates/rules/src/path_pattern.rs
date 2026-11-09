@@ -80,6 +80,19 @@ impl PathPattern {
         }
     }
 
+    pub(crate) fn encloses(&self, components: &[String]) -> bool {
+        match self {
+            Self::Anchored(segments) => {
+                segments.len() <= components.len()
+                    && segments
+                        .iter()
+                        .zip(components)
+                        .all(|(segment, component)| segment.matches(component))
+            }
+            Self::AnyDepth { .. } => false,
+        }
+    }
+
     pub(crate) fn follows_sibling(&self, name: &str, sibling: &OsStr) -> bool {
         match self {
             Self::AnyDepth {

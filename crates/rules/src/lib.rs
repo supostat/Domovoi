@@ -28,6 +28,7 @@ mod rule_table;
 mod running_applications;
 mod screen_capture_location;
 mod simulator_runtimes;
+mod tool_roots;
 mod tray;
 mod tray_application;
 mod tray_mark;

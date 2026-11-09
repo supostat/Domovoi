@@ -304,3 +304,47 @@ fn every_rule_that_finds_project_artifacts_is_safe() {
         assert_eq!(rule.level, SafetyLevel::Safe, "{}", rule.id);
     }
 }
+
+fn dependencies(project: &str) -> Node {
+    directory(
+        project,
+        vec![file("package.json"), directory("node_modules", vec![file("index.js")])],
+    )
+}
+
+#[test]
+fn dependencies_of_installed_tools_are_not_projects() {
+    let tools = [
+        "/Applications/Visual Studio Code.app/Contents/Resources/app",
+        "/Users/igor/.vscode/extensions/swift-2.18.0",
+        "/Users/igor/Library/pnpm/global/5",
+        "/Users/igor/.nvm/versions/node/v22.11.0/lib/node_modules/npm",
+    ];
+    let mut trees: Vec<Node> = tools
+        .iter()
+        .map(|tool| {
+            let tool = Path::new(tool);
+            path_tree(
+                &tool.parent().expect("a tool sits in a folder").to_string_lossy(),
+                dependencies(&tool.file_name().expect("a tool has a name").to_string_lossy()),
+            )
+        })
+        .collect();
+    trees.push(path_tree("/Users/igor/Projects", dependencies("web")));
+    let index = data_volume_index(merge(trees));
+    let (rules, recommendations) = recommendations(&index);
+
+    let roots: BTreeSet<PathBuf> = projects(&index, &recommendations).into_keys().collect();
+
+    assert_eq!(roots, paths(&["/Users/igor/Projects/web"]));
+    for tool in tools {
+        let dependencies = index
+            .find(&Path::new(tool).join("node_modules"))
+            .unwrap_or_else(|| panic!("{tool} is indexed"));
+        assert_eq!(
+            rules.claim_of(&index, dependencies),
+            None,
+            "the dependencies of {tool} belong to the tool"
+        );
+    }
+}

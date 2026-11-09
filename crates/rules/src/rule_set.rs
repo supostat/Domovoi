@@ -1,3 +1,4 @@
+use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fmt;
@@ -16,6 +17,7 @@ use crate::path_pattern::PathPattern;
 use crate::rule::{Condition, Rule};
 use crate::rule_table::rule_table;
 use crate::simulator_runtimes::{InstalledSimulatorRuntimes, SimulatorRuntimes};
+use crate::tool_roots::TOOL_ROOTS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Claim {
@@ -29,6 +31,7 @@ pub struct RuleSet {
     runtimes: Box<dyn SimulatorRuntimes>,
     anchored_by_length: HashMap<usize, Vec<(usize, usize)>>,
     any_depth: Vec<(usize, usize)>,
+    tool_roots: Vec<PathPattern>,
 }
 
 impl fmt::Debug for RuleSet {
@@ -69,6 +72,10 @@ impl RuleSet {
             runtimes,
             anchored_by_length,
             any_depth,
+            tool_roots: TOOL_ROOTS
+                .iter()
+                .map(|root| PathPattern::parse(root).folded(case))
+                .collect(),
         }
     }
 
@@ -227,10 +234,16 @@ impl RuleSet {
                 .and_then(|parent| index.child_named(parent, OsStr::new(marker)))
                 .is_some()
         };
+        let hosts_projects = OnceCell::new();
         let anchored = self.anchored_by_length.get(&components.len()).into_iter().flatten();
         let mut matching: Vec<usize> = anchored
             .chain(self.any_depth.iter())
-            .filter(|(rule, pattern)| self.rules[*rule].patterns[*pattern].matches(components, has_sibling))
+            .filter(|(rule, pattern)| {
+                let pattern = &self.rules[*rule].patterns[*pattern];
+                pattern.matches(components, has_sibling)
+                    && (!pattern.has_project_marker()
+                        || *hosts_projects.get_or_init(|| self.hosts_projects(index, node, components)))
+            })
             .map(|(rule, _)| *rule)
             .collect();
         matching.sort_unstable();
@@ -238,6 +251,15 @@ impl RuleSet {
         matching
             .into_iter()
             .find(|rule| self.condition_holds(index, node, *rule))
+    }
+
+    fn hosts_projects(&self, index: &Index, node: NodeId, components: &[String]) -> bool {
+        let inside_dependencies = index
+            .parent(node)
+            .is_some_and(|parent| index.inside_dependency_store(parent));
+        !inside_dependencies
+            && !self.tool_roots.iter().any(|root| root.encloses(components))
+            && index.enclosing_package(node).is_none()
     }
 
     fn condition_holds(&self, index: &Index, node: NodeId, rule: usize) -> bool {
