@@ -174,7 +174,7 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
     );
 
     let mut duplicates = searched_with_the_own_copy_checked(&mut session);
-    duplicates.assess_clones(|keep, copy| session.clone_plan(keep, copy).map(drop));
+    duplicates.assess_clones(|keep, copy| session.clone_assessment(keep, copy));
     let (keep, copy) = duplicates.checked_copies()[0];
     let eligible = duplicates.groups()[0]
         .copies
@@ -216,9 +216,11 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
     assert_eq!(after.deleted.as_ref().map(|outcome| outcome.freed), Some(expected));
     assert!(estimated.measuring.is_some() && after.measuring.is_none());
 
-    session
-        .replace_with_clone(keep, copy)
-        .expect("the copy becomes a clone");
+    let cloned = session
+        .replace_with_clones(&[(keep, copy)], None, &CancelToken::default())
+        .expect("the index takes the replaced copy");
+    assert!(cloned.failures.is_empty() && !cloned.stopped, "{cloned:?}");
+    assert!(cloned.freed > 0, "the old body of the copy is freed");
     let index = session.index().expect("the index stays");
     let replaced = DuplicatesModel::found(index, session.duplicates().expect("duplicates stay"), 3, 1);
     assert!(

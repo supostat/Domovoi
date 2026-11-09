@@ -38,6 +38,8 @@ const PURGE_FREED: u64 = 1_200_000_000;
 const PURGE_AVAILABLE: u64 = 10_000_000_000;
 const SEARCH_DONE: u64 = 2_025;
 const SEARCH_TOTAL: u64 = 40_000;
+const CLONE_DONE: u64 = 987_654_321_098;
+const CLONE_TOTAL: u64 = 999_999_999_999;
 const CRUMBS: [&str; 7] = [
     "Macintosh HD",
     "Пользователи · igor",
@@ -440,9 +442,32 @@ fn duplicate_search_progress(checks: &mut Checks, marker: MainThreadMarker) {
     };
     let actions = ShellActions::new(marker);
     let screen = DuplicatesScreen::build(marker, &data, &palette(), &actions);
-    screen.show_progress(SearchStage::Contents.title(), SEARCH_DONE, SEARCH_TOTAL);
+    screen.show_progress(&DuplicatesState::Searching {
+        stage: SearchStage::Contents,
+        done: SEARCH_DONE,
+        total: SEARCH_TOTAL,
+    });
     let (_, count, _) = screen.progress.as_ref().expect("a search shows its progress");
     checks.never_cut(count, "duplicate search count after the search grows");
+}
+
+fn clone_replacement_progress(checks: &mut Checks, marker: MainThreadMarker) {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shell_state.json");
+    let mut data = ShellFixture::read(&fixture)
+        .and_then(|fixture| fixture.shell_data(Screen::Duplicates))
+        .expect("the fixture reads");
+    data.care.duplicates.state = DuplicatesState::Cloning {
+        done: 0,
+        total: CLONE_TOTAL,
+    };
+    let actions = ShellActions::new(marker);
+    let screen = DuplicatesScreen::build(marker, &data, &palette(), &actions);
+    screen.show_progress(&DuplicatesState::Cloning {
+        done: CLONE_DONE,
+        total: CLONE_TOTAL,
+    });
+    let (_, count, _) = screen.progress.as_ref().expect("a replacement shows its progress");
+    checks.never_cut(count, "clone replacement count after the replacement grows");
 }
 
 fn hover(checks: &mut Checks, marker: MainThreadMarker) {
@@ -745,6 +770,7 @@ fn main() -> ExitCode {
     head(&mut checks, marker);
     scanning(&mut checks, marker);
     duplicate_search_progress(&mut checks, marker);
+    clone_replacement_progress(&mut checks, marker);
     hover(&mut checks, marker);
     recommendation_card(&mut checks, marker);
     project_rows(&mut checks, marker);

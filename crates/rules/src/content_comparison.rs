@@ -14,7 +14,13 @@ pub enum ContentComparison {
 }
 
 impl ContentComparison {
-    pub fn of(first: &File, second: &File, size: u64, cancel: &CancelToken) -> io::Result<Self> {
+    pub fn of(
+        first: &File,
+        second: &File,
+        size: u64,
+        cancel: &CancelToken,
+        compared: &dyn Fn(u64),
+    ) -> io::Result<Self> {
         let chunk = usize::try_from(size.min(READ_CHUNK_BYTES)).expect("a read chunk fits in usize");
         let mut first_buffer = vec![0_u8; chunk];
         let mut second_buffer = vec![0_u8; chunk];
@@ -30,6 +36,7 @@ impl ContentComparison {
                 return Ok(Self::Different);
             }
             offset += length as u64;
+            compared(offset);
         }
         Ok(Self::Same)
     }

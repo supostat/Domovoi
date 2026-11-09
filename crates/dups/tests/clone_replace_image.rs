@@ -11,7 +11,7 @@ use domovoi_dups::{
 };
 use domovoi_index::{Enrichment, Index, IndexRoot, NodeId, Reclaimable};
 use domovoi_rules::{CaseRule, Denylist};
-use domovoi_scanner::{ScanOptions, scan};
+use domovoi_scanner::{CancelToken, ScanOptions, scan};
 use domovoi_testkit::{ImageVolume, TempTree, Visibility, VolumeFormat};
 
 const FILE_SIZE: usize = 256 * 1024;
@@ -187,7 +187,7 @@ fn sparse_copies_are_replaced(fixture: &mut Fixture) {
     fixture
         .prepare("sparse")
         .expect("sparse pair is replaceable")
-        .execute(&mut fixture.clone_journal)
+        .execute(&mut fixture.clone_journal, &CancelToken::default(), &|_| {})
         .expect("sparse copy is replaced");
     let copy = fixture.mount().join("sparse/copy");
     assert_eq!(fs::metadata(&copy).expect("metadata").len(), SPARSE_SIZE);
@@ -207,7 +207,7 @@ fn a_replaced_copy_shares_blocks_and_its_old_body_is_gone(fixture: &mut Fixture)
     let plan = fixture.prepare("success").expect("independent pair is replaceable");
     assert!(!plan.low_space);
     let replaced = plan
-        .execute(&mut fixture.clone_journal)
+        .execute(&mut fixture.clone_journal, &CancelToken::default(), &|_| {})
         .expect("copy is replaced with a clone");
 
     assert_eq!(

@@ -109,6 +109,11 @@ define_class!(
             self.dispatch(ShellAction::ToggleCopy(tag_of(sender)));
         }
 
+        #[unsafe(method(stopClones:))]
+        fn stop_clones(&self, _sender: Option<&AnyObject>) {
+            self.dispatch(ShellAction::StopClones);
+        }
+
         #[unsafe(method(applyDuplicates:))]
         fn apply_duplicates(&self, _sender: Option<&AnyObject>) {
             self.dispatch(ShellAction::ApplyDuplicates);

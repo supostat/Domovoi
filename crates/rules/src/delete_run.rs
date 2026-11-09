@@ -209,7 +209,7 @@ fn compare_with_kept(copy: &Path, kept: &Path, cancel: &CancelToken) -> Result<C
     if kept_size != size {
         return Ok(ContentComparison::Different);
     }
-    ContentComparison::of(&copy, &kept, size, cancel).map_err(|error| DeleteFailure::from_io(&error))
+    ContentComparison::of(&copy, &kept, size, cancel, &|_| {}).map_err(|error| DeleteFailure::from_io(&error))
 }
 
 fn open_for_comparison(path: &Path) -> io::Result<File> {

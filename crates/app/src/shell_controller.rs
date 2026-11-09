@@ -44,7 +44,9 @@ use crate::card_model::CardModel;
 use crate::care_models::CareModels;
 #[cfg(feature = "claude-code")]
 use crate::claude_search::installed_claude_code;
+use crate::clone_job::CloneJob;
 use crate::clone_refusal_text::clone_refusal_text;
+use crate::clone_run::CloneRun;
 use crate::csv_export::csv_lines;
 use crate::delete_job::DeleteJob;
 use crate::delete_outcome::DeleteOutcome;
@@ -103,9 +105,9 @@ use crate::shell_root_view::ShellRootView;
 use crate::shell_state::ShellState;
 use crate::stage::Stage;
 use crate::strings::{
-    APP_NAME, CANCEL, CLONED, DELETE, DELETE_CONFIRM, DELETE_CONFIRM_HINT, DIAGRAM, FAILURE_CLOSE, FAILURE_TITLE,
-    FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, OPEN_DISK_UTILITY, PROTECTION_UNCHECKED, TERMINAL_MISSING, TMUTIL_COPIED,
-    UNRESPONSIVE_TITLE, UPDATING_INDEX, csv_file_name, unresponsive_body,
+    APP_NAME, CANCEL, CLONED, CLONES_STOPPED, DELETE, DELETE_CONFIRM, DELETE_CONFIRM_HINT, DIAGRAM, FAILURE_CLOSE,
+    FAILURE_TITLE, FDA_SETTINGS_URL, NOT_CLONED, OBJECTS, OPEN_DISK_UTILITY, PROTECTION_UNCHECKED, TERMINAL_MISSING,
+    TMUTIL_COPIED, UNRESPONSIVE_TITLE, UPDATING_INDEX, csv_file_name, unresponsive_body,
 };
 use crate::tilde::tilde;
 use crate::tmutil_commands::tmutil_commands;
@@ -117,6 +119,7 @@ use crate::tray_sheet::TraySheet;
 
 const SCAN_TICK: f64 = 1.0 / 30.0;
 const SEARCH_TICK: f64 = 1.0 / 10.0;
+const CLONE_TICK: f64 = 1.0 / 10.0;
 const EVENTS_TICK: f64 = 0.5;
 const MEASURE_TICK: f64 = 0.25;
 const TERMINAL_BUNDLE: &str = "com.apple.Terminal";
@@ -266,6 +269,9 @@ impl ShellController {
         }
         if let Some(job) = &state.search {
             job.stop();
+        }
+        if let Some(run) = &state.cloning {
+            run.stop();
         }
         if let Some(run) = state.delete.take() {
             run.stop();
@@ -984,7 +990,11 @@ impl ShellController {
             if job.absorb_progress()
                 && let Some(ScreenViews::Duplicates(screen)) = views.as_ref()
             {
-                screen.show_progress(job.stage.title(), job.done, job.total);
+                screen.show_progress(&DuplicatesState::Searching {
+                    stage: job.stage,
+                    done: job.done,
+                    total: job.total,
+                });
             }
             if job.is_finished() { search.take() } else { None }
         };
@@ -1036,28 +1046,66 @@ impl ShellController {
             }
             return self.open_tray();
         }
-        let mut freed = 0;
-        let mut failures = Vec::new();
+        let session = self
+            .state
+            .borrow_mut()
+            .session
+            .take()
+            .expect("duplicates come from an open session");
+        let timer = self.repeating(CLONE_TICK, ShellController::clone_tick);
         {
             let mut state = self.state.borrow_mut();
-            let session = state.session.as_mut().expect("duplicates come from an open session");
-            for (keep, copy) in pairs {
-                let index = session.index().expect("duplicates come from an open session");
-                let path = index.path(copy);
-                let reclaimed = index.reclaimable(copy).map_or(0, |reclaimable| reclaimable.bytes);
-                match session.replace_with_clone(keep, copy) {
-                    Ok(_) => freed += reclaimed,
-                    Err(error) => failures.push(format!("{} — {}", tilde(&path), clone_refusal_text(&error))),
-                }
-            }
+            let run = CloneRun::start(CloneJob::start(session, pairs), timer);
+            state.care_mut().duplicates.state = run.state();
+            state.cloning = Some(run);
         }
+        self.show_current();
+    }
+
+    fn clone_tick(&self) {
+        let finished = {
+            let mut state = self.state.borrow_mut();
+            let ShellState { cloning, views, .. } = &mut *state;
+            let Some(run) = cloning.as_mut() else {
+                return;
+            };
+            if run.absorb_progress()
+                && let Some(ScreenViews::Duplicates(screen)) = views.as_ref()
+            {
+                screen.show_progress(&run.state());
+            }
+            if run.is_finished() { cloning.take() } else { None }
+        };
+        let Some(run) = finished else {
+            return;
+        };
+        let (session, outcome) = run.finish();
+        self.state.borrow_mut().session = Some(session);
+        let outcome = match outcome {
+            Ok(outcome) => outcome,
+            Err(error) => return self.fail(&error.to_string()),
+        };
         self.refresh();
-        let mut lines = vec![format!("{CLONED} {}", format_size(freed))];
-        if !failures.is_empty() {
+        let mut lines = vec![format!("{CLONED} {}", format_size(outcome.freed))];
+        if !outcome.failures.is_empty() {
             lines.push(NOT_CLONED.to_owned());
-            lines.extend(failures);
+            lines.extend(
+                outcome
+                    .failures
+                    .iter()
+                    .map(|(path, error)| format!("{} — {}", tilde(path), clone_refusal_text(error))),
+            );
+        }
+        if outcome.stopped {
+            lines.push(CLONES_STOPPED.to_owned());
         }
         self.inform(&lines.join("\n"));
+    }
+
+    fn stop_clones(&self) {
+        if let Some(run) = &self.state.borrow().cloning {
+            run.stop();
+        }
     }
 
     fn open_tray(&self) {
@@ -1804,6 +1852,7 @@ impl ActionHandler for ShellController {
             ShellAction::SelectDuplicateAction(clone) => self.select_duplicate_action(clone),
             ShellAction::ToggleCopy(tag) => self.toggle_copy(tag),
             ShellAction::ApplyDuplicates => self.apply_duplicates(),
+            ShellAction::StopClones => self.stop_clones(),
             ShellAction::DeleteTray => self.delete_tray(),
             ShellAction::StopDelete => self.stop_delete(),
             ShellAction::CloseTray => self.close_tray(),

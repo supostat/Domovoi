@@ -3,7 +3,8 @@ use domovoi_dups::{CloneRefusal, CloneReplaceError};
 use crate::strings::{
     REFUSED_ALREADY_CLONES, REFUSED_BUSY, REFUSED_CHANGED, REFUSED_DENIED, REFUSED_HARD_LINKED, REFUSED_NOT_OWNED,
     REFUSED_NOT_REGULAR, REFUSED_NOT_WRITABLE, REFUSED_OPEN, REFUSED_OTHER_VOLUME, REFUSED_PACKAGE, REFUSED_PROTECTED,
-    REFUSED_PURGEABLE, REFUSED_SYNCED, REFUSED_UNREADABLE, REFUSED_VOLUME_CANNOT_CLONE, REFUSED_VOLUME_CANNOT_SWAP,
+    REFUSED_PURGEABLE, REFUSED_STOPPED, REFUSED_SYNCED, REFUSED_UNREADABLE, REFUSED_VOLUME_CANNOT_CLONE,
+    REFUSED_VOLUME_CANNOT_SWAP,
 };
 
 pub(crate) fn clone_refusal_text(error: &CloneReplaceError) -> &'static str {
@@ -27,5 +28,6 @@ pub(crate) fn clone_refusal_text(error: &CloneReplaceError) -> &'static str {
             CloneRefusal::ContentChanged => REFUSED_CHANGED,
         },
         CloneReplaceError::OldBodyNotDeleted { .. } | CloneReplaceError::Io(_) => REFUSED_UNREADABLE,
+        CloneReplaceError::Stopped => REFUSED_STOPPED,
     }
 }

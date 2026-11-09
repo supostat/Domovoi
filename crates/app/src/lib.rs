@@ -46,7 +46,11 @@ mod check_box;
 mod claude_code_choice;
 #[cfg(feature = "claude-code")]
 mod claude_search;
+mod clone_job;
+mod clone_progress;
 mod clone_refusal_text;
+mod clone_run;
+mod clones_outcome;
 mod command_line;
 mod crumb;
 mod csv_export;
@@ -263,6 +267,9 @@ pub use check_box::CheckBox;
 pub use claude_code_choice::ClaudeCodeChoice;
 #[cfg(feature = "claude-code")]
 pub use claude_search::{claude_directories, find_claude};
+pub use clone_job::CloneJob;
+pub use clone_progress::CloneProgress;
+pub use clones_outcome::ClonesOutcome;
 pub use command_line::CommandLine;
 pub use crumb::Crumb;
 pub use csv_export::csv_lines;

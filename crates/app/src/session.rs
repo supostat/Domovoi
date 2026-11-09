@@ -3,7 +3,7 @@ use std::io;
 use std::mem;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread;
 
 use domovoi_agent::{Agent, AgentAnswer, AgentContext, AgentError, AgentLimits, ToolStep};
@@ -29,6 +29,8 @@ use domovoi_scanner::{
 };
 
 use crate::cache_opening::CacheOpening;
+use crate::clone_progress::CloneProgress;
+use crate::clones_outcome::ClonesOutcome;
 use crate::drop_verdict::DropVerdict;
 use crate::event_effect::EventEffect;
 use crate::event_request::EventRequest;
@@ -435,18 +437,52 @@ impl Session {
         self.rescan_paths(&gone)
     }
 
-    pub fn clone_plan(&self, keep: NodeId, copy: NodeId) -> Result<ClonePlan, CloneReplaceError> {
+    pub fn clone_assessment(&self, keep: NodeId, copy: NodeId) -> Result<(), CloneReplaceError> {
         let index = self.index.as_ref().expect("clones replace copies of a scanned volume");
-        ClonePlan::prepare(index, keep, copy, &self.denylist, &self.cloud_folders)
+        ClonePlan::assess(index, keep, copy, &self.denylist, &self.cloud_folders)
     }
 
-    pub fn replace_with_clone(&mut self, keep: NodeId, copy: NodeId) -> Result<CloneReplaced, CloneReplaceError> {
+    pub fn clone_bytes(&self, pairs: &[(NodeId, NodeId)]) -> u64 {
         let index = self.index.as_ref().expect("clones replace copies of a scanned volume");
-        let copy_path = index.path(copy);
-        let replaced = self.clone_plan(keep, copy)?.execute(&mut self.clone_journal)?;
-        self.rescan_paths(&[copy_path])
-            .map_err(|error| CloneReplaceError::Io(io::Error::other(error.to_string())))?;
-        Ok(replaced)
+        pairs.iter().map(|(_, copy)| index.node(*copy).total_size).sum()
+    }
+
+    pub fn replace_with_clones(
+        &mut self,
+        pairs: &[(NodeId, NodeId)],
+        progress: Option<&SyncSender<CloneProgress>>,
+        cancel: &CancelToken,
+    ) -> Result<ClonesOutcome, SessionError> {
+        let total = self.clone_bytes(pairs);
+        let index = self.index.as_ref().expect("clones replace copies of a scanned volume");
+        let mut outcome = ClonesOutcome::default();
+        let mut replaced = Vec::new();
+        let mut finished = 0;
+        for (keep, copy) in pairs {
+            if cancel.is_cancelled() {
+                outcome.stopped = true;
+                break;
+            }
+            let path = index.path(*copy);
+            let compared = |offset: u64| report_clone_progress(progress, finished + offset, total);
+            let result = ClonePlan::prepare(index, *keep, *copy, &self.denylist, &self.cloud_folders)
+                .and_then(|plan| plan.execute(&mut self.clone_journal, cancel, &compared));
+            finished += index.node(*copy).total_size;
+            match result {
+                Ok(CloneReplaced { freed_bytes }) => {
+                    outcome.freed += freed_bytes;
+                    replaced.push(path);
+                }
+                Err(CloneReplaceError::Stopped) => {
+                    outcome.stopped = true;
+                    break;
+                }
+                Err(error) => outcome.failures.push((path, error)),
+            }
+            report_clone_progress(progress, finished, total);
+        }
+        self.rescan_paths(&replaced)?;
+        Ok(outcome)
     }
 
     fn refresh_screen_captures(&mut self) {
@@ -537,6 +573,14 @@ impl Session {
                 }
             }
             duplicates.groups = remapped;
+        }
+    }
+}
+
+fn report_clone_progress(progress: Option<&SyncSender<CloneProgress>>, done: u64, total: u64) {
+    if let Some(sender) = progress {
+        match sender.try_send(CloneProgress { done, total }) {
+            Ok(()) | Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {}
         }
     }
 }

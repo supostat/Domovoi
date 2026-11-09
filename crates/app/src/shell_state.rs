@@ -14,6 +14,7 @@ use crate::apply_job::ApplyJob;
 use crate::assistant::Assistant;
 use crate::cached_tray_summary::CachedTraySummary;
 use crate::care_models::CareModels;
+use crate::clone_run::CloneRun;
 use crate::delete_run::DeleteRun;
 use crate::disk_overview::DiskOverview;
 use crate::duplicate_job::DuplicateJob;
@@ -61,6 +62,7 @@ pub(crate) struct ShellState {
     pub views_key: Option<ScreenKey>,
     pub scan: Option<ScanJob>,
     pub search: Option<DuplicateJob>,
+    pub cloning: Option<CloneRun>,
     pub duplicate_summary: Option<DuplicateSummary>,
     pub duplicate_failure: Option<String>,
     pub clone_mode: bool,
@@ -106,6 +108,7 @@ impl ShellState {
             views_key: None,
             scan: None,
             search: None,
+            cloning: None,
             duplicate_summary: None,
             duplicate_failure: None,
             clone_mode: false,
@@ -329,7 +332,7 @@ impl ShellState {
         };
         duplicates.clone_mode = self.clone_mode;
         if self.clone_mode {
-            duplicates.assess_clones(|keep, copy| session.clone_plan(keep, copy).map(drop));
+            duplicates.assess_clones(|keep, copy| session.clone_assessment(keep, copy));
         }
         if let Some(previous) = previous {
             for copy in duplicates

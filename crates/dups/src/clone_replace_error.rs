@@ -10,6 +10,7 @@ pub enum CloneReplaceError {
     Refused(CloneRefusal),
     OldBodyNotDeleted { location: PathBuf, failure: DeleteFailure },
     Io(io::Error),
+    Stopped,
 }
 
 impl From<io::Error> for CloneReplaceError {

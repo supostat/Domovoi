@@ -33,6 +33,7 @@ enum DuplicatesBody {
     Idle,
     Failed,
     Searching,
+    Cloning,
     NoneFound,
     Found { clone_mode: bool, clone_available: bool },
 }
@@ -68,6 +69,7 @@ impl DuplicatesBody {
             DuplicatesState::Idle => Self::Idle,
             DuplicatesState::Failed { .. } => Self::Failed,
             DuplicatesState::Searching { .. } => Self::Searching,
+            DuplicatesState::Cloning { .. } => Self::Cloning,
             DuplicatesState::Found { groups, .. } if groups.is_empty() => Self::NoneFound,
             DuplicatesState::Found { .. } => Self::Found {
                 clone_mode: model.clone_mode,

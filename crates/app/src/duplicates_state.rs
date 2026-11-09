@@ -12,6 +12,10 @@ pub enum DuplicatesState {
         done: u64,
         total: u64,
     },
+    Cloning {
+        done: u64,
+        total: u64,
+    },
     Found {
         candidates: u64,
         seconds: u64,

@@ -62,8 +62,17 @@ pub struct ClonePlan {
     pending: PendingReplacement,
 }
 
-impl ClonePlan {
-    pub fn prepare(
+struct Preconditions {
+    original: PathBuf,
+    copy: PathBuf,
+    directory: PathBuf,
+    copy_metadata: fs::Metadata,
+    volume: PathBuf,
+    canonical: PathBuf,
+}
+
+impl Preconditions {
+    fn check(
         index: &Index,
         keep: NodeId,
         copy: NodeId,
@@ -124,37 +133,75 @@ impl ClonePlan {
         if cloud_folders.contains(&canonical) || inside_sync_root(index, copy) {
             return Err(CloneRefusal::SyncedFolder.into());
         }
-        let holders = other_processes_holding(&copy_path)?;
-        if !holders.is_empty() {
-            return Err(CloneRefusal::OpenElsewhere(holders).into());
-        }
         if original_stream.clone_id == copy_stream.clone_id {
             return Err(CloneRefusal::AlreadyClones.into());
         }
-        let capacity = container_capacity(&volume)?;
-        let temporary = directory.join(format!("{TEMPORARY_PREFIX}{}", NSUUID::UUID().UUIDString()));
+        Ok(Self {
+            original,
+            copy: copy_path,
+            directory,
+            copy_metadata,
+            volume,
+            canonical,
+        })
+    }
+}
+
+impl ClonePlan {
+    pub fn assess(
+        index: &Index,
+        keep: NodeId,
+        copy: NodeId,
+        denylist: &Denylist,
+        cloud_folders: &CloudFolders,
+    ) -> Result<(), CloneReplaceError> {
+        Preconditions::check(index, keep, copy, denylist, cloud_folders).map(drop)
+    }
+
+    pub fn prepare(
+        index: &Index,
+        keep: NodeId,
+        copy: NodeId,
+        denylist: &Denylist,
+        cloud_folders: &CloudFolders,
+    ) -> Result<Self, CloneReplaceError> {
+        let checked = Preconditions::check(index, keep, copy, denylist, cloud_folders)?;
+        let holders = other_processes_holding(&checked.copy)?;
+        if !holders.is_empty() {
+            return Err(CloneRefusal::OpenElsewhere(holders).into());
+        }
+        let capacity = container_capacity(&checked.volume)?;
+        let temporary = checked
+            .directory
+            .join(format!("{TEMPORARY_PREFIX}{}", NSUUID::UUID().UUIDString()));
         let pending = PendingReplacement {
-            copy: canonical.to_string_lossy().into_owned(),
-            copy_physical: copy_path.to_string_lossy().into_owned(),
+            copy: checked.canonical.to_string_lossy().into_owned(),
+            copy_physical: checked.copy.to_string_lossy().into_owned(),
             temporary: temporary.to_string_lossy().into_owned(),
-            link_id: link_id(&copy_path)?,
+            link_id: link_id(&checked.copy)?,
             alloc_size: index.node(copy).alloc_size,
         };
+        let metadata = &checked.copy_metadata;
         Ok(Self {
             low_space: capacity.available.saturating_mul(LOW_SPACE_DIVISOR) < capacity.size,
-            original,
-            copy_device: copy_metadata.dev(),
-            copy_inode: copy_metadata.ino(),
-            copy_size: copy_metadata.len(),
-            copy_modified: copy_metadata.modified()?,
-            copy_generation: gen_count(&copy_path)?,
-            directory_modified: fs::metadata(&directory)?.modified()?,
-            copy: copy_path,
+            copy_device: metadata.dev(),
+            copy_inode: metadata.ino(),
+            copy_size: metadata.len(),
+            copy_modified: metadata.modified()?,
+            copy_generation: gen_count(&checked.copy)?,
+            directory_modified: fs::metadata(&checked.directory)?.modified()?,
+            original: checked.original,
+            copy: checked.copy,
             pending,
         })
     }
 
-    pub fn execute(self, clone_journal: &mut CloneJournal) -> Result<CloneReplaced, CloneReplaceError> {
+    pub fn execute(
+        self,
+        clone_journal: &mut CloneJournal,
+        cancel: &CancelToken,
+        compared: &dyn Fn(u64),
+    ) -> Result<CloneReplaced, CloneReplaceError> {
         let temporary = PathBuf::from(&self.pending.temporary);
         let directory = File::open(parent_of(&self.copy)?)?;
         let original_directory = File::open(parent_of(&self.original)?)?;
@@ -167,7 +214,7 @@ impl ClonePlan {
             temporary_name,
         )
         .map_err(CloneReplaceError::from)
-        .and_then(|()| self.prepare_clone(&temporary))
+        .and_then(|()| self.prepare_clone(&temporary, cancel, compared))
         .and_then(|()| self.swap_coordinated(&directory, temporary_name));
         if let Err(error) = replaced {
             clone_journal.settle(&temporary)?;
@@ -187,7 +234,12 @@ impl ClonePlan {
         })
     }
 
-    fn prepare_clone(&self, temporary: &Path) -> Result<(), CloneReplaceError> {
+    fn prepare_clone(
+        &self,
+        temporary: &Path,
+        cancel: &CancelToken,
+        compared: &dyn Fn(u64),
+    ) -> Result<(), CloneReplaceError> {
         let copy_file = open_without_cache(&self.copy)?;
         let clone_file = OpenOptions::new()
             .read(true)
@@ -197,18 +249,19 @@ impl ClonePlan {
         set_nocache(clone_file.as_fd())?;
         copy_metadata(copy_file.as_fd(), clone_file.as_fd())?;
         let opened = copy_file.metadata()?;
-        let unchanged = opened.dev() == self.copy_device
+        let identity_unchanged = opened.dev() == self.copy_device
             && opened.ino() == self.copy_inode
             && opened.len() == self.copy_size
             && opened.modified()? == self.copy_modified
             && self.copy_is_untouched()?
-            && clone_file.metadata()?.len() == self.copy_size
-            && ContentComparison::of(&copy_file, &clone_file, self.copy_size, &CancelToken::default())?
-                == ContentComparison::Same;
-        if unchanged {
-            Ok(())
-        } else {
-            Err(CloneRefusal::ContentChanged.into())
+            && clone_file.metadata()?.len() == self.copy_size;
+        if !identity_unchanged {
+            return Err(CloneRefusal::ContentChanged.into());
+        }
+        match ContentComparison::of(&copy_file, &clone_file, self.copy_size, cancel, compared)? {
+            ContentComparison::Same => Ok(()),
+            ContentComparison::Different => Err(CloneRefusal::ContentChanged.into()),
+            ContentComparison::Stopped => Err(CloneReplaceError::Stopped),
         }
     }
 

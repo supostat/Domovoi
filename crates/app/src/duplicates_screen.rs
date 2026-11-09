@@ -4,6 +4,7 @@ use domovoi_theme::format_size;
 use objc2::Message;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
+use objc2::runtime::Sel;
 use objc2::{MainThreadMarker, MainThreadOnly, sel};
 use objc2_app_kit::{
     NSAutoresizingMaskOptions, NSLineBreakMode, NSOutlineView, NSScrollView, NSTableColumn,
@@ -31,8 +32,8 @@ use crate::shell_data::ShellData;
 use crate::shell_layout::{PANE_PADDING, WINDOW, from_top};
 use crate::shell_palette::ShellPalette;
 use crate::strings::{
-    ACTION_CLONE, ACTION_DELETE, CLONE_EXPLANATION, DUPLICATES, DUPLICATES_FAILED, DUPLICATES_IDLE, DUPLICATES_NOTE,
-    FIND_DUPLICATES, NO_DUPLICATES, OF, OTHER_USERS_FILES, STOP, TO_TRAY,
+    ACTION_CLONE, ACTION_DELETE, CLONE_EXPLANATION, CLONING, DUPLICATES, DUPLICATES_FAILED, DUPLICATES_IDLE,
+    DUPLICATES_NOTE, FIND_DUPLICATES, NO_DUPLICATES, OF, OTHER_USERS_FILES, STOP, TO_TRAY,
 };
 use crate::toggle_switch::{SIZE as TOGGLE_SIZE, ToggleSwitch};
 use crate::ui_font::{interface_font, mono_font};
@@ -98,15 +99,8 @@ impl DuplicatesScreen {
                 ),
                 body,
             )),
-            DuplicatesState::Searching { done, total, .. } => {
-                progress = Some(progress_block(
-                    marker,
-                    &frame.pane,
-                    body,
-                    (*done, *total),
-                    palette,
-                    actions,
-                ));
+            state @ (DuplicatesState::Searching { .. } | DuplicatesState::Cloning { .. }) => {
+                progress = Some(progress_block(marker, &frame.pane, body, state, palette, actions));
             }
             DuplicatesState::Found { .. } if groups.is_empty() => {
                 frame.pane.addSubview(&placed(
@@ -143,12 +137,11 @@ impl DuplicatesScreen {
         self.show(&data.care.duplicates);
     }
 
-    pub fn show_progress(&self, stage: &str, done: u64, total: u64) {
-        if let Some((bar, count, title)) = &self.progress {
-            let share = done as f64 / total.max(1) as f64;
-            bar.setFrameSize(NSSize::new(PROGRESS_WIDTH * share.clamp(0.0, 1.0), PROGRESS_HEIGHT));
-            retext(count, &progress_count(done, total));
-            title.setStringValue(&NSString::from_str(stage));
+    pub fn show_progress(&self, state: &DuplicatesState) {
+        if let (Some((bar, count, title)), Some(progress)) = (&self.progress, Progress::of(state)) {
+            bar.setFrameSize(NSSize::new(PROGRESS_WIDTH * progress.share(), PROGRESS_HEIGHT));
+            retext(count, &progress.count);
+            title.setStringValue(&NSString::from_str(progress.title));
         }
     }
 
@@ -165,9 +158,7 @@ impl DuplicatesScreen {
 
     fn show(&self, model: &DuplicatesModel) {
         self.show_selection(model);
-        if let DuplicatesState::Searching { stage, done, total } = &model.state {
-            self.show_progress(stage.title(), *done, *total);
-        }
+        self.show_progress(&model.state);
     }
 
     fn show_titles(&self, model: &DuplicatesModel) {
@@ -224,6 +215,7 @@ fn subtitle_line(model: &DuplicatesModel) -> Option<String> {
     match &model.state {
         DuplicatesState::Found { .. } => model.checked_line(),
         DuplicatesState::Searching { stage, .. } => Some(stage.title().to_owned()),
+        DuplicatesState::Cloning { .. } => Some(CLONING.to_owned()),
         DuplicatesState::Idle | DuplicatesState::Failed { .. } => None,
     }
 }
@@ -263,7 +255,7 @@ fn head_controls(
     });
     let searching = matches!(
         model.state,
-        DuplicatesState::Searching { .. } | DuplicatesState::Found { .. }
+        DuplicatesState::Searching { .. } | DuplicatesState::Cloning { .. } | DuplicatesState::Found { .. }
     );
     let toggle = ToggleSwitch::new(
         marker,
@@ -309,8 +301,38 @@ fn apply_title(model: &DuplicatesModel) -> String {
     format!("{verb} · {}", format_size(model.will_free()))
 }
 
-fn progress_count(done: u64, total: u64) -> String {
-    format!("{done} {OF} {total}")
+struct Progress {
+    title: &'static str,
+    done: u64,
+    total: u64,
+    count: String,
+    stop: Sel,
+}
+
+impl Progress {
+    fn of(state: &DuplicatesState) -> Option<Self> {
+        match state {
+            DuplicatesState::Searching { stage, done, total } => Some(Self {
+                title: stage.title(),
+                done: *done,
+                total: *total,
+                count: format!("{done} {OF} {total}"),
+                stop: sel!(toggleDuplicateSearch:),
+            }),
+            DuplicatesState::Cloning { done, total } => Some(Self {
+                title: CLONING,
+                done: *done,
+                total: *total,
+                count: format!("{} {OF} {}", format_size(*done), format_size(*total)),
+                stop: sel!(stopClones:),
+            }),
+            DuplicatesState::Idle | DuplicatesState::Found { .. } | DuplicatesState::Failed { .. } => None,
+        }
+    }
+
+    fn share(&self) -> f64 {
+        (self.done as f64 / self.total.max(1) as f64).clamp(0.0, 1.0)
+    }
 }
 
 fn footer(
@@ -416,10 +438,11 @@ fn progress_block(
     marker: MainThreadMarker,
     pane: &NSView,
     body: NSRect,
-    (done, total): (u64, u64),
+    state: &DuplicatesState,
     palette: &ShellPalette,
     actions: &ShellActions,
 ) -> (Retained<FillView>, Retained<NSTextField>, Retained<NSTextField>) {
+    let progress = Progress::of(state).expect("a progress block shows a running search or replacement");
     let tokens = palette.tokens;
     let container = NSView::initWithFrame(NSView::alloc(marker), body);
     container.setAutoresizingMask(
@@ -432,12 +455,7 @@ fn progress_block(
         &tokens.text.ns_color(),
         NSLineBreakMode::ByTruncatingTail,
     );
-    let count = measure_label(
-        marker,
-        &progress_count(done, total),
-        &mono_font(12.0, 400.0),
-        &tokens.dim.ns_color(),
-    );
+    let count = measure_label(marker, &progress.count, &mono_font(12.0, 400.0), &tokens.dim.ns_color());
     let stop = ShellButton::new(
         marker,
         STOP,
@@ -450,7 +468,7 @@ fn progress_block(
             font: interface_font(13.0, 500.0),
         },
     );
-    stop.on_click(actions, sel!(toggleDuplicateSearch:));
+    stop.on_click(actions, progress.stop);
     let title_height = title.fittingSize().height.max(20.0);
     let count_size = count.fittingSize();
     let stop_size = stop.frame().size;
@@ -513,10 +531,9 @@ fn progress_block(
     }
     pane.addSubview(&container);
     let parts = (bar, count, title);
-    parts.0.setFrameSize(NSSize::new(
-        PROGRESS_WIDTH * (done as f64 / total.max(1) as f64).clamp(0.0, 1.0),
-        PROGRESS_HEIGHT,
-    ));
+    parts
+        .0
+        .setFrameSize(NSSize::new(PROGRESS_WIDTH * progress.share(), PROGRESS_HEIGHT));
     parts
 }
 

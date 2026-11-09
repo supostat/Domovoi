@@ -31,6 +31,7 @@ use crate::cache_opening::CacheOpening;
 use crate::card_question::card_focus;
 use crate::care_models::CareModels;
 use crate::chat_model::ChatModel;
+use crate::clone_job::CloneJob;
 use crate::csv_export::csv_lines;
 use crate::delete_job::DeleteJob;
 use crate::delete_outcome::DeleteOutcome;
@@ -386,7 +387,7 @@ impl EndToEnd {
             + duplicates.skipped.len() as u64;
         self.duplicates = Some(DuplicateSummary { candidates, seconds });
         let mut model = DuplicatesModel::found(index, duplicates, candidates, seconds);
-        model.assess_clones(|keep, copy| session.clone_plan(keep, copy).map(drop));
+        model.assess_clones(|keep, copy| session.clone_assessment(keep, copy));
         model
     }
 
@@ -585,11 +586,14 @@ impl EndToEnd {
             .find(|(_, copy)| copy.can_check(true))
             .and_then(|(group, copy)| Some((group.keep.node?, copy.node?)))
             .ok_or("no copy can be replaced with a clone")?;
-        let replaced = self
-            .session_mut()
-            .replace_with_clone(keep, copy)
-            .map_err(|error| format!("{error:?}"))?;
-        Ok(json!({ "step": "replace_with_clone", "freed": replaced.freed_bytes }))
+        let session = self.session.take().expect(SESSION_BETWEEN_STEPS);
+        let (session, outcome) = CloneJob::start(session, vec![(keep, copy)]).finish();
+        self.session = Some(session);
+        let outcome = outcome.map_err(|error| error.to_string())?;
+        if let Some((path, error)) = outcome.failures.first() {
+            return Err(format!("{} was not replaced: {error:?}", path.display()));
+        }
+        Ok(json!({ "step": "replace_with_clone", "freed": outcome.freed }))
     }
 
     fn download_model(&mut self, catalog: &Path, entry: &str, mirror: &str, models: &Path) -> Result<Value, String> {

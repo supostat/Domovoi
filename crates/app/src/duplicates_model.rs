@@ -84,14 +84,20 @@ impl DuplicatesModel {
     pub fn groups(&self) -> &[GroupModel] {
         match &self.state {
             DuplicatesState::Found { groups, .. } => groups,
-            DuplicatesState::Idle | DuplicatesState::Searching { .. } | DuplicatesState::Failed { .. } => &[],
+            DuplicatesState::Idle
+            | DuplicatesState::Searching { .. }
+            | DuplicatesState::Cloning { .. }
+            | DuplicatesState::Failed { .. } => &[],
         }
     }
 
     pub fn groups_mut(&mut self) -> &mut [GroupModel] {
         match &mut self.state {
             DuplicatesState::Found { groups, .. } => groups,
-            DuplicatesState::Idle | DuplicatesState::Searching { .. } | DuplicatesState::Failed { .. } => &mut [],
+            DuplicatesState::Idle
+            | DuplicatesState::Searching { .. }
+            | DuplicatesState::Cloning { .. }
+            | DuplicatesState::Failed { .. } => &mut [],
         }
     }
 
@@ -150,7 +156,10 @@ impl DuplicatesModel {
                 seconds / SECONDS_PER_MINUTE,
                 seconds % SECONDS_PER_MINUTE
             )),
-            DuplicatesState::Idle | DuplicatesState::Searching { .. } | DuplicatesState::Failed { .. } => None,
+            DuplicatesState::Idle
+            | DuplicatesState::Searching { .. }
+            | DuplicatesState::Cloning { .. }
+            | DuplicatesState::Failed { .. } => None,
         }
     }
 

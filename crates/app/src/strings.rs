@@ -217,6 +217,7 @@ pub const REFUSED_OPEN: &str = "файл открыт в другом прило
 pub const REFUSED_ALREADY_CLONES: &str = "уже клоны";
 pub const REFUSED_CHANGED: &str = "содержимое изменилось";
 pub const REFUSED_UNREADABLE: &str = "файл не читается";
+pub const REFUSED_STOPPED: &str = "замена остановлена";
 
 pub const WILL_DELETE: &str = "Будет удалено";
 pub const TRAY_NOTE: &str =
@@ -281,6 +282,8 @@ pub const STOPPED_MIDWAY: &str = "остановлено на середине";
 pub const NOT_STARTED: &str = "не начато";
 pub const CLONED: &str = "Заменено клоном:";
 pub const NOT_CLONED: &str = "Не заменено:";
+pub const CLONING: &str = "Заменяю копии клонами";
+pub const CLONES_STOPPED: &str = "Остановлено: остальные копии не тронуты.";
 pub const PURGE_SPACE: &str = "Освободить…";
 pub const PURGE_TITLE: &str = "Освобождение";
 pub const PURGE_RELEASE: &str = "Освободить";

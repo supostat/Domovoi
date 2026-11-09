@@ -34,6 +34,7 @@ pub enum ShellAction {
     SelectDuplicateAction(bool),
     ToggleCopy(usize),
     ApplyDuplicates,
+    StopClones,
     DeleteTray,
     UnmarkTrayRow(usize),
     DragFromList,

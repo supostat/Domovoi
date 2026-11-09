@@ -158,7 +158,7 @@ fn a_comparison_stops_when_the_delete_is_stopped() {
     let cancel = CancelToken::default();
     cancel.cancel();
 
-    let comparison = ContentComparison::of(&copy, &kept, SIZE, &cancel).expect("the files read");
+    let comparison = ContentComparison::of(&copy, &kept, SIZE, &cancel, &|_| {}).expect("the files read");
 
     assert_eq!(comparison, ContentComparison::Stopped);
 }
