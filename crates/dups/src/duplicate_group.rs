@@ -4,6 +4,8 @@ use domovoi_index::{Index, NodeId, Reclaimable};
 use domovoi_rules::{DeleteRefusal, DeleteSubject, Denylist, Tray};
 
 use crate::duplicate_copy::DuplicateCopy;
+use crate::skip_reason::SkipReason;
+use crate::skipped_file::SkippedFile;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DuplicateGroup {
@@ -14,7 +16,7 @@ pub struct DuplicateGroup {
 }
 
 impl DuplicateGroup {
-    pub fn of_members(index: &Index, size: u64, members: &[NodeId]) -> io::Result<Option<Self>> {
+    pub fn of_members(index: &Index, size: u64, members: &[NodeId], skipped: &mut Vec<SkippedFile>) -> Option<Self> {
         let placed: Vec<(NodeId, Option<NodeId>)> = members
             .iter()
             .map(|member| (*member, index.enclosing_package(*member)))
@@ -33,28 +35,41 @@ impl DuplicateGroup {
                 )
             })
             .expect("a duplicate group has members");
-        let copies: Vec<DuplicateCopy> = placed
-            .iter()
-            .filter(|(member, _)| *member != keep)
-            .map(|(member, package)| DuplicateCopy {
+        let mut copies = Vec::with_capacity(placed.len() - 1);
+        for (member, package) in placed.iter().filter(|(member, _)| *member != keep) {
+            let mut copy = DuplicateCopy {
                 node: *member,
                 shares_with_kept: shares_blocks_with_kept(index, keep, *member),
                 package: *package,
-            })
-            .collect();
+                reclaimable: Reclaimable::default(),
+            };
+            if copy.is_removable() {
+                match index.reclaimable(copy.node) {
+                    Ok(reclaimable) => copy.reclaimable = reclaimable,
+                    Err(error) => {
+                        skipped.push(SkippedFile {
+                            node: copy.node,
+                            reason: SkipReason::of(&error),
+                        });
+                        continue;
+                    }
+                }
+            }
+            copies.push(copy);
+        }
         if copies.iter().all(|copy| copy.package.is_some()) {
-            return Ok(None);
+            return None;
         }
         let mut reclaimable = Reclaimable::default();
         for copy in copies.iter().filter(|copy| copy.is_removable()) {
-            reclaimable += index.reclaimable(copy.node)?;
+            reclaimable += copy.reclaimable;
         }
-        Ok(Some(Self {
+        Some(Self {
             size,
             keep,
             copies,
             reclaimable,
-        }))
+        })
     }
 
     pub fn take_copies_for_delete(

@@ -9,7 +9,6 @@ use std::time::{Duration, Instant, SystemTime};
 
 use block2::RcBlock;
 use domovoi_downloader::{Catalog, ModelStore};
-use domovoi_dups::SearchError;
 use domovoi_index::Reclaimable;
 use domovoi_log_sys::SystemLog;
 use domovoi_render::{
@@ -479,10 +478,7 @@ impl ShellController {
     }
 
     fn refresh(&self) {
-        let rebuilt = self.state.borrow_mut().rebuild_data(SystemTime::now());
-        if let Err(error) = rebuilt {
-            return self.fail(&error.to_string());
-        }
+        self.state.borrow_mut().rebuild_data(SystemTime::now());
         {
             let state = self.state.borrow();
             if let (Some(ScreenViews::Main { diagram, .. }), Some(data)) = (state.views.as_ref(), state.data.as_ref()) {
@@ -957,7 +953,7 @@ impl ShellController {
             }
             return self.refresh();
         }
-        let session = self.state.borrow_mut().session.take();
+        let session = self.state.borrow_mut().begin_duplicate_search();
         let Some(session) = session else {
             return;
         };
@@ -998,15 +994,10 @@ impl ShellController {
                 seconds: job.seconds(),
             };
             let (session, outcome) = job.finish();
-            {
-                let mut state = self.state.borrow_mut();
-                state.session = Some(session);
-                state.duplicate_summary = outcome.is_ok().then_some(summary);
-            }
-            match outcome {
-                Ok(()) | Err(SearchError::Cancelled) => self.refresh(),
-                Err(error) => self.fail(&error.to_string()),
-            }
+            self.state
+                .borrow_mut()
+                .finish_duplicate_search(session, outcome, summary);
+            self.refresh();
         }
     }
 

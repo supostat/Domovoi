@@ -165,6 +165,7 @@ impl Index {
             let path = self.physical_path(entry);
             match reclaimable_file(facts, || private_size(&path)) {
                 Err(error) if error.raw_os_error() == Some(libc::ENOENT) => Ok(Reclaimable::default()),
+                Err(error) if error.kind() == io::ErrorKind::Unsupported => Ok(estimate_file(facts)),
                 outcome => outcome,
             }
         })

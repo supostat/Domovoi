@@ -71,7 +71,7 @@ pub fn find_duplicates(
             .iter()
             .flat_map(|position| search.candidates[*position].entries.iter().copied())
             .collect();
-        if let Some(group) = DuplicateGroup::of_members(index, bucket.size, &members).map_err(SearchError::Io)? {
+        if let Some(group) = DuplicateGroup::of_members(index, bucket.size, &members, &mut skipped) {
             groups.push(group);
         }
     }

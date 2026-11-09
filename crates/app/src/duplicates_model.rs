@@ -28,21 +28,16 @@ impl DuplicatesModel {
         }
     }
 
-    pub fn found(index: &Index, duplicates: &Duplicates, candidates: u64, seconds: u64) -> std::io::Result<Self> {
+    pub fn found(index: &Index, duplicates: &Duplicates, candidates: u64, seconds: u64) -> Self {
         let mut groups = Vec::with_capacity(duplicates.groups.len());
         for group in &duplicates.groups {
             let keep_path = index.path(group.keep);
             let mut copies = Vec::with_capacity(group.copies.len());
             for copy in &group.copies {
-                let frees = if copy.is_removable() {
-                    index.reclaimable(copy.node)?.bytes
-                } else {
-                    0
-                };
                 copies.push(MemberModel {
                     path: tilde(&index.path(copy.node)),
                     size: group.size,
-                    frees,
+                    frees: copy.reclaimable.bytes,
                     clone: copy.shares_with_kept,
                     checked: false,
                     refusal: None,
@@ -69,27 +64,34 @@ impl DuplicatesModel {
                 copies,
             });
         }
-        Ok(Self {
+        Self {
             state: DuplicatesState::Found {
                 candidates,
                 seconds,
                 groups,
             },
             clone_mode: false,
-        })
+        }
+    }
+
+    pub fn failed(reason: String) -> Self {
+        Self {
+            state: DuplicatesState::Failed { reason },
+            clone_mode: false,
+        }
     }
 
     pub fn groups(&self) -> &[GroupModel] {
         match &self.state {
             DuplicatesState::Found { groups, .. } => groups,
-            DuplicatesState::Idle | DuplicatesState::Searching { .. } => &[],
+            DuplicatesState::Idle | DuplicatesState::Searching { .. } | DuplicatesState::Failed { .. } => &[],
         }
     }
 
     pub fn groups_mut(&mut self) -> &mut [GroupModel] {
         match &mut self.state {
             DuplicatesState::Found { groups, .. } => groups,
-            DuplicatesState::Idle | DuplicatesState::Searching { .. } => &mut [],
+            DuplicatesState::Idle | DuplicatesState::Searching { .. } | DuplicatesState::Failed { .. } => &mut [],
         }
     }
 
@@ -148,7 +150,7 @@ impl DuplicatesModel {
                 seconds / SECONDS_PER_MINUTE,
                 seconds % SECONDS_PER_MINUTE
             )),
-            DuplicatesState::Idle | DuplicatesState::Searching { .. } => None,
+            DuplicatesState::Idle | DuplicatesState::Searching { .. } | DuplicatesState::Failed { .. } => None,
         }
     }
 

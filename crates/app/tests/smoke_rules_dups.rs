@@ -116,8 +116,7 @@ fn searched_with_the_own_copy_checked(session: &mut Session) -> DuplicatesModel 
         .expect("duplicates are searched");
     let index = session.index().expect("the index stays");
     let mut duplicates =
-        DuplicatesModel::found(index, session.duplicates().expect("the search stores duplicates"), 3, 1)
-            .expect("the duplicates model builds");
+        DuplicatesModel::found(index, session.duplicates().expect("the search stores duplicates"), 3, 1);
     assert_eq!(duplicates.groups().len(), 1);
     let group = &duplicates.groups()[0];
     assert_eq!(group.copies.len(), 2);
@@ -221,8 +220,7 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
         .replace_with_clone(keep, copy)
         .expect("the copy becomes a clone");
     let index = session.index().expect("the index stays");
-    let replaced = DuplicatesModel::found(index, session.duplicates().expect("duplicates stay"), 3, 1)
-        .expect("the duplicates model builds");
+    let replaced = DuplicatesModel::found(index, session.duplicates().expect("duplicates stay"), 3, 1);
     assert!(
         replaced.groups()[0].copies.iter().all(|member| member.clone),
         "every copy now shares blocks with the kept file"

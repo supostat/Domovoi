@@ -173,7 +173,7 @@ impl EndToEnd {
                 self.session_mut()
                     .find_duplicates(None, CancelToken::default())
                     .map_err(|error| error.to_string())?;
-                let model = self.duplicates_model(started.elapsed().as_secs())?;
+                let model = self.duplicates_model(started.elapsed().as_secs());
                 let groups: Vec<Value> = model
                     .groups()
                     .iter()
@@ -374,7 +374,7 @@ impl EndToEnd {
             .unwrap_or_default()
     }
 
-    fn duplicates_model(&mut self, seconds: u64) -> Result<DuplicatesModel, String> {
+    fn duplicates_model(&mut self, seconds: u64) -> DuplicatesModel {
         let session = self.session.as_ref().expect(SESSION_BETWEEN_STEPS);
         let index = session.index().expect("duplicates follow a scan");
         let duplicates = session.duplicates().expect("a finished search stores duplicates");
@@ -385,10 +385,9 @@ impl EndToEnd {
             .sum::<u64>()
             + duplicates.skipped.len() as u64;
         self.duplicates = Some(DuplicateSummary { candidates, seconds });
-        let mut model =
-            DuplicatesModel::found(index, duplicates, candidates, seconds).map_err(|error| error.to_string())?;
+        let mut model = DuplicatesModel::found(index, duplicates, candidates, seconds);
         model.assess_clones(|keep, copy| session.clone_plan(keep, copy).map(drop));
-        Ok(model)
+        model
     }
 
     fn delete_recommendations(&mut self, level: SafetyBadge) -> Result<Value, String> {
@@ -578,7 +577,7 @@ impl EndToEnd {
     }
 
     fn replace_with_clone(&mut self) -> Result<Value, String> {
-        let model = self.duplicates_model(self.duplicates.map_or(0, |summary| summary.seconds))?;
+        let model = self.duplicates_model(self.duplicates.map_or(0, |summary| summary.seconds));
         let (keep, copy) = model
             .groups()
             .iter()
@@ -840,7 +839,7 @@ impl EndToEnd {
         let overview = DiskOverview::measure(&self.root).map_err(|error| error.to_string())?;
         let recommendations = self.recommendations();
         let duplicates = match self.duplicates {
-            Some(summary) => self.duplicates_model(summary.seconds)?,
+            Some(summary) => self.duplicates_model(summary.seconds),
             None => DuplicatesModel::idle(),
         };
         let index = self.session().index().expect("live data follows a scan");

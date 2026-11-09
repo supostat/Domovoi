@@ -31,6 +31,7 @@ enum Shape {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DuplicatesBody {
     Idle,
+    Failed,
     Searching,
     NoneFound,
     Found { clone_mode: bool, clone_available: bool },
@@ -65,6 +66,7 @@ impl DuplicatesBody {
     fn of(model: &DuplicatesModel) -> Self {
         match &model.state {
             DuplicatesState::Idle => Self::Idle,
+            DuplicatesState::Failed { .. } => Self::Failed,
             DuplicatesState::Searching { .. } => Self::Searching,
             DuplicatesState::Found { groups, .. } if groups.is_empty() => Self::NoneFound,
             DuplicatesState::Found { .. } => Self::Found {

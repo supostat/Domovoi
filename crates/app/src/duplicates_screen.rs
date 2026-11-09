@@ -31,8 +31,8 @@ use crate::shell_data::ShellData;
 use crate::shell_layout::{PANE_PADDING, WINDOW, from_top};
 use crate::shell_palette::ShellPalette;
 use crate::strings::{
-    ACTION_CLONE, ACTION_DELETE, CLONE_EXPLANATION, DUPLICATES, DUPLICATES_IDLE, DUPLICATES_NOTE, FIND_DUPLICATES,
-    NO_DUPLICATES, OF, OTHER_USERS_FILES, STOP, TO_TRAY,
+    ACTION_CLONE, ACTION_DELETE, CLONE_EXPLANATION, DUPLICATES, DUPLICATES_FAILED, DUPLICATES_IDLE, DUPLICATES_NOTE,
+    FIND_DUPLICATES, NO_DUPLICATES, OF, OTHER_USERS_FILES, STOP, TO_TRAY,
 };
 use crate::toggle_switch::{SIZE as TOGGLE_SIZE, ToggleSwitch};
 use crate::ui_font::{interface_font, mono_font};
@@ -86,6 +86,16 @@ impl DuplicatesScreen {
         match &model.state {
             DuplicatesState::Idle => frame.pane.addSubview(&placed(
                 empty_state(marker, body.size, DUPLICATES_IDLE, None, palette),
+                body,
+            )),
+            DuplicatesState::Failed { reason } => frame.pane.addSubview(&placed(
+                empty_state(
+                    marker,
+                    body.size,
+                    &format!("{DUPLICATES_FAILED}\n{reason}"),
+                    None,
+                    palette,
+                ),
                 body,
             )),
             DuplicatesState::Searching { done, total, .. } => {
@@ -214,7 +224,7 @@ fn subtitle_line(model: &DuplicatesModel) -> Option<String> {
     match &model.state {
         DuplicatesState::Found { .. } => model.checked_line(),
         DuplicatesState::Searching { stage, .. } => Some(stage.title().to_owned()),
-        DuplicatesState::Idle => None,
+        DuplicatesState::Idle | DuplicatesState::Failed { .. } => None,
     }
 }
 
@@ -251,7 +261,10 @@ fn head_controls(
         right -= size.width + HEAD_GAP;
         switch
     });
-    let searching = !matches!(model.state, DuplicatesState::Idle);
+    let searching = matches!(
+        model.state,
+        DuplicatesState::Searching { .. } | DuplicatesState::Found { .. }
+    );
     let toggle = ToggleSwitch::new(
         marker,
         FIND_DUPLICATES,

@@ -126,7 +126,7 @@ impl Session {
         match open_cache(&self.paths.cache, &self.header) {
             Ok(cached) => {
                 self.last_event_id = cached.last_event_id;
-                self.install(cached.index).map_err(CacheError::Io)?;
+                self.install(cached.index);
                 Ok(CacheOpening::Opened)
             }
             Err(CacheError::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(CacheOpening::Absent),
@@ -151,8 +151,7 @@ impl Session {
         let root = IndexRoot::for_path(&self.root).map_err(ScanError::Root)?;
         self.last_event_id = started_at;
         self.refresh_screen_captures();
-        self.install(Index::build(&report, root, &self.enrichment))
-            .map_err(SessionError::Io)?;
+        self.install(Index::build(&report, root, &self.enrichment));
         self.persist().map_err(SessionError::Io)
     }
 
@@ -209,7 +208,6 @@ impl Session {
             DeltaApplied::Spliced { .. } => self.remap(duplicate_paths, Remapping::Detached),
             DeltaApplied::Compacted { .. } => self.remap(duplicate_paths, Remapping::Everything),
         }
-        .map_err(SessionError::Io)?;
         let index = self.index.as_ref().expect("deltas apply to a scanned volume");
         self.recommendations
             .as_mut()
@@ -237,7 +235,7 @@ impl Session {
             return Ok(());
         };
         if index.compact_garbage() {
-            self.remap(duplicate_paths, Remapping::Everything)?;
+            self.remap(duplicate_paths, Remapping::Everything);
             self.refresh_recommendations();
         }
         let index = self.index.as_ref().expect("a persisted session holds an index");
@@ -462,12 +460,11 @@ impl Session {
         };
     }
 
-    fn install(&mut self, index: Index) -> io::Result<()> {
+    fn install(&mut self, index: Index) {
         let duplicate_paths = self.duplicate_paths();
         self.index = Some(index);
-        self.remap(duplicate_paths, Remapping::Everything)?;
+        self.remap(duplicate_paths, Remapping::Everything);
         self.refresh_recommendations();
-        Ok(())
     }
 
     fn rescan_paths(&mut self, paths: &[PathBuf]) -> Result<(), SessionError> {
@@ -508,7 +505,7 @@ impl Session {
         )
     }
 
-    fn remap(&mut self, duplicate_paths: Option<Vec<GroupPaths>>, remapping: Remapping) -> io::Result<()> {
+    fn remap(&mut self, duplicate_paths: Option<Vec<GroupPaths>>, remapping: Remapping) {
         let index = self.index.as_ref().expect("remapping follows a new index");
         let resolve = |node: NodeId, path: &Path| match remapping {
             Remapping::Detached if index.is_live(node) => Some(node),
@@ -533,13 +530,13 @@ impl Session {
                 if unchanged && remapping == Remapping::Detached {
                     remapped.push(group);
                 } else if members.len() > 1
-                    && let Some(regrouped) = DuplicateGroup::of_members(index, paths.size, &members)?
+                    && let Some(regrouped) =
+                        DuplicateGroup::of_members(index, paths.size, &members, &mut duplicates.skipped)
                 {
                     remapped.push(regrouped);
                 }
             }
             duplicates.groups = remapped;
         }
-        Ok(())
     }
 }

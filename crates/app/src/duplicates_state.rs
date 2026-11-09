@@ -17,4 +17,7 @@ pub enum DuplicatesState {
         seconds: u64,
         groups: Vec<GroupModel>,
     },
+    Failed {
+        reason: String,
+    },
 }

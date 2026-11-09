@@ -167,6 +167,7 @@ pub const NO_RECOMMENDATIONS: &str = "Правилам здесь нечего �
 
 pub const FIND_DUPLICATES: &str = "Искать дубликаты";
 pub const DUPLICATES_IDLE: &str = "Дубликаты ищутся отдельным проходом: размер, края файла, затем полное содержимое.";
+pub const DUPLICATES_FAILED: &str = "Поиск дубликатов не удался, его можно начать заново. Причина:";
 pub const GROUPS: PluralForms = PluralForms {
     one: "группа",
     few: "группы",

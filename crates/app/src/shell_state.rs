@@ -1,7 +1,7 @@
-use std::io;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+use domovoi_dups::SearchError;
 use domovoi_index::{Category, ModelEvent, NodeId, SpaceRecovery};
 use domovoi_render::{DiagramMode, NodeOrigin, ROOT, SmallGroups};
 use domovoi_theme::Palette;
@@ -62,6 +62,7 @@ pub(crate) struct ShellState {
     pub scan: Option<ScanJob>,
     pub search: Option<DuplicateJob>,
     pub duplicate_summary: Option<DuplicateSummary>,
+    pub duplicate_failure: Option<String>,
     pub clone_mode: bool,
     pub last_scan: Option<ScanStatus>,
     pub watch: Option<EventWatch>,
@@ -106,6 +107,7 @@ impl ShellState {
             scan: None,
             search: None,
             duplicate_summary: None,
+            duplicate_failure: None,
             clone_mode: false,
             last_scan: None,
             watch: None,
@@ -165,7 +167,7 @@ impl ShellState {
         })
     }
 
-    pub(crate) fn rebuild_data(&mut self, now: SystemTime) -> io::Result<()> {
+    pub(crate) fn rebuild_data(&mut self, now: SystemTime) {
         if self.session.is_none()
             && let Some(previous) = self.data.take_if(|data| data.care_ready)
         {
@@ -179,7 +181,7 @@ impl ShellState {
                 self.assistant.models(),
             );
             self.data = Some(fresh.carrying_index_of(previous));
-            return Ok(());
+            return;
         }
         if let Some(session) = self.session.as_mut() {
             for event in self.pending_model_events.drain(..) {
@@ -187,7 +189,7 @@ impl ShellState {
             }
         }
         let previous = self.data.take().map(|data| data.care);
-        let care = self.care_models(previous.as_ref(), now)?;
+        let care = self.care_models(previous.as_ref(), now);
         let index = self.session.as_ref().and_then(Session::index);
         let focus_node = index.and_then(|index| self.focus_path.as_deref().and_then(|path| index.find(path)));
         self.expansion = index.map_or_else(Expansion::default, |index| {
@@ -209,7 +211,25 @@ impl ShellState {
             .and_then(|node| data.tree_position(NodeOrigin::Indexed(node)))
             .unwrap_or(ROOT);
         self.data = Some(data);
-        Ok(())
+    }
+
+    pub(crate) fn begin_duplicate_search(&mut self) -> Option<Session> {
+        self.duplicate_failure = None;
+        self.session.take()
+    }
+
+    pub(crate) fn finish_duplicate_search(
+        &mut self,
+        session: Session,
+        outcome: Result<(), SearchError>,
+        summary: DuplicateSummary,
+    ) {
+        self.session = Some(session);
+        self.duplicate_summary = outcome.is_ok().then_some(summary);
+        self.duplicate_failure = match outcome {
+            Err(SearchError::Io(error)) => Some(error.to_string()),
+            Ok(()) | Err(SearchError::Cancelled) => None,
+        };
     }
 
     pub(crate) fn remember_focus(&mut self, focus: usize) {
@@ -272,13 +292,13 @@ impl ShellState {
         &mut self.data.as_mut().expect("care screens show built data").care
     }
 
-    fn care_models(&self, previous: Option<&CareModels>, now: SystemTime) -> io::Result<CareModels> {
+    fn care_models(&self, previous: Option<&CareModels>, now: SystemTime) -> CareModels {
         let Some((session, index)) = self
             .session
             .as_ref()
             .and_then(|session| Some((session, session.index()?)))
         else {
-            return Ok(CareModels::default());
+            return CareModels::default();
         };
         let mut recommendations = session
             .recommendations()
@@ -287,8 +307,13 @@ impl ShellState {
         if let Some(previous) = previous {
             recommendations.keep_selection(&previous.recommendations);
         }
-        let mut duplicates = match (&self.search, session.duplicates(), self.duplicate_summary) {
-            (Some(job), _, _) => DuplicatesModel {
+        let mut duplicates = match (
+            &self.search,
+            &self.duplicate_failure,
+            session.duplicates(),
+            self.duplicate_summary,
+        ) {
+            (Some(job), _, _, _) => DuplicatesModel {
                 state: DuplicatesState::Searching {
                     stage: job.stage,
                     done: job.done,
@@ -296,8 +321,9 @@ impl ShellState {
                 },
                 clone_mode: false,
             },
-            (None, Some(found), Some(summary)) => {
-                DuplicatesModel::found(index, found, summary.candidates, summary.seconds)?
+            (None, Some(reason), _, _) => DuplicatesModel::failed(reason.clone()),
+            (None, None, Some(found), Some(summary)) => {
+                DuplicatesModel::found(index, found, summary.candidates, summary.seconds)
             }
             _ => DuplicatesModel::idle(),
         };
@@ -323,20 +349,22 @@ impl ShellState {
             }
         }
         let tray = TrayModel::estimated(index, session.tray());
-        Ok(CareModels {
+        CareModels {
             recommendations,
             duplicates,
             tray,
-        })
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::path::Path;
     use std::time::SystemTime;
 
     use domovoi_downloader::{Catalog, ModelStore};
+    use domovoi_dups::SearchError;
     use domovoi_render::DiagramMode;
     use domovoi_scanner::CancelToken;
     use domovoi_testkit::{Fill, TempTree};
@@ -345,6 +373,8 @@ mod tests {
     use crate::assistant::Assistant;
     use crate::assistant_settings::AssistantSettings;
     use crate::disk_overview::{DiskOverview, SYSTEM_DATA_ROOT};
+    use crate::duplicate_summary::DuplicateSummary;
+    use crate::duplicates_state::DuplicatesState;
     use crate::provenance::Provenance;
     use crate::session::Session;
     use crate::session_paths::SessionPaths;
@@ -379,7 +409,7 @@ mod tests {
         let mut shell = ShellState::new(DiagramMode::Sunburst, false, assistant);
         shell.overview = Some(DiskOverview::measure(Path::new(SYSTEM_DATA_ROOT)).expect("the disk is measured"));
         shell.session = Some(session);
-        shell.rebuild_data(SystemTime::now()).expect("the screens are built");
+        shell.rebuild_data(SystemTime::now());
         Workspace {
             _tree: tree,
             _state: state,
@@ -403,9 +433,7 @@ mod tests {
         assert!(checked.selected_total() > 0, "the user checked the project");
 
         let session = shell.session.take();
-        shell
-            .rebuild_data(SystemTime::now())
-            .expect("the screens are rebuilt while a job holds the session");
+        shell.rebuild_data(SystemTime::now());
         assert_eq!(
             shell.care().recommendations,
             checked,
@@ -413,13 +441,42 @@ mod tests {
         );
 
         shell.session = session;
-        shell
-            .rebuild_data(SystemTime::now())
-            .expect("the screens are rebuilt when the job returns the session");
+        shell.rebuild_data(SystemTime::now());
         assert_eq!(
             shell.care().recommendations.selected_total(),
             checked.selected_total(),
             "the checks survive the job"
         );
+    }
+
+    #[test]
+    fn a_failed_search_returns_the_session_and_shows_its_reason_until_the_next_search() {
+        let mut workspace = scanned();
+        let shell = &mut workspace.shell;
+        let session = shell.begin_duplicate_search().expect("the scanned session is free");
+        let failure = || io::Error::from_raw_os_error(libc::EIO);
+
+        shell.finish_duplicate_search(
+            session,
+            Err(SearchError::Io(failure())),
+            DuplicateSummary {
+                candidates: 0,
+                seconds: 0,
+            },
+        );
+        shell.rebuild_data(SystemTime::now());
+
+        assert!(shell.session.is_some(), "the session is back for the next action");
+        assert_eq!(
+            shell.care().duplicates.state,
+            DuplicatesState::Failed {
+                reason: failure().to_string()
+            },
+            "the tab shows why the search failed"
+        );
+
+        let session = shell.begin_duplicate_search().expect("a new search takes the session");
+        assert_eq!(shell.duplicate_failure, None, "a new search clears the failure");
+        shell.session = Some(session);
     }
 }
