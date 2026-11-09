@@ -38,7 +38,7 @@ fn duplicate_copies_are_deleted_by_default() {
     assert_eq!(duplicates.groups.len(), 1);
     let group = &duplicates.groups[0];
     assert_eq!(group.copies.len(), 2);
-    assert!(group.copies.iter().all(|copy| !copy.shares_blocks));
+    assert!(group.copies.iter().all(|copy| !copy.shares_with_kept));
     assert_eq!(DuplicateAction::default(), DuplicateAction::Delete);
 
     let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");

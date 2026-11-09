@@ -145,7 +145,7 @@ fn identical_files_form_a_group_and_only_independent_copies_count_as_gain() {
         group
             .copies
             .iter()
-            .filter(|copy| copy.shares_blocks)
+            .filter(|copy| copy.shares_with_kept)
             .map(|copy| copy.node),
     );
     let photos_set: BTreeSet<String> = ["photos/a.raw", "photos/a-link.raw", "photos/a-clone.raw"]
@@ -157,7 +157,7 @@ fn identical_files_form_a_group_and_only_independent_copies_count_as_gain() {
     let independent: Vec<NodeId> = group
         .copies
         .iter()
-        .filter(|copy| !copy.shares_blocks)
+        .filter(|copy| !copy.shares_with_kept)
         .map(|copy| copy.node)
         .collect();
     assert_eq!(

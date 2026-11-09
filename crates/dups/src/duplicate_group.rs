@@ -38,7 +38,7 @@ impl DuplicateGroup {
             .filter(|(member, _)| *member != keep)
             .map(|(member, package)| DuplicateCopy {
                 node: *member,
-                shares_blocks: shares_blocks_with_another_member(index, members, *member),
+                shares_with_kept: shares_blocks_with_kept(index, keep, *member),
                 package: *package,
             })
             .collect();
@@ -80,11 +80,9 @@ impl DuplicateGroup {
     }
 }
 
-fn shares_blocks_with_another_member(index: &Index, members: &[NodeId], member: NodeId) -> bool {
-    let node = index.node(member);
-    members.iter().filter(|other| **other != member).any(|other| {
-        let other = index.node(*other);
-        other.real_dev == node.real_dev
-            && (other.file_id == node.file_id || (node.clone_id != 0 && other.clone_id == node.clone_id))
-    })
+fn shares_blocks_with_kept(index: &Index, keep: NodeId, copy: NodeId) -> bool {
+    let copy = index.node(copy);
+    let keep = index.node(keep);
+    keep.real_dev == copy.real_dev
+        && (keep.file_id == copy.file_id || (copy.clone_id != 0 && keep.clone_id == copy.clone_id))
 }

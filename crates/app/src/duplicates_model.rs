@@ -43,7 +43,7 @@ impl DuplicatesModel {
                     path: tilde(&index.path(copy.node)),
                     size: group.size,
                     frees,
-                    clone: copy.shares_blocks,
+                    clone: copy.shares_with_kept,
                     checked: false,
                     refusal: None,
                     package: copy

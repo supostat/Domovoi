@@ -178,7 +178,7 @@ fn existing_clones_have_no_gain(fixture: &Fixture) {
         .iter()
         .find(|group| group.keep == fixture.node("clones/original"))
         .expect("clones form a group");
-    assert!(clones.copies.iter().all(|copy| copy.shares_blocks));
+    assert!(clones.copies.iter().all(|copy| copy.shares_with_kept));
     assert_eq!(clones.reclaimable, Reclaimable::default());
     assert_eq!(fixture.refusal("clones"), CloneRefusal::AlreadyClones);
 }
