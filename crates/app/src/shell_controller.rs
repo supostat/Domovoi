@@ -1580,7 +1580,7 @@ impl ShellController {
                             .map(|key| DuplicateKey::parse(&key.to_string()))
                     })
                     .collect();
-                PreviewTargets::from_duplicates(data.care.duplicates.groups(), &keys)
+                PreviewTargets::from_duplicates(data.care.duplicates.groups(), index, &keys)
             }
             _ => PreviewTargets::default(),
         }

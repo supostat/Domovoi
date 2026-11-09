@@ -24,7 +24,7 @@ impl PreviewTargets {
         }
     }
 
-    pub fn from_duplicates(groups: &[GroupModel], keys: &[DuplicateKey]) -> Self {
+    pub fn from_duplicates(groups: &[GroupModel], index: &Index, keys: &[DuplicateKey]) -> Self {
         Self {
             paths: keys
                 .iter()
@@ -34,7 +34,7 @@ impl PreviewTargets {
                         0 => &group.keep,
                         copy => group.copies.get(copy - 1)?,
                     };
-                    Some(PathBuf::from(&member.path))
+                    Some(index.path(member.node?))
                 })
                 .collect(),
         }
