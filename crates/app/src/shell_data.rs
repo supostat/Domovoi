@@ -74,6 +74,20 @@ impl ShellData {
         }
     }
 
+    #[must_use]
+    pub(crate) fn carrying_index_of(self, previous: Self) -> Self {
+        Self {
+            tree: previous.tree,
+            in_cloud_bytes: previous.in_cloud_bytes,
+            care: previous.care,
+            care_ready: previous.care_ready,
+            hidden_folders: previous.hidden_folders,
+            other_user_homes: previous.other_user_homes,
+            marked: previous.marked,
+            ..self
+        }
+    }
+
     pub fn mark_tray(&mut self, index: &Index, tray: &Tray) {
         let positions: HashMap<NodeId, usize> = (0..self.tree.len())
             .filter_map(|position| match self.tree.node(position).origin {

@@ -166,6 +166,21 @@ impl ShellState {
     }
 
     pub(crate) fn rebuild_data(&mut self, now: SystemTime) -> io::Result<()> {
+        if self.session.is_none()
+            && let Some(previous) = self.data.take_if(|data| data.care_ready)
+        {
+            let fresh = ShellData::measured(
+                self.access,
+                self.overview(),
+                None,
+                &self.expansion,
+                self.scan_status(),
+                CareModels::default(),
+                self.assistant.models(),
+            );
+            self.data = Some(fresh.carrying_index_of(previous));
+            return Ok(());
+        }
         if let Some(session) = self.session.as_mut() {
             for event in self.pending_model_events.drain(..) {
                 session.apply_model_event(&event);
@@ -313,5 +328,98 @@ impl ShellState {
             duplicates,
             tray,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+    use std::time::SystemTime;
+
+    use domovoi_downloader::{Catalog, ModelStore};
+    use domovoi_render::DiagramMode;
+    use domovoi_scanner::CancelToken;
+    use domovoi_testkit::{Fill, TempTree};
+
+    use super::ShellState;
+    use crate::assistant::Assistant;
+    use crate::assistant_settings::AssistantSettings;
+    use crate::disk_overview::{DiskOverview, SYSTEM_DATA_ROOT};
+    use crate::provenance::Provenance;
+    use crate::session::Session;
+    use crate::session_paths::SessionPaths;
+
+    struct Workspace {
+        _tree: TempTree,
+        _state: TempTree,
+        shell: ShellState,
+    }
+
+    fn scanned() -> Workspace {
+        let tree = TempTree::new().expect("a temp tree is created");
+        let project = tree
+            .root()
+            .expect("the root opens")
+            .directory("demo")
+            .expect("a project is created");
+        project
+            .file("Cargo.toml", 64, Fill::Byte(1))
+            .expect("a manifest is written");
+        project
+            .directory("target")
+            .expect("a build folder is created")
+            .file("demo", 1024 * 1024, Fill::Noise(2))
+            .expect("build output is written");
+        let state = TempTree::new().expect("a state folder is created");
+        let paths = SessionPaths::in_directory(state.path());
+        let mut session = Session::open(tree.path(), &paths, "0.0.0-test").expect("the session opens");
+        session.scan(None, CancelToken::default()).expect("the tree scans");
+        let models = ModelStore::open(&paths.models).expect("the model store opens");
+        let assistant = Assistant::new(models, Catalog::bundled(), AssistantSettings::default());
+        let mut shell = ShellState::new(DiagramMode::Sunburst, false, assistant);
+        shell.overview = Some(DiskOverview::measure(Path::new(SYSTEM_DATA_ROOT)).expect("the disk is measured"));
+        shell.session = Some(session);
+        shell.rebuild_data(SystemTime::now()).expect("the screens are built");
+        Workspace {
+            _tree: tree,
+            _state: state,
+            shell,
+        }
+    }
+
+    #[test]
+    fn a_rebuild_while_a_job_holds_the_session_keeps_the_recommendations_and_their_checks() {
+        let mut workspace = scanned();
+        let shell = &mut workspace.shell;
+        shell
+            .care_mut()
+            .recommendations
+            .cards
+            .iter_mut()
+            .find(|card| card.provenance == Provenance::Projects)
+            .expect("the build folder makes a projects card")
+            .toggle_rows();
+        let checked = shell.care().recommendations.clone();
+        assert!(checked.selected_total() > 0, "the user checked the project");
+
+        let session = shell.session.take();
+        shell
+            .rebuild_data(SystemTime::now())
+            .expect("the screens are rebuilt while a job holds the session");
+        assert_eq!(
+            shell.care().recommendations,
+            checked,
+            "a rebuild without the session keeps what the screens showed"
+        );
+
+        shell.session = session;
+        shell
+            .rebuild_data(SystemTime::now())
+            .expect("the screens are rebuilt when the job returns the session");
+        assert_eq!(
+            shell.care().recommendations.selected_total(),
+            checked.selected_total(),
+            "the checks survive the job"
+        );
     }
 }
