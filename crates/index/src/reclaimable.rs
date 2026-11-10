@@ -1,17 +1,15 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::convert::Infallible;
 use std::io;
 use std::ops::AddAssign;
 
 use domovoi_apfs_sys::private_size;
 use domovoi_apfs_sys::sys::{EF_SHARES_ALL_BLOCKS, UF_COMPRESSED};
-use domovoi_scanner::Node;
 
-use crate::copy_groups::{InodeKey, is_link_member, is_stream_candidate, link_key, stream_key};
+use crate::copy_groups::{InodeKey, link_key, stream_key};
 use crate::held_group::{HeldGroup, HeldKey};
-use crate::index::{Index, record};
+use crate::index::Index;
 use crate::index_node::IndexNode;
-use crate::name_table::NameId;
 use crate::node_id::NodeId;
 use crate::node_kind::NodeKind;
 
@@ -42,7 +40,7 @@ pub(crate) struct FileFacts {
 }
 
 impl FileFacts {
-    fn of(node: &IndexNode, stream_inodes: u32) -> Self {
+    pub(crate) fn of(node: &IndexNode, stream_inodes: u32) -> Self {
         Self {
             compressed: node.flags & UF_COMPRESSED != 0,
             shares_all_blocks: node.ext_flags & u64::from(EF_SHARES_ALL_BLOCKS) != 0,
@@ -58,7 +56,7 @@ impl FileFacts {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FileReading {
+pub(crate) enum FileReading {
     Vanished,
     Unread,
     Private(u64),
@@ -90,7 +88,7 @@ fn read_file(facts: FileFacts, private_size: impl FnOnce() -> io::Result<u64>) -
     }
 }
 
-fn reclaim_alone(facts: FileFacts, reading: FileReading) -> Reclaimable {
+pub(crate) fn reclaim_alone(facts: FileFacts, reading: FileReading) -> Reclaimable {
     match reading {
         FileReading::Vanished => Reclaimable::default(),
         FileReading::Unread => estimate_file(facts),
@@ -129,12 +127,12 @@ fn reclaim_together(members: &[(FileFacts, FileReading)]) -> Reclaimable {
 }
 
 #[derive(Debug, Default)]
-struct Tally {
-    total: Reclaimable,
+pub(crate) struct Tally {
+    pub(crate) total: Reclaimable,
     held: Vec<HeldGroup>,
 }
 
-fn tally_files<'file, T, E>(
+pub(crate) fn tally_files<'file, T, E>(
     files: impl IntoIterator<Item = (&'file IndexNode, T)>,
     stream_inodes: impl Fn(&IndexNode) -> u32,
     mut read: impl FnMut(FileFacts, T) -> Result<FileReading, E>,
@@ -223,56 +221,6 @@ fn settle_stream<T, E>(
         members_total,
     });
     Ok(())
-}
-
-pub fn measure_reclaimable(root: &Node) -> Reclaimable {
-    measure_reclaimable_of(&[root])
-}
-
-pub fn measure_reclaimable_of(roots: &[&Node]) -> Reclaimable {
-    let files: Vec<(IndexNode, Option<u64>)> = roots.iter().flat_map(|root| scanned_files(root)).collect();
-    let mut linked = HashSet::new();
-    let mut streams: HashMap<InodeKey, u32> = HashMap::new();
-    for (file, _) in &files {
-        let counted = !is_link_member(file) || linked.insert(link_key(file));
-        if counted && is_stream_candidate(file) {
-            *streams.entry(stream_key(file)).or_default() += 1;
-        }
-    }
-    let stream_inodes = |file: &IndexNode| {
-        if is_stream_candidate(file) {
-            streams[&stream_key(file)]
-        } else {
-            1
-        }
-    };
-    let Ok(tally) = tally_files(
-        files.iter().map(|(file, private)| (file, *private)),
-        stream_inodes,
-        |facts, private| {
-            Ok::<_, Infallible>(match private {
-                Some(size) if !facts.compressed => FileReading::Private(size),
-                _ => FileReading::Unread,
-            })
-        },
-    );
-    tally.total
-}
-
-fn scanned_files(root: &Node) -> Vec<(IndexNode, Option<u64>)> {
-    let mut files = Vec::new();
-    let mut pending = vec![root];
-    while let Some(node) = pending.pop() {
-        let file = record(node, NodeId::NONE, NameId::NONE);
-        if file.kind == NodeKind::File {
-            files.push((
-                file,
-                node.attributes.as_ref().and_then(|attributes| attributes.private_size),
-            ));
-        }
-        pending.extend(&node.children);
-    }
-    files
 }
 
 impl Index {

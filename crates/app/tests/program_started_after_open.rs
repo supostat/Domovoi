@@ -86,7 +86,7 @@ fn a_program_started_after_the_session_opened_is_not_deleted() -> Result<(), Str
     let sizes = TrayModel::estimated_sizes(index, session.tray());
 
     let (subjects, refusals) = session
-        .take_tray_for_delete(&sizes)
+        .take_tray_for_delete(&sizes.items)
         .expect("running programs are checked");
 
     let refused_as_running = matches!(

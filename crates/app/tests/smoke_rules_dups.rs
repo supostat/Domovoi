@@ -5,7 +5,7 @@ use std::time::SystemTime;
 
 use domovoi_app::{
     CardModel, DeleteOutcome, DuplicatesModel, ProjectRow, Provenance, RecommendationsModel, SafetyBadge, Session,
-    SessionPaths, TrayMeasureJob, TrayModel, strings,
+    SessionPaths, TrayMeasureJob, TrayModel, TraySizes, strings,
 };
 use domovoi_index::Reclaimable;
 use domovoi_rules::delete;
@@ -80,7 +80,7 @@ fn the_demo_project(recommendations: &RecommendationsModel) -> (&CardModel, &Pro
     (card, demo)
 }
 
-fn estimated_then_measured_tray(session: &Session, title: &str) -> (TrayModel, TrayModel, Vec<Reclaimable>) {
+fn estimated_then_measured_tray(session: &Session, title: &str) -> (TrayModel, TrayModel, TraySizes) {
     let index = session.index().expect("the index stays");
     let estimated = TrayModel::estimated(index, session.tray());
     assert_eq!(estimated.rows.len(), 1);
@@ -103,7 +103,7 @@ fn estimated_then_measured_tray(session: &Session, title: &str) -> (TrayModel, T
         .iter()
         .map(|item| index.reclaimable(item.node).expect("the index measures the item"))
         .collect();
-    assert_eq!(exact, indexed);
+    assert_eq!(exact.items, indexed);
     let measured = TrayModel::measured(index, session.tray(), &exact);
     assert!(measured.measuring.is_none());
     assert_eq!(measured.rows[0].title, title);
@@ -190,7 +190,7 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
     let (estimated, measured, sizes) = estimated_then_measured_tray(&session, &demo.name);
     let expected = measured.total();
     let (subjects, refusals) = session
-        .take_tray_for_delete(&sizes)
+        .take_tray_for_delete(&sizes.items)
         .expect("running programs are checked");
     assert!(refusals.is_empty(), "{refusals:?}");
     assert!(session.tray().items().is_empty(), "taking empties the tray");

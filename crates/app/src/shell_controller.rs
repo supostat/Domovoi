@@ -9,7 +9,6 @@ use std::time::{Duration, Instant, SystemTime};
 
 use block2::RcBlock;
 use domovoi_downloader::{Catalog, ModelStore};
-use domovoi_index::Reclaimable;
 use domovoi_log_sys::SystemLog;
 use domovoi_render::{
     DiagramChange, DiagramGraphics, DiagramMode, DiagramObserver, DiagramRenderer, DiagramState, DiagramView,
@@ -1251,17 +1250,16 @@ impl ShellController {
         }
         let taken = {
             let mut state = self.state.borrow_mut();
-            let sizes = state.tray_measurement.take().map(|measurement| {
-                measurement
-                    .exact()
-                    .map_or_else(|| measurement.estimate().to_vec(), <[Reclaimable]>::to_vec)
-            });
+            let sizes = state
+                .tray_measurement
+                .take()
+                .map(|measurement| measurement.exact().unwrap_or(measurement.estimate()).clone());
             let session = state.session.as_mut().expect("the tray belongs to an open session");
             let sizes = sizes.unwrap_or_else(|| {
                 let index = session.index().expect("the tray belongs to a scanned volume");
                 TrayModel::estimated_sizes(index, session.tray())
             });
-            session.take_tray_for_delete(&sizes)
+            session.take_tray_for_delete(&sizes.items)
         };
         let (subjects, refusals) = match taken {
             Ok(taken) => taken,

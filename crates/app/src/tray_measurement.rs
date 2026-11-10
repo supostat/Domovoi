@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
-use domovoi_index::Reclaimable;
 use domovoi_scanner::ScanError;
 use objc2::rc::Retained;
 use objc2_foundation::NSTimer;
 
 use crate::measure_progress::MeasureProgress;
 use crate::tray_measure_job::TrayMeasureJob;
+use crate::tray_sizes::TraySizes;
 
 #[derive(Debug)]
 pub(crate) struct TrayMeasurement {
@@ -14,12 +14,12 @@ pub(crate) struct TrayMeasurement {
     job: Option<TrayMeasureJob>,
     timer: Option<Retained<NSTimer>>,
     progress: MeasureProgress,
-    estimate: Vec<Reclaimable>,
-    exact: Option<Vec<Reclaimable>>,
+    estimate: TraySizes,
+    exact: Option<TraySizes>,
 }
 
 impl TrayMeasurement {
-    pub(crate) fn start(items: Vec<PathBuf>, estimate: Vec<Reclaimable>, timer: Retained<NSTimer>) -> Self {
+    pub(crate) fn start(items: Vec<PathBuf>, estimate: TraySizes, timer: Retained<NSTimer>) -> Self {
         Self {
             job: Some(TrayMeasureJob::start(items.clone())),
             items,
@@ -48,11 +48,11 @@ impl TrayMeasurement {
         self.progress
     }
 
-    pub(crate) fn exact(&self) -> Option<&[Reclaimable]> {
-        self.exact.as_deref()
+    pub(crate) fn exact(&self) -> Option<&TraySizes> {
+        self.exact.as_ref()
     }
 
-    pub(crate) fn estimate(&self) -> &[Reclaimable] {
+    pub(crate) fn estimate(&self) -> &TraySizes {
         &self.estimate
     }
 

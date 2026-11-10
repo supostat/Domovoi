@@ -504,6 +504,7 @@ fn project_rows(checks: &mut Checks, marker: MainThreadMarker) {
         stale,
         amount: 393_200_000_000,
         selected: stale,
+        in_joint_hold: false,
         targets: Vec::new(),
     };
     let card = CardModel {
@@ -522,6 +523,7 @@ fn project_rows(checks: &mut Checks, marker: MainThreadMarker) {
         vendor_command: None,
         age: None,
         selected: false,
+        in_joint_hold: false,
         rows: vec![row(true), row(false)],
         targets: Vec::new(),
     };
@@ -588,6 +590,7 @@ fn recommendation_card(checks: &mut Checks, marker: MainThreadMarker) {
         vendor_command: None,
         age: None,
         selected: true,
+        in_joint_hold: false,
         rows: Vec::new(),
         targets: Vec::new(),
     };

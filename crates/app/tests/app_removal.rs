@@ -161,7 +161,7 @@ fn removing_an_application_takes_its_files_with_reasons_and_leaves_a_name_match_
     assert_eq!(group.unmarked.len(), 1);
 
     let (subjects, refusals) = session
-        .take_tray_for_delete(&sizes)
+        .take_tray_for_delete(&sizes.items)
         .expect("running programs are checked");
     assert_eq!(refusals.len(), 1, "{refusals:?}");
     assert_eq!(refusals[0].path, library(&root, LAUNCH_AGENT));

@@ -13,7 +13,7 @@ use domovoi_apfs_sys::SnapshotClass;
 use domovoi_downloader::{
     Catalog, CatalogEntry, DownloadOutcome, Downloader, ModelSource, ModelStore, Sha256Hasher, is_excluded_from_backup,
 };
-use domovoi_index::{ModelEvent, NodeId, Reclaimable, SpaceRecovery};
+use domovoi_index::{ModelEvent, NodeId, SpaceRecovery};
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_inference_proto::Timeouts;
 use domovoi_render::{DiagramLayout, DiagramMode, NodeOrigin, SunburstLayout};
@@ -70,6 +70,7 @@ use crate::strings::CARD_QUESTION;
 use crate::tmutil_commands::tmutil_commands;
 use crate::tray_measure_job::TrayMeasureJob;
 use crate::tray_model::TrayModel;
+use crate::tray_sizes::TraySizes;
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const EVENT_POLL: Duration = Duration::from_millis(50);
@@ -409,7 +410,7 @@ impl EndToEnd {
             .free_bytes();
         let (subjects, refusals) = self
             .session_mut()
-            .take_tray_for_delete(&sizes)
+            .take_tray_for_delete(&sizes.items)
             .map_err(|error| error.to_string())?;
         let taken: Vec<PathBuf> = subjects.iter().map(|subject| subject.physical.clone()).collect();
         let job = DeleteJob::start(subjects);
@@ -462,7 +463,7 @@ impl EndToEnd {
         let (_, _, sizes) = self.measured_tray()?;
         let (subjects, refusals) = self
             .session_mut()
-            .take_tray_for_delete(&sizes)
+            .take_tray_for_delete(&sizes.items)
             .map_err(|error| error.to_string())?;
         let taken: Vec<PathBuf> = subjects.iter().map(|subject| subject.physical.clone()).collect();
         let job = DeleteJob::start(subjects);
@@ -560,7 +561,7 @@ impl EndToEnd {
         }))
     }
 
-    fn measured_tray(&self) -> Result<(TrayModel, u64, Vec<Reclaimable>), String> {
+    fn measured_tray(&self) -> Result<(TrayModel, u64, TraySizes), String> {
         let items: Vec<PathBuf> = self
             .session()
             .tray()

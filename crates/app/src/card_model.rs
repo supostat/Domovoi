@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use domovoi_index::NodeId;
 use domovoi_theme::format_count;
 use serde::Deserialize;
 
@@ -40,6 +41,8 @@ pub struct CardModel {
     #[serde(default)]
     pub selected: bool,
     #[serde(default)]
+    pub in_joint_hold: bool,
+    #[serde(default)]
     pub rows: Vec<ProjectRow>,
     #[serde(skip)]
     pub targets: Vec<TrayTarget>,
@@ -54,7 +57,11 @@ impl CardModel {
     }
 
     pub fn selectable(&self) -> bool {
-        self.owner_running.is_none() && self.vendor_command.is_none() && self.amount > 0
+        self.actionable() && (self.amount > 0 || self.in_joint_hold)
+    }
+
+    pub(crate) fn actionable(&self) -> bool {
+        self.owner_running.is_none() && self.vendor_command.is_none()
     }
 
     pub fn selected_amount(&self) -> u64 {
@@ -70,9 +77,17 @@ impl CardModel {
     }
 
     pub fn selected_targets(&self) -> Vec<TrayTarget> {
+        self.chosen_targets().into_iter().cloned().collect()
+    }
+
+    pub(crate) fn selected_nodes(&self) -> impl Iterator<Item = NodeId> + '_ {
+        self.chosen_targets().into_iter().map(|target| target.node)
+    }
+
+    fn chosen_targets(&self) -> Vec<&TrayTarget> {
         if self.rows.is_empty() {
             if self.selected && self.selectable() {
-                self.targets.clone()
+                self.targets.iter().collect()
             } else {
                 Vec::new()
             }
@@ -80,7 +95,7 @@ impl CardModel {
             self.rows
                 .iter()
                 .filter(|row| row.selected)
-                .flat_map(|row| row.targets.iter().cloned())
+                .flat_map(|row| &row.targets)
                 .collect()
         }
     }

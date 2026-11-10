@@ -129,6 +129,7 @@ fn a_hypothesis_card_has_no_rule_and_asks_to_be_checked() {
         vendor_command: None,
         age: None,
         selected: false,
+        in_joint_hold: false,
         rows: Vec::new(),
         targets: Vec::new(),
     };

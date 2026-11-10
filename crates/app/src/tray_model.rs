@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use domovoi_index::{Index, NodeId, Reclaimable};
+use domovoi_index::{Index, NodeId};
 use domovoi_rules::{Tray, TrayItem};
 use domovoi_theme::{format_count, group_thousands};
 use serde::Deserialize;
@@ -13,6 +13,7 @@ use crate::owner_reason::removal_phrase;
 use crate::strings::{AND_MORE, DELETE_UNITS, DELETING, FILES, OF, REFINING_SIZE, WITH_ITS_FILES, rule_title};
 use crate::tilde::tilde;
 use crate::tray_row::TrayRow;
+use crate::tray_sizes::TraySizes;
 
 const APP_FILE_LINES: usize = 6;
 
@@ -26,6 +27,8 @@ pub struct TrayModel {
     pub held_by_clones: u64,
     #[serde(default)]
     pub held_by_hard_links: u64,
+    #[serde(default)]
+    pub freed_together: u64,
     #[serde(default)]
     pub measuring: Option<MeasureProgress>,
     #[serde(default)]
@@ -41,18 +44,17 @@ impl TrayModel {
         Self::measured(index, tray, &Self::estimated_sizes(index, tray)).with_progress(MeasureProgress::default())
     }
 
-    pub fn estimated_sizes(index: &Index, tray: &Tray) -> Vec<Reclaimable> {
-        tray.items()
-            .iter()
-            .map(|item| index.reclaimable_estimate(item.node))
-            .collect()
+    pub fn estimated_sizes(index: &Index, tray: &Tray) -> TraySizes {
+        let nodes: Vec<NodeId> = tray.items().iter().map(|item| item.node).collect();
+        TraySizes {
+            items: nodes.iter().map(|node| index.reclaimable_estimate(*node)).collect(),
+            together: index.reclaimable_estimate_of(&nodes),
+        }
     }
 
-    pub fn measured(index: &Index, tray: &Tray, sizes: &[Reclaimable]) -> Self {
+    pub fn measured(index: &Index, tray: &Tray, sizes: &TraySizes) -> Self {
         let mut rows: Vec<(Option<RowGroup>, TrayRow, Vec<NodeId>)> = Vec::new();
-        let mut held = Reclaimable::default();
-        for (item, reclaimable) in tray.items().iter().zip(sizes.iter().copied()) {
-            held += reclaimable;
+        for (item, reclaimable) in tray.items().iter().zip(&sizes.items) {
             let size = reclaimable.bytes;
             let group = RowGroup::of(item);
             let detail = match (item.reason, &item.project) {
@@ -85,11 +87,17 @@ impl TrayModel {
                 (row, nodes)
             })
             .unzip();
+        let freed_apart: u64 = sizes.items.iter().map(|size| size.bytes).sum();
         Self {
             rows,
-            held_by_snapshots: held.held_by_snapshots,
-            held_by_clones: held.held_by_clones,
-            held_by_hard_links: held.held_by_hard_links,
+            held_by_snapshots: sizes.together.held_by_snapshots,
+            held_by_clones: sizes.together.held_by_clones,
+            held_by_hard_links: sizes.together.held_by_hard_links,
+            freed_together: sizes
+                .together
+                .bytes
+                .checked_sub(freed_apart)
+                .expect("items deleted together free at least what each frees alone"),
             measuring: None,
             deleting: None,
             deleted: None,
@@ -144,7 +152,7 @@ impl TrayModel {
     }
 
     pub fn total(&self) -> u64 {
-        self.rows.iter().map(|row| row.size).sum()
+        self.rows.iter().map(|row| row.size).sum::<u64>() + self.freed_together
     }
 
     pub fn held_line(&self) -> Option<String> {

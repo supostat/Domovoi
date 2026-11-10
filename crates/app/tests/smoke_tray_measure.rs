@@ -66,12 +66,20 @@ fn the_tray_is_measured_in_the_background_with_progress_and_can_be_cancelled() {
     let seen = wait(&mut job);
     let measured = job.finish().expect("the measurement completes");
     assert_eq!(
-        measured.sizes,
+        measured.sizes.items,
         [
             indexed(&index, &items[0]),
             indexed(&index, &items[1]),
             Reclaimable::default(),
         ]
+    );
+    let mut apart = Reclaimable::default();
+    for size in &measured.sizes.items {
+        apart += *size;
+    }
+    assert_eq!(
+        measured.sizes.together, apart,
+        "items sharing nothing free together what they free apart"
     );
     assert_eq!(measured.walked.files, (FOLDERS * FILES_PER_FOLDER + 1) as u64);
     assert!(measured.walked.bytes >= (FOLDERS * FILES_PER_FOLDER * FILE_BYTES + LOOSE_BYTES) as u64);

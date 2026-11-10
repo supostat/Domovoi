@@ -404,10 +404,7 @@ impl Session {
             .expect("the tray collects nodes of a scanned volume");
         TraySummary {
             objects: self.tray.items().len(),
-            bytes: TrayModel::estimated_sizes(index, &self.tray)
-                .iter()
-                .map(|size| size.bytes)
-                .sum(),
+            bytes: TrayModel::estimated_sizes(index, &self.tray).together.bytes,
         }
     }
 

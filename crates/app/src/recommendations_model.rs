@@ -1,8 +1,10 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::time::{Duration, SystemTime};
 
 use domovoi_index::{Index, LastOpenedSource, NodeId, Reclaimable, SafetyLevel};
-use domovoi_rules::{Condition, DenyReason, HypothesisCard, ProjectCard, Recommendations, RuleCard, RuleSet};
+use domovoi_rules::{
+    Condition, DenyReason, HypothesisCard, JointHold, ProjectCard, Recommendations, RuleCard, RuleSet,
+};
 use domovoi_theme::{DateSource, format_age, format_count, format_elapsed, format_size};
 use serde::Deserialize;
 
@@ -30,6 +32,8 @@ pub struct RecommendationsModel {
     pub recoverable: u64,
     pub check_yourself: u64,
     pub cards: Vec<CardModel>,
+    #[serde(skip)]
+    pub joint: Vec<JointHold>,
 }
 
 impl RecommendationsModel {
@@ -53,11 +57,14 @@ impl RecommendationsModel {
                 .iter()
                 .map(|hypothesis| hypothesis_card(index, hypothesis, now)),
         );
+        let joint = reachable_holds(&cards, &recommendations.joint);
+        mark_joint_holds(&mut cards, &joint);
         Self {
             safe: recommendations.totals.safe,
             recoverable: recommendations.totals.recoverable,
             check_yourself: recommendations.totals.check_yourself,
             cards,
+            joint,
         }
     }
 
@@ -97,7 +104,39 @@ impl RecommendationsModel {
     }
 
     pub fn selected_total(&self) -> u64 {
-        self.cards.iter().map(CardModel::selected_amount).sum()
+        let apart: u64 = self.cards.iter().map(CardModel::selected_amount).sum();
+        let selected: HashSet<NodeId> = self.cards.iter().flat_map(CardModel::selected_nodes).collect();
+        let together: u64 = self
+            .joint
+            .iter()
+            .filter(|hold| hold.items.iter().all(|item| selected.contains(item)))
+            .map(|hold| hold.bytes)
+            .sum();
+        apart + together
+    }
+}
+
+fn reachable_holds(cards: &[CardModel], joint: &[JointHold]) -> Vec<JointHold> {
+    let markable: HashSet<NodeId> = cards
+        .iter()
+        .filter(|card| card.actionable())
+        .flat_map(|card| card.targets.iter().map(|target| target.node))
+        .collect();
+    joint
+        .iter()
+        .filter(|hold| hold.items.iter().all(|item| markable.contains(item)))
+        .cloned()
+        .collect()
+}
+
+fn mark_joint_holds(cards: &mut [CardModel], joint: &[JointHold]) {
+    let held: HashSet<NodeId> = joint.iter().flat_map(|hold| hold.items.iter().copied()).collect();
+    let in_hold = |targets: &[TrayTarget]| targets.iter().any(|target| held.contains(&target.node));
+    for card in cards {
+        for row in &mut card.rows {
+            row.in_joint_hold = in_hold(&row.targets);
+        }
+        card.in_joint_hold = in_hold(&card.targets);
     }
 }
 
@@ -137,6 +176,7 @@ fn rule_card(index: &Index, rules: &RuleSet, card: &RuleCard) -> CardModel {
         vendor_command: rule.vendor_command.map(|command| format!("{VENDOR_COMMAND} {command}")),
         age: None,
         selected: false,
+        in_joint_hold: false,
         targets: card
             .items
             .iter()
@@ -170,6 +210,7 @@ fn hypothesis_card(index: &Index, card: &HypothesisCard, now: SystemTime) -> Car
         vendor_command: None,
         age: last_opened(index, card.node, now),
         selected: false,
+        in_joint_hold: false,
         rows: Vec::new(),
         targets: vec![TrayTarget {
             node: card.node,
@@ -216,6 +257,7 @@ fn projects_card(index: &Index, rules: &RuleSet, projects: &[ProjectCard], now: 
         vendor_command: None,
         age: None,
         selected: false,
+        in_joint_hold: false,
         targets: rows.iter().flat_map(|row| row.targets.iter().cloned()).collect(),
         rows,
     }
@@ -235,6 +277,7 @@ fn project_row(index: &Index, rules: &RuleSet, project: &ProjectCard, now: Syste
         stale,
         amount: project.reclaimable.bytes,
         selected: false,
+        in_joint_hold: false,
         targets: project
             .items
             .iter()

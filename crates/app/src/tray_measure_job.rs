@@ -5,11 +5,12 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
 
 use domovoi_apfs_sys::{AttributeSet, path_entry};
-use domovoi_index::{Reclaimable, measure_reclaimable};
+use domovoi_index::MeasuredSet;
 use domovoi_scanner::{CancelToken, Node, NodeState, ScanError, ScanOptions, ScanProgress, scan};
 
 use crate::measure_progress::MeasureProgress;
 use crate::tray_measured::TrayMeasured;
+use crate::tray_sizes::TraySizes;
 
 const PROGRESS_BACKLOG: usize = 64;
 
@@ -68,15 +69,23 @@ fn measure_items(
 ) -> Result<TrayMeasured, ScanError> {
     let mut walked = MeasureProgress::default();
     let mut sizes = Vec::with_capacity(items.len());
+    let mut together = MeasuredSet::default();
     for item in items {
         if cancel.is_cancelled() {
             return Err(ScanError::Cancelled);
         }
-        let (reclaimable, after) = measure_item(item, walked, progress, cancel)?;
+        let (measured, after) = measure_item(item, walked, progress, cancel)?;
         walked = after;
-        sizes.push(reclaimable);
+        sizes.push(measured.reclaimable());
+        together.absorb(measured);
     }
-    Ok(TrayMeasured { sizes, walked })
+    Ok(TrayMeasured {
+        sizes: TraySizes {
+            items: sizes,
+            together: together.reclaimable(),
+        },
+        walked,
+    })
 }
 
 fn measure_item(
@@ -84,11 +93,11 @@ fn measure_item(
     before: MeasureProgress,
     progress: &SyncSender<MeasureProgress>,
     cancel: &CancelToken,
-) -> Result<(Reclaimable, MeasureProgress), ScanError> {
+) -> Result<(MeasuredSet, MeasureProgress), ScanError> {
     match fs::symlink_metadata(item) {
         Ok(metadata) if metadata.is_dir() => measure_folder(item, before, progress, cancel),
         Ok(_) => measure_file(item, before, progress),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok((Reclaimable::default(), before)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok((MeasuredSet::default(), before)),
         Err(error) => Err(ScanError::Root(error)),
     }
 }
@@ -97,10 +106,10 @@ fn measure_file(
     item: &Path,
     before: MeasureProgress,
     progress: &SyncSender<MeasureProgress>,
-) -> Result<(Reclaimable, MeasureProgress), ScanError> {
+) -> Result<(MeasuredSet, MeasureProgress), ScanError> {
     let entry = match path_entry(item, AttributeSet::ExtendedWithPrivateSize) {
         Ok(entry) => entry,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok((Reclaimable::default(), before)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok((MeasuredSet::default(), before)),
         Err(error) => return Err(ScanError::Root(error)),
     };
     let attributes = entry.attributes.ok();
@@ -120,7 +129,7 @@ fn measure_file(
         state: NodeState::Leaf,
         children: Vec::new(),
     };
-    Ok((measure_reclaimable(&node), walked))
+    Ok((MeasuredSet::of(&node), walked))
 }
 
 fn measure_folder(
@@ -128,7 +137,7 @@ fn measure_folder(
     before: MeasureProgress,
     progress: &SyncSender<MeasureProgress>,
     cancel: &CancelToken,
-) -> Result<(Reclaimable, MeasureProgress), ScanError> {
+) -> Result<(MeasuredSet, MeasureProgress), ScanError> {
     thread::scope(|scope| {
         let (sender, events) = mpsc::sync_channel(PROGRESS_BACKLOG);
         let options = ScanOptions {
@@ -150,13 +159,13 @@ fn measure_folder(
         }
         match walk.join().expect("the measuring walk does not panic") {
             Ok(walked) => Ok((
-                measure_reclaimable(&walked.root),
+                MeasuredSet::of(&walked.root),
                 MeasureProgress {
                     files: before.files + walked.files,
                     bytes: before.bytes + walked.bytes,
                 },
             )),
-            Err(ScanError::Root(_)) => Ok((Reclaimable::default(), before)),
+            Err(ScanError::Root(_)) => Ok((MeasuredSet::default(), before)),
             Err(error) => Err(error),
         }
     })

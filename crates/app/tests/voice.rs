@@ -102,6 +102,7 @@ fn section_viii_phrases_are_how_the_interface_speaks() {
         recoverable: 26_100_000_000,
         check_yourself: 108_200_000_000,
         cards: Vec::new(),
+        joint: Vec::new(),
     };
     assert_eq!(spoken(&total.total_line()), "Можно освободить 222,1 ГБ");
     let outcome = DeleteOutcome {
