@@ -496,7 +496,7 @@ impl Index {
             .find(|ancestor| self.node(*ancestor).kind == NodeKind::Directory && names_a_package(self.name(*ancestor)))
     }
 
-    fn ancestors(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+    pub(crate) fn ancestors(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
         std::iter::successors(self.parent(id), |node| self.parent(*node))
     }
 

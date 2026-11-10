@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::convert::Infallible;
 use std::io;
 use std::ops::AddAssign;
@@ -8,6 +8,7 @@ use domovoi_apfs_sys::sys::{EF_SHARES_ALL_BLOCKS, UF_COMPRESSED};
 use domovoi_scanner::Node;
 
 use crate::copy_groups::{InodeKey, is_link_member, is_stream_candidate, link_key, stream_key};
+use crate::held_group::{HeldGroup, HeldKey};
 use crate::index::{Index, record};
 use crate::index_node::IndexNode;
 use crate::name_table::NameId;
@@ -40,9 +41,31 @@ pub(crate) struct FileFacts {
     pub(crate) alloc_size: u64,
 }
 
+impl FileFacts {
+    fn of(node: &IndexNode, stream_inodes: u32) -> Self {
+        Self {
+            compressed: node.flags & UF_COMPRESSED != 0,
+            shares_all_blocks: node.ext_flags & u64::from(EF_SHARES_ALL_BLOCKS) != 0,
+            clone_refcount: node.clone_refcount,
+            stream_inodes,
+            alloc_size: node.alloc_size,
+        }
+    }
+
+    fn is_regular_clone(self) -> bool {
+        !self.compressed && self.clone_refcount > 1
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FileReading {
+    Vanished,
+    Unread,
+    Private(u64),
+}
+
 pub(crate) fn estimate_file(facts: FileFacts) -> Reclaimable {
-    let regular_clone = !facts.compressed && facts.clone_refcount > 1;
-    if facts.shares_all_blocks || facts.stream_inodes > 1 || regular_clone {
+    if facts.shares_all_blocks || facts.stream_inodes > 1 || facts.is_regular_clone() {
         Reclaimable {
             held_by_clones: facts.alloc_size,
             ..Reclaimable::default()
@@ -55,14 +78,24 @@ pub(crate) fn estimate_file(facts: FileFacts) -> Reclaimable {
     }
 }
 
-pub(crate) fn reclaimable_file(
-    facts: FileFacts,
-    private_size: impl FnOnce() -> io::Result<u64>,
-) -> io::Result<Reclaimable> {
+fn read_file(facts: FileFacts, private_size: impl FnOnce() -> io::Result<u64>) -> io::Result<FileReading> {
     if facts.compressed {
-        return Ok(estimate_file(facts));
+        return Ok(FileReading::Unread);
     }
-    Ok(split_private(facts, private_size()?))
+    match private_size() {
+        Ok(size) => Ok(FileReading::Private(size)),
+        Err(error) if error.raw_os_error() == Some(libc::ENOENT) => Ok(FileReading::Vanished),
+        Err(error) if error.kind() == io::ErrorKind::Unsupported => Ok(FileReading::Unread),
+        Err(error) => Err(error),
+    }
+}
+
+fn reclaim_alone(facts: FileFacts, reading: FileReading) -> Reclaimable {
+    match reading {
+        FileReading::Vanished => Reclaimable::default(),
+        FileReading::Unread => estimate_file(facts),
+        FileReading::Private(size) => split_private(facts, size),
+    }
 }
 
 fn split_private(facts: FileFacts, private_size: u64) -> Reclaimable {
@@ -77,20 +110,127 @@ fn split_private(facts: FileFacts, private_size: u64) -> Reclaimable {
     }
 }
 
-impl FileFacts {
-    fn of(node: &IndexNode, stream_inodes: u32) -> Self {
-        Self {
-            compressed: node.flags & UF_COMPRESSED != 0,
-            shares_all_blocks: node.ext_flags & u64::from(EF_SHARES_ALL_BLOCKS) != 0,
-            clone_refcount: node.clone_refcount,
-            stream_inodes,
-            alloc_size: node.alloc_size,
-        }
+fn reclaim_together(members: &[(FileFacts, FileReading)]) -> Reclaimable {
+    let mut private = 0;
+    let mut shared = 0;
+    for (facts, reading) in members {
+        let own = match reading {
+            FileReading::Vanished => continue,
+            FileReading::Unread => 0,
+            FileReading::Private(size) => (*size).min(facts.alloc_size),
+        };
+        private += own;
+        shared = shared.max(facts.alloc_size - own);
+    }
+    Reclaimable {
+        bytes: private + shared,
+        ..Reclaimable::default()
     }
 }
 
+#[derive(Debug, Default)]
+struct Tally {
+    total: Reclaimable,
+    held: Vec<HeldGroup>,
+}
+
+fn tally_files<'file, T, E>(
+    files: impl IntoIterator<Item = (&'file IndexNode, T)>,
+    stream_inodes: impl Fn(&IndexNode) -> u32,
+    mut read: impl FnMut(FileFacts, T) -> Result<FileReading, E>,
+) -> Result<Tally, E> {
+    let mut tally = Tally::default();
+    let mut streams: HashMap<InodeKey, Vec<(FileFacts, T)>> = HashMap::new();
+    for (file, item) in freed_inodes(files, &mut tally) {
+        let facts = FileFacts::of(file, stream_inodes(file));
+        if facts.is_regular_clone() {
+            streams.entry(stream_key(file)).or_default().push((facts, item));
+        } else {
+            tally.total += reclaim_alone(facts, read(facts, item)?);
+        }
+    }
+    for (key, members) in streams {
+        settle_stream(key, members, &mut read, &mut tally)?;
+    }
+    tally.held.sort_unstable_by_key(|group| group.key);
+    Ok(tally)
+}
+
+fn freed_inodes<'file, T>(
+    files: impl IntoIterator<Item = (&'file IndexNode, T)>,
+    tally: &mut Tally,
+) -> Vec<(&'file IndexNode, T)> {
+    let mut linked: HashMap<InodeKey, (u32, &'file IndexNode, T)> = HashMap::new();
+    let mut inodes = Vec::new();
+    for (file, item) in files {
+        if file.link_count > 1 {
+            linked
+                .entry(link_key(file))
+                .and_modify(|group| group.0 += 1)
+                .or_insert((1, file, item));
+        } else {
+            inodes.push((file, item));
+        }
+    }
+    for (key, (inside, file, item)) in linked {
+        if inside >= file.link_count {
+            inodes.push((file, item));
+        } else {
+            tally.total.held_by_hard_links += file.alloc_size;
+            tally.held.push(HeldGroup {
+                key: HeldKey::hard_links(key),
+                bytes: file.alloc_size,
+                members_inside: inside,
+                members_total: file.link_count,
+            });
+        }
+    }
+    inodes
+}
+
+fn settle_stream<T, E>(
+    key: InodeKey,
+    members: Vec<(FileFacts, T)>,
+    read: &mut impl FnMut(FileFacts, T) -> Result<FileReading, E>,
+    tally: &mut Tally,
+) -> Result<(), E> {
+    let members_inside = u32::try_from(members.len()).expect("a clone stream has fewer than 2^32 inodes");
+    let members_total = members
+        .iter()
+        .map(|(facts, _)| facts.clone_refcount)
+        .max()
+        .expect("a clone stream is not empty");
+    let bytes = members
+        .iter()
+        .map(|(facts, _)| facts.alloc_size)
+        .max()
+        .expect("a clone stream is not empty");
+    let readings = members
+        .into_iter()
+        .map(|(facts, item)| Ok((facts, read(facts, item)?)))
+        .collect::<Result<Vec<_>, E>>()?;
+    if members_inside >= members_total {
+        tally.total += reclaim_together(&readings);
+        return Ok(());
+    }
+    for (facts, reading) in readings {
+        tally.total += reclaim_alone(facts, reading);
+    }
+    tally.held.push(HeldGroup {
+        key: HeldKey::clones(key),
+        bytes,
+        members_inside,
+        members_total,
+    });
+    Ok(())
+}
+
 pub fn measure_reclaimable(root: &Node) -> Reclaimable {
-    let files = scanned_files(root);
+    measure_reclaimable_of(&[root])
+}
+
+pub fn measure_reclaimable_of(roots: &[&Node]) -> Reclaimable {
+    let files: Vec<(IndexNode, Option<u64>)> = roots.iter().flat_map(|root| scanned_files(root)).collect();
     let mut linked = HashSet::new();
     let mut streams: HashMap<InodeKey, u32> = HashMap::new();
     for (file, _) in &files {
@@ -99,15 +239,24 @@ pub fn measure_reclaimable(root: &Node) -> Reclaimable {
             *streams.entry(stream_key(file)).or_default() += 1;
         }
     }
-    let Ok(total) = sum_over_files(files.iter().map(|(file, private)| (file, *private)), |file, private| {
-        let stream_inodes = if is_stream_candidate(file) {
+    let stream_inodes = |file: &IndexNode| {
+        if is_stream_candidate(file) {
             streams[&stream_key(file)]
         } else {
             1
-        };
-        Ok::<_, Infallible>(measured_file(FileFacts::of(file, stream_inodes), private))
-    });
-    total
+        }
+    };
+    let Ok(tally) = tally_files(
+        files.iter().map(|(file, private)| (file, *private)),
+        stream_inodes,
+        |facts, private| {
+            Ok::<_, Infallible>(match private {
+                Some(size) if !facts.compressed => FileReading::Private(size),
+                _ => FileReading::Unread,
+            })
+        },
+    );
+    tally.total
 }
 
 fn scanned_files(root: &Node) -> Vec<(IndexNode, Option<u64>)> {
@@ -126,69 +275,56 @@ fn scanned_files(root: &Node) -> Vec<(IndexNode, Option<u64>)> {
     files
 }
 
-fn measured_file(facts: FileFacts, private_size: Option<u64>) -> Reclaimable {
-    match private_size {
-        Some(private) if !facts.compressed => split_private(facts, private),
-        _ => estimate_file(facts),
-    }
-}
-
-fn sum_over_files<'file, T, E>(
-    files: impl IntoIterator<Item = (&'file IndexNode, T)>,
-    mut reclaim: impl FnMut(&'file IndexNode, T) -> Result<Reclaimable, E>,
-) -> Result<Reclaimable, E> {
-    let mut total = Reclaimable::default();
-    let mut linked: HashMap<InodeKey, (usize, &'file IndexNode, T)> = HashMap::new();
-    for (file, item) in files {
-        if file.link_count > 1 {
-            linked
-                .entry(link_key(file))
-                .and_modify(|group| group.0 += 1)
-                .or_insert((1, file, item));
-        } else {
-            total += reclaim(file, item)?;
-        }
-    }
-    for (seen, file, item) in linked.into_values() {
-        if file.link_count as usize > seen {
-            total.held_by_hard_links += file.alloc_size;
-        } else {
-            total += reclaim(file, item)?;
-        }
-    }
-    Ok(total)
-}
-
 impl Index {
     pub fn reclaimable(&self, id: NodeId) -> io::Result<Reclaimable> {
-        self.sum_over_inodes(id, |entry, facts| {
-            let path = self.physical_path(entry);
-            match reclaimable_file(facts, || private_size(&path)) {
-                Err(error) if error.raw_os_error() == Some(libc::ENOENT) => Ok(Reclaimable::default()),
-                Err(error) if error.kind() == io::ErrorKind::Unsupported => Ok(estimate_file(facts)),
-                outcome => outcome,
-            }
-        })
+        self.reclaimable_of(&[id])
+    }
+
+    pub fn reclaimable_of(&self, ids: &[NodeId]) -> io::Result<Reclaimable> {
+        let tally = self.tally(ids, |member, facts| {
+            read_file(facts, || private_size(&self.physical_path(member)))
+        })?;
+        Ok(tally.total)
     }
 
     pub fn reclaimable_estimate(&self, id: NodeId) -> Reclaimable {
-        let Ok(total) = self.sum_over_inodes(id, |_, facts| Ok::<_, Infallible>(estimate_file(facts)));
-        total
+        self.reclaimable_estimate_of(&[id])
     }
 
-    fn sum_over_inodes<E>(
+    pub fn reclaimable_estimate_of(&self, ids: &[NodeId]) -> Reclaimable {
+        self.estimate_tally(ids).total
+    }
+
+    pub fn held_groups(&self, id: NodeId) -> Vec<HeldGroup> {
+        self.estimate_tally(&[id]).held
+    }
+
+    fn estimate_tally(&self, ids: &[NodeId]) -> Tally {
+        let Ok(tally) = self.tally(ids, |_, _| Ok::<_, Infallible>(FileReading::Unread));
+        tally
+    }
+
+    fn tally<E>(
         &self,
-        id: NodeId,
-        mut reclaim: impl FnMut(NodeId, FileFacts) -> Result<Reclaimable, E>,
-    ) -> Result<Reclaimable, E> {
+        ids: &[NodeId],
+        mut read: impl FnMut(NodeId, FileFacts) -> Result<FileReading, E>,
+    ) -> Result<Tally, E> {
         let files = self
-            .subtree(id)
+            .outermost(ids)
             .into_iter()
+            .flat_map(|root| self.subtree(root))
             .filter(|member| self.node(*member).kind == NodeKind::File)
             .map(|member| (self.node(member), member));
-        sum_over_files(files, |file, member| {
-            reclaim(member, FileFacts::of(file, file.shares_with + 1))
-        })
+        tally_files(files, |file| file.shares_with + 1, |facts, member| read(member, facts))
+    }
+
+    fn outermost(&self, ids: &[NodeId]) -> BTreeSet<NodeId> {
+        let chosen: BTreeSet<NodeId> = ids.iter().copied().collect();
+        chosen
+            .iter()
+            .copied()
+            .filter(|id| !self.ancestors(*id).any(|ancestor| chosen.contains(&ancestor)))
+            .collect()
     }
 }
 
@@ -196,7 +332,7 @@ impl Index {
 mod tests {
     use std::io;
 
-    use super::{FileFacts, Reclaimable, reclaimable_file};
+    use super::{FileFacts, FileReading, Reclaimable, read_file, reclaim_alone};
 
     const ALLOCATED: u64 = 40_960;
 
@@ -212,9 +348,9 @@ mod tests {
 
     #[test]
     fn blocks_kept_only_by_a_snapshot_are_held_by_the_snapshot() {
-        let reclaimable = reclaimable_file(facts(), || Ok(0)).expect("facts are complete");
+        let reading = read_file(facts(), || Ok(0)).expect("facts are complete");
         assert_eq!(
-            reclaimable,
+            reclaim_alone(facts(), reading),
             Reclaimable {
                 held_by_snapshots: ALLOCATED,
                 ..Reclaimable::default()
@@ -229,19 +365,13 @@ mod tests {
             ..facts()
         };
         let unread = || -> io::Result<u64> { panic!("PRIVATESIZE is meaningless for decmpfs files") };
-        assert_eq!(
-            reclaimable_file(compressed, unread).expect("facts are complete").bytes,
-            ALLOCATED
-        );
+        let reading = read_file(compressed, unread).expect("facts are complete");
+        assert_eq!(reading, FileReading::Unread);
+        assert_eq!(reclaim_alone(compressed, reading).bytes, ALLOCATED);
         let cloned = FileFacts {
             stream_inodes: 2,
             ..compressed
         };
-        assert_eq!(
-            reclaimable_file(cloned, unread)
-                .expect("facts are complete")
-                .held_by_clones,
-            ALLOCATED
-        );
+        assert_eq!(reclaim_alone(cloned, reading).held_by_clones, ALLOCATED);
     }
 }

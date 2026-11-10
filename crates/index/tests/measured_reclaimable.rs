@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::Command;
 
 use domovoi_apfs_sys::AttributeSet;
-use domovoi_index::{Enrichment, Index, IndexRoot, Reclaimable, measure_reclaimable};
+use domovoi_index::{Enrichment, Index, IndexRoot, NodeId, Reclaimable, measure_reclaimable, measure_reclaimable_of};
 use domovoi_scanner::{Node, ScanOptions, ScanReport, scan};
 use domovoi_testkit::{Fill, TempTree};
 
@@ -68,11 +68,16 @@ fn child<'node>(node: &'node Node, name: &str) -> &'node Node {
         .unwrap_or_else(|| panic!("{name} is scanned"))
 }
 
-fn indexed(index: &Index, tree: &TempTree, relative: &str) -> Reclaimable {
-    let node = index
+fn found(index: &Index, tree: &TempTree, relative: &str) -> NodeId {
+    index
         .find(&tree.path().join(relative))
-        .unwrap_or_else(|| panic!("{relative} is indexed"));
-    index.reclaimable(node).expect("the index measures the item")
+        .unwrap_or_else(|| panic!("{relative} is indexed"))
+}
+
+fn indexed(index: &Index, tree: &TempTree, relative: &str) -> Reclaimable {
+    index
+        .reclaimable(found(index, tree, relative))
+        .expect("the index measures the item")
 }
 
 #[test]
@@ -99,4 +104,22 @@ fn measured_files_equal_the_index_measurement() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn a_measured_set_equals_the_index_measurement_of_the_same_set() {
+    let tree = workshop();
+    let (report, index) = scanned(&tree);
+    let measured = measure_reclaimable_of(&[child(&report.root, "item"), child(&report.root, "outside")]);
+    let set = ["item", "outside"].map(|relative| found(&index, &tree, relative));
+    assert_eq!(
+        measured,
+        index.reclaimable_of(&set).expect("the index measures the set")
+    );
+    assert_eq!(measured.held_by_hard_links, 0, "{measured:?}");
+    let compressed_pair = ["item/packed", "item/packed-clone"]
+        .map(|relative| index.node(found(&index, &tree, relative)).alloc_size)
+        .iter()
+        .sum::<u64>();
+    assert_eq!(measured.held_by_clones, compressed_pair, "{measured:?}");
 }
