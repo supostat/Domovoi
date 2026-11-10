@@ -295,8 +295,9 @@ impl Index {
         self.estimate_tally(ids).total
     }
 
-    pub fn held_groups(&self, id: NodeId) -> Vec<HeldGroup> {
-        self.estimate_tally(&[id]).held
+    pub fn reclaimable_estimate_with_held_groups(&self, id: NodeId) -> (Reclaimable, Vec<HeldGroup>) {
+        let tally = self.estimate_tally(&[id]);
+        (tally.total, tally.held)
     }
 
     fn estimate_tally(&self, ids: &[NodeId]) -> Tally {

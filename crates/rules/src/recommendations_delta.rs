@@ -7,6 +7,7 @@ use domovoi_index::{DeltaApplied, Index, NodeId, SplicedDirectory};
 use crate::claim_ledger::{ClaimLedger, ancestry};
 use crate::claim_scope::ClaimScope;
 use crate::denylist::Denylist;
+use crate::joint_hold::JointHold;
 use crate::recommendations::{HypothesisCard, Recommendations};
 use crate::rule_set::RuleSet;
 
@@ -44,7 +45,11 @@ impl Recommendations {
             }
         }
         ledger.settle(index, denylist);
+        let holdings_changed = ledger.holdings_changed();
         (self.cards, self.projects, self.totals) = ledger.into_recommendations(index, rules, running_bundle_ids);
+        if holdings_changed {
+            self.joint = JointHold::gather(&self.cards, &self.projects);
+        }
         if !hypotheses.is_empty() {
             let touched: HashSet<NodeId> = directories
                 .iter()

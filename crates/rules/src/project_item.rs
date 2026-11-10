@@ -1,8 +1,9 @@
-use domovoi_index::{NodeId, Reclaimable};
+use domovoi_index::{HeldGroup, NodeId, Reclaimable};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProjectItem {
     pub node: NodeId,
     pub rule: usize,
     pub reclaimable: Reclaimable,
+    pub held: Vec<HeldGroup>,
 }

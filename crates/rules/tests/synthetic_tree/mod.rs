@@ -61,6 +61,20 @@ pub(crate) fn file(name: &str) -> Node {
     node(name, ObjectKind::File, Vec::new())
 }
 
+pub(crate) fn hard_link_pair(name: &str, partner_name: &str) -> (Node, Node) {
+    let mut first = file(name);
+    let attributes = first.attributes.as_mut().expect("a synthetic file has attributes");
+    attributes.link_count = Some(2);
+    let mut partner = first.clone();
+    partner.name = OsString::from(partner_name);
+    partner
+        .attributes
+        .as_mut()
+        .expect("a synthetic file has attributes")
+        .link_id = Some(NEXT_FILE_ID.fetch_add(1, Ordering::Relaxed));
+    (first, partner)
+}
+
 pub(crate) fn path_tree(path: &str, leaf: Node) -> Node {
     let mut parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
     let mut current = leaf;

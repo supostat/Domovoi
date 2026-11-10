@@ -59,8 +59,14 @@ fn held_by_hard_links(bytes: u64) -> Reclaimable {
     }
 }
 
+fn held_groups(index: &Index, folder: NodeId) -> Vec<HeldGroup> {
+    let (estimate, groups) = index.reclaimable_estimate_with_held_groups(folder);
+    assert_eq!(estimate, index.reclaimable_estimate(folder));
+    groups
+}
+
 fn the_only_group(index: &Index, folder: NodeId) -> HeldGroup {
-    let groups = index.held_groups(folder);
+    let groups = held_groups(index, folder);
     assert_eq!(groups.len(), 1, "{groups:?}");
     groups[0]
 }
@@ -288,7 +294,7 @@ fn a_clone_pair_inside_one_folder_is_freed_once_by_the_folder() {
         index.reclaimable(pair).expect("reclaimable is computed"),
         freed(allocated)
     );
-    assert!(index.held_groups(pair).is_empty());
+    assert!(held_groups(&index, pair).is_empty());
 }
 
 #[test]
@@ -365,5 +371,5 @@ fn a_compressed_clone_pair_stays_held_because_decmpfs_files_report_no_clone_refc
     assert_eq!(members.map(|member| index.node(member).clone_refcount), [0, 0]);
     let allocated = members.iter().map(|member| index.node(*member).alloc_size).sum();
     assert_eq!(index.reclaimable_estimate(pair), held_by_clones(allocated));
-    assert!(index.held_groups(pair).is_empty());
+    assert!(held_groups(&index, pair).is_empty());
 }

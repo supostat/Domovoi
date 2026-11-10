@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::os::fd::AsFd;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use domovoi_apfs_sys::chflags;
@@ -43,6 +44,7 @@ struct View {
     cards: BTreeMap<&'static str, CardView>,
     projects: BTreeMap<PathBuf, ProjectView>,
     totals: LevelTotals,
+    joint: BTreeMap<Vec<PathBuf>, u64>,
     hypotheses: BTreeMap<PathBuf, Reclaimable>,
 }
 
@@ -197,6 +199,15 @@ impl Workbench {
                 })
                 .collect(),
             totals: recommendations.totals,
+            joint: recommendations
+                .joint
+                .iter()
+                .map(|hold| {
+                    let mut items: Vec<PathBuf> = hold.items.iter().map(|item| path(*item)).collect();
+                    items.sort();
+                    (items, hold.bytes)
+                })
+                .collect(),
             hypotheses: recommendations
                 .hypotheses
                 .iter()
@@ -205,20 +216,28 @@ impl Workbench {
         }
     }
 
-    fn views(&self) -> (View, View) {
-        let full = Recommendations::build(
+    fn full_build(&self) -> Recommendations {
+        Recommendations::build(
             &self.index,
             &self.rules,
             &self.denylist,
             &BTreeSet::new(),
             self.hypotheses.clone(),
-        );
-        (self.view(&self.recommendations), self.view(&full))
+        )
+    }
+
+    fn views(&self) -> (View, View) {
+        (self.view(&self.recommendations), self.view(&self.full_build()))
     }
 
     fn assert_matches_a_full_build(&self) {
         let (delta, full) = self.views();
         assert_eq!(delta, full);
+        assert_eq!(
+            self.recommendations.joint,
+            self.full_build().joint,
+            "joint holds name the current nodes of their items"
+        );
         assert!(
             self.recommendations
                 .cards
@@ -237,6 +256,18 @@ impl Workbench {
 
     fn project(&self, relative: &str) -> Option<ProjectView> {
         self.view(&self.recommendations).projects.remove(&self.path(relative))
+    }
+
+    fn joint(&self) -> BTreeMap<Vec<PathBuf>, u64> {
+        self.view(&self.recommendations).joint
+    }
+
+    fn allocated(&self, relative: &str) -> u64 {
+        let node = self
+            .index
+            .find(&self.path(relative))
+            .unwrap_or_else(|| panic!("{relative} is indexed"));
+        self.index.node(node).alloc_size
     }
 }
 
@@ -432,6 +463,104 @@ fn a_clone_leaving_its_group_outside_an_item_frees_the_shared_blocks_of_the_item
             bytes: FILE_ALLOCATION,
             ..Reclaimable::default()
         }
+    );
+    bench.assert_matches_a_full_build();
+}
+
+fn projects_sharing_a_hard_link_and_a_clone() -> TempTree {
+    let tree = TempTree::new().expect("temp tree is created");
+    let root = tree.root().expect("root opens");
+    for project in ["alpha", "beta"] {
+        let folder = root.directory(project).expect("directory is created");
+        folder.file("package.json", 64, Fill::Byte(1)).expect("file is written");
+        folder
+            .directory("node_modules")
+            .expect("directory is created")
+            .directory("pkg")
+            .expect("directory is created");
+    }
+    let alpha = tree.path().join("alpha/node_modules/pkg");
+    let beta = tree.path().join("beta/node_modules/pkg");
+    fs::write(alpha.join("linked.bin"), vec![3_u8; 40_000]).expect("file is written");
+    fs::hard_link(alpha.join("linked.bin"), beta.join("linked.bin")).expect("the projects share a hard link");
+    fs::write(alpha.join("cloned.bin"), vec![5_u8; 60_000]).expect("file is written");
+    let status = Command::new("/bin/cp")
+        .arg("-c")
+        .arg(alpha.join("cloned.bin"))
+        .arg(beta.join("cloned.bin"))
+        .status()
+        .expect("cp runs");
+    assert!(status.success(), "cp -c failed");
+    age_files(tree.path());
+    tree
+}
+
+#[test]
+fn a_delta_touching_one_of_two_projects_with_shared_files_keeps_their_joint_hold_as_a_full_build() {
+    let mut bench = Workbench::scanned(projects_sharing_a_hard_link_and_a_clone());
+    let together = vec![bench.path("alpha/node_modules"), bench.path("beta/node_modules")];
+    let linked = bench.allocated("alpha/node_modules/pkg/linked.bin");
+    let cloned = bench.allocated("alpha/node_modules/pkg/cloned.bin");
+    assert_eq!(bench.joint(), BTreeMap::from([(together.clone(), linked + cloned)]));
+
+    fs::write(bench.path("alpha/README.md"), b"alpha").expect("a file appears next to the dependencies");
+    bench.apply(&["alpha"]);
+    assert_eq!(bench.joint(), BTreeMap::from([(together.clone(), linked + cloned)]));
+    bench.assert_matches_a_full_build();
+
+    fs::write(bench.path("beta/node_modules/pkg/fresh.js"), b"export {}").expect("a file is added");
+    bench.apply(&["beta/node_modules/pkg"]);
+    assert_eq!(bench.joint(), BTreeMap::from([(together.clone(), linked + cloned)]));
+    bench.assert_matches_a_full_build();
+
+    fs::remove_file(bench.path("beta/node_modules/pkg/linked.bin")).expect("the shared link is removed");
+    bench.apply(&["beta/node_modules/pkg"]);
+    assert_eq!(bench.joint(), BTreeMap::from([(together, cloned)]));
+    bench.assert_matches_a_full_build();
+
+    fs::remove_file(bench.path("beta/node_modules/pkg/cloned.bin")).expect("the shared clone is removed");
+    bench.apply(&["beta/node_modules/pkg"]);
+    assert!(bench.joint().is_empty(), "{:?}", bench.joint());
+    bench.assert_matches_a_full_build();
+}
+
+#[test]
+fn removing_the_dependencies_of_one_of_two_projects_with_shared_files_drops_their_joint_hold() {
+    let mut bench = Workbench::scanned(projects_sharing_a_hard_link_and_a_clone());
+    assert_eq!(bench.joint().len(), 1, "{:?}", bench.joint());
+    fs::remove_dir_all(bench.path("beta/node_modules")).expect("the dependencies are removed");
+    bench.apply(&["beta"]);
+    assert!(bench.project("beta").is_none());
+    assert!(bench.joint().is_empty(), "{:?}", bench.joint());
+    bench.assert_matches_a_full_build();
+}
+
+#[test]
+fn a_third_project_linking_the_shared_file_joins_the_joint_hold() {
+    let mut bench = Workbench::scanned(projects_sharing_a_hard_link_and_a_clone());
+    let linked = bench.allocated("alpha/node_modules/pkg/linked.bin");
+    let cloned = bench.allocated("alpha/node_modules/pkg/cloned.bin");
+    let gamma = bench.path("gamma/node_modules/pkg");
+    fs::create_dir_all(&gamma).expect("the dependencies folder is created");
+    fs::write(bench.path("gamma/package.json"), b"{}").expect("the manifest is written");
+    fs::hard_link(
+        bench.path("alpha/node_modules/pkg/linked.bin"),
+        gamma.join("linked.bin"),
+    )
+    .expect("the third project links the shared file");
+    bench.apply(&[""]);
+    let modules = |projects: &[&str]| -> Vec<PathBuf> {
+        projects
+            .iter()
+            .map(|project| bench.path(&format!("{project}/node_modules")))
+            .collect()
+    };
+    assert_eq!(
+        bench.joint(),
+        BTreeMap::from([
+            (modules(&["alpha", "beta"]), cloned),
+            (modules(&["alpha", "beta", "gamma"]), linked),
+        ])
     );
     bench.assert_matches_a_full_build();
 }

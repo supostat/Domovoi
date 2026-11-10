@@ -7,6 +7,7 @@ use crate::card_item::CardItem;
 use crate::claim_ledger::ClaimLedger;
 use crate::deny_reason::DenyReason;
 use crate::denylist::Denylist;
+use crate::joint_hold::JointHold;
 use crate::project_card::ProjectCard;
 use crate::rule_set::RuleSet;
 
@@ -76,6 +77,7 @@ pub struct Recommendations {
     pub cards: Vec<RuleCard>,
     pub projects: Vec<ProjectCard>,
     pub totals: LevelTotals,
+    pub joint: Vec<JointHold>,
     pub hypotheses: Vec<HypothesisCard>,
 }
 
@@ -91,6 +93,7 @@ impl Recommendations {
         ledger.settle(index, denylist);
         let (cards, projects, totals) = ledger.into_recommendations(index, rules, running_bundle_ids);
         Self {
+            joint: JointHold::gather(&cards, &projects),
             cards,
             projects,
             totals,

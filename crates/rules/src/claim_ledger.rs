@@ -2,7 +2,7 @@ use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap};
 use std::iter;
 
-use domovoi_index::{Index, NodeId, Reclaimable};
+use domovoi_index::{HeldGroup, Index, NodeId, Reclaimable};
 
 use crate::blocked_item::BlockedItem;
 use crate::card_item::CardItem;
@@ -22,8 +22,20 @@ enum Due {
 
 #[derive(Clone, Debug)]
 enum Standing {
-    Counted(Reclaimable),
+    Counted {
+        reclaimable: Reclaimable,
+        held: Vec<HeldGroup>,
+    },
     Blocked(DenyReason),
+}
+
+impl Standing {
+    fn held(standing: Option<&Self>) -> &[HeldGroup] {
+        match standing {
+            Some(Self::Counted { held, .. }) => held,
+            Some(Self::Blocked(_)) | None => &[],
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -37,6 +49,7 @@ struct LedgerEntry {
 pub(crate) struct ClaimLedger {
     entries: Vec<Option<LedgerEntry>>,
     positions: HashMap<NodeId, usize>,
+    holdings_changed: bool,
 }
 
 impl ClaimLedger {
@@ -52,10 +65,15 @@ impl ClaimLedger {
         let mut ledger = Self::default();
         for card in cards {
             let rule = card.rule;
-            let counted = card
-                .items
-                .into_iter()
-                .map(|item| (Claim { node: item.node, rule }, Standing::Counted(item.reclaimable)));
+            let counted = card.items.into_iter().map(|item| {
+                (
+                    Claim { node: item.node, rule },
+                    Standing::Counted {
+                        reclaimable: item.reclaimable,
+                        held: item.held,
+                    },
+                )
+            });
             let blocked = card
                 .blocked
                 .into_iter()
@@ -71,7 +89,10 @@ impl ClaimLedger {
                         node: item.node,
                         rule: item.rule,
                     },
-                    Standing::Counted(item.reclaimable),
+                    Standing::Counted {
+                        reclaimable: item.reclaimable,
+                        held: item.held,
+                    },
                 )
             });
             let blocked = project.blocked.into_iter().map(|blocked| {
@@ -132,13 +153,17 @@ impl ClaimLedger {
                 .expect("a position points at a live entry");
             entry.claim.node = current;
             entry.due = entry.due.max(Due::Verdict);
+            self.holdings_changed |= !Standing::held(entry.standing.as_ref()).is_empty();
             self.positions.insert(current, position);
         }
     }
 
     pub(crate) fn forget(&mut self, node: NodeId) {
         if let Some(position) = self.positions.remove(&node) {
-            self.entries[position] = None;
+            let entry = self.entries[position]
+                .take()
+                .expect("a position points at a live entry");
+            self.holdings_changed |= !Standing::held(entry.standing.as_ref()).is_empty();
         }
     }
 
@@ -171,20 +196,32 @@ impl ClaimLedger {
     }
 
     pub(crate) fn settle(&mut self, index: &Index, denylist: &Denylist) {
+        let mut holdings_changed = false;
         for entry in self.entries.iter_mut().flatten() {
             if entry.due == Due::Nothing {
                 continue;
             }
             let node = entry.claim.node;
-            entry.standing = Some(match (denylist.verdict(index, node), entry.standing.take()) {
-                (Some(reason), _) => Standing::Blocked(reason),
-                (None, Some(Standing::Counted(reclaimable))) if entry.due == Due::Verdict => {
-                    Standing::Counted(reclaimable)
+            let standing = match (denylist.verdict(index, node), entry.standing.take()) {
+                (Some(reason), previous) => {
+                    holdings_changed |= !Standing::held(previous.as_ref()).is_empty();
+                    Standing::Blocked(reason)
                 }
-                (None, _) => Standing::Counted(index.reclaimable_estimate(node)),
-            });
+                (None, Some(counted @ Standing::Counted { .. })) if entry.due == Due::Verdict => counted,
+                (None, previous) => {
+                    let (reclaimable, held) = index.reclaimable_estimate_with_held_groups(node);
+                    holdings_changed |= Standing::held(previous.as_ref()) != held.as_slice();
+                    Standing::Counted { reclaimable, held }
+                }
+            };
+            entry.standing = Some(standing);
             entry.due = Due::Nothing;
         }
+        self.holdings_changed |= holdings_changed;
+    }
+
+    pub(crate) fn holdings_changed(&self) -> bool {
+        self.holdings_changed
     }
 
     pub(crate) fn into_recommendations(
@@ -202,7 +239,7 @@ impl ClaimLedger {
             let claim = entry.claim;
             let standing = entry.standing.expect("every claim is settled before its card is built");
             let definition = rules.rule(claim.rule);
-            if let Standing::Counted(reclaimable) = &standing
+            if let Standing::Counted { reclaimable, .. } = &standing
                 && !definition.is_info_only()
             {
                 totals.add(definition.level, reclaimable.bytes);
@@ -265,9 +302,13 @@ fn empty_card(rules: &RuleSet, rule: usize, running_bundle_ids: &BTreeSet<String
 
 fn file_into_card(card: &mut RuleCard, node: NodeId, standing: Standing) {
     match standing {
-        Standing::Counted(reclaimable) => {
+        Standing::Counted { reclaimable, held } => {
             card.reclaimable += reclaimable;
-            card.items.push(CardItem { node, reclaimable });
+            card.items.push(CardItem {
+                node,
+                reclaimable,
+                held,
+            });
         }
         Standing::Blocked(reason) => card.blocked.push((node, reason)),
     }
@@ -275,12 +316,13 @@ fn file_into_card(card: &mut RuleCard, node: NodeId, standing: Standing) {
 
 fn file_into_project(project: &mut ProjectCard, claim: Claim, standing: Standing) {
     match standing {
-        Standing::Counted(reclaimable) => {
+        Standing::Counted { reclaimable, held } => {
             project.reclaimable += reclaimable;
             project.items.push(ProjectItem {
                 node: claim.node,
                 rule: claim.rule,
                 reclaimable,
+                held,
             });
         }
         Standing::Blocked(reason) => project.blocked.push(BlockedItem {

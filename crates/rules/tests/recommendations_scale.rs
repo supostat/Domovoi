@@ -8,9 +8,11 @@ use domovoi_index::{ChangedPath, DeltaRequest, DirectoryListing, Enrichment, Ind
 use domovoi_rules::{CaseRule, ConfigOverrides, Denylist, Recommendations, RuleSet, rule_table};
 use domovoi_scanner::{Node, NodeState, ScanReport};
 use domovoi_testkit::TempTree;
-use synthetic_tree::{FILE_ALLOCATION, NoSimulators, data_volume, directory, file, merge, path_tree};
+use synthetic_tree::{FILE_ALLOCATION, NoSimulators, data_volume, directory, file, hard_link_pair, merge, path_tree};
 
 const PROJECT: &str = "Users/igor/Projects/engine";
+const LINKED_PROJECT: &str = "Users/igor/Projects/site";
+const UNCLAIMED_STORE: &str = "Users/igor/Storage/pnpm";
 const BUILD_UNITS: usize = 1_000;
 const OBJECTS_PER_UNIT: usize = 500;
 const WORKSHOP_UNITS: usize = 500;
@@ -36,6 +38,7 @@ impl Workshop {
         for folder in ["engine", "engine/target", "engine/target/unit-0", "site", "notes"] {
             fs::create_dir(tree.path().join(folder)).expect("the folder exists on disk for its delta target");
         }
+        let (modules, store) = modules_linked_to_a_store();
         let report = ScanReport {
             root: Node {
                 name: tree.path().as_os_str().to_owned(),
@@ -44,7 +47,8 @@ impl Workshop {
                 state: NodeState::Listed,
                 children: vec![
                     directory("engine", vec![file("Cargo.toml"), build_products(WORKSHOP_UNITS)]),
-                    directory("site", vec![file("package.json"), dependencies()]),
+                    directory("site", vec![file("package.json"), modules]),
+                    directory("store", vec![store]),
                     directory("notes", numbered("note", LOOSE_NOTES)),
                 ],
             },
@@ -136,15 +140,6 @@ fn build_products(units: usize) -> Node {
     )
 }
 
-fn dependencies() -> Node {
-    directory(
-        "node_modules",
-        (0..PACKAGES)
-            .map(|package| directory(&format!("package-{package}"), numbered("module", FILES_PER_PACKAGE)))
-            .collect(),
-    )
-}
-
 fn shallow(node: &Node) -> Node {
     Node {
         children: Vec::new(),
@@ -197,9 +192,72 @@ fn recommendations_over_half_a_million_files_sum_allocations_within_two_index_bu
     );
 }
 
+fn modules_linked_to_a_store() -> (Node, Node) {
+    let mut stored = Vec::new();
+    let packages = (0..PACKAGES)
+        .map(|package| {
+            let modules = (0..FILES_PER_PACKAGE)
+                .map(|number| {
+                    let (module, store_entry) =
+                        hard_link_pair(&format!("module-{number}"), &format!("{package}-{number}"));
+                    stored.push(store_entry);
+                    module
+                })
+                .collect();
+            directory(&format!("package-{package}"), modules)
+        })
+        .collect();
+    (directory("node_modules", packages), directory("files", stored))
+}
+
+#[test]
+fn modules_hard_linked_to_a_store_outside_the_cards_hold_nothing_jointly_within_two_index_builds() {
+    let (modules, store) = modules_linked_to_a_store();
+    let (report, root) = data_volume(merge(vec![
+        path_tree(LINKED_PROJECT, file("package.json")),
+        path_tree(LINKED_PROJECT, modules),
+        path_tree(UNCLAIMED_STORE, store),
+    ]));
+    let index_build = fastest(|| drop(Index::build(&report, root.clone(), &Enrichment::default())));
+    let index = Index::build(&report, root, &Enrichment::default());
+    let rules = rules();
+    let denylist = Denylist::new(CaseRule::Insensitive).expect("denylist is prepared");
+    let mut recommendations = Recommendations::default();
+    let recommendations_build = fastest(|| {
+        recommendations = Recommendations::build(&index, &rules, &denylist, &BTreeSet::new(), Vec::new());
+    });
+
+    let [project] = recommendations.projects.as_slice() else {
+        panic!("the dependencies belong to one project: {:?}", recommendations.projects);
+    };
+    let [item] = project.items.as_slice() else {
+        panic!("the project holds its dependencies: {:?}", project.items);
+    };
+    let modules = PACKAGES * FILES_PER_PACKAGE;
+    let linked = u64::try_from(modules).expect("the module count fits in u64") * FILE_ALLOCATION;
+    assert_eq!(project.reclaimable.held_by_hard_links, linked);
+    assert_eq!(project.reclaimable.bytes, 0);
+    assert_eq!(item.held.len(), modules);
+    assert!(recommendations.cards.is_empty(), "{:?}", recommendations.cards);
+    assert!(recommendations.joint.is_empty(), "{:?}", recommendations.joint);
+    assert!(
+        recommendations_build <= index_build * INDEX_BUILDS_ALLOWED,
+        "recommendations took {recommendations_build:?}, the index build {index_build:?}"
+    );
+}
+
 #[test]
 fn a_directory_delta_outside_the_cards_costs_at_most_a_hundredth_of_an_index_build() {
     let workshop = Workshop::new();
+    assert!(
+        workshop
+            .recommendations
+            .projects
+            .iter()
+            .flat_map(|project| &project.items)
+            .any(|item| !item.held.is_empty()),
+        "the dependencies hold their store links"
+    );
     let index_build = fastest(|| {
         drop(Index::build(
             &workshop.report,
