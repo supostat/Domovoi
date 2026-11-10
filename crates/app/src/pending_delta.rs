@@ -5,6 +5,7 @@ use domovoi_scanner::{ScanError, ScanOptions};
 pub struct PendingDelta {
     pub(crate) request: DeltaRequest,
     pub(crate) last_event_id: u64,
+    pub(crate) touches_rule_sources: bool,
 }
 
 impl PendingDelta {

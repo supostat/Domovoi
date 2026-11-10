@@ -21,8 +21,8 @@ use domovoi_index::{
 use domovoi_inference::{CancelFlag, InferenceBackend};
 use domovoi_log_sys::SystemLog;
 use domovoi_rules::{
-    AppRemoval, CaseRule, ConfigOverrides, DeleteRefusal, DeleteReport, DeleteSubject, Denylist, Recommendations,
-    RuleSet, Tray, running_bundle_ids, screen_capture_location,
+    AppRemoval, CaseRule, ConfigOverrides, DeleteRefusal, DeleteReport, DeleteSubject, Denylist,
+    InstalledSimulatorRuntimes, Recommendations, RuleSet, Tray, running_bundle_ids, screen_capture_location,
 };
 use domovoi_scanner::{
     CancelToken, ScanError, ScanOptions, ScanProgress, Since, VolumeEvent, VolumeEventStream, current_event_id, scan,
@@ -75,10 +75,7 @@ impl Session {
             root: root.to_path_buf(),
             paths: paths.clone(),
             header: CacheHeader::current(root, app_version)?,
-            rules: RuleSet::for_volume(
-                root,
-                &ConfigOverrides::read(&paths.home)?.with_screenshot_location(screen_capture_location(&paths.home)),
-            )?,
+            rules: rules_for(root, &paths.home)?,
             denylist: Denylist::new(CaseRule::Insensitive)?,
             enrichment: Enrichment::default(),
             cloud_folders: CloudFolders::of_home(&paths.home),
@@ -153,6 +150,7 @@ impl Session {
         let root = IndexRoot::for_path(&self.root).map_err(ScanError::Root)?;
         self.last_event_id = started_at;
         self.refresh_screen_captures();
+        self.rules = rules_for(&self.root, &self.paths.home).map_err(SessionError::Io)?;
         self.install(Index::build(&report, root, &self.enrichment));
         self.persist().map_err(SessionError::Io)
     }
@@ -187,6 +185,7 @@ impl Session {
         EventRequest::Delta(PendingDelta {
             request: index.delta_request(&changed),
             last_event_id,
+            touches_rule_sources: touches_rule_sources(index, &self.paths.home, &changed),
         })
     }
 
@@ -209,6 +208,11 @@ impl Session {
         match &applied {
             DeltaApplied::Spliced { .. } => self.remap(duplicate_paths, Remapping::Detached),
             DeltaApplied::Compacted { .. } => self.remap(duplicate_paths, Remapping::Everything),
+        }
+        if pending.touches_rule_sources {
+            self.rules = rules_for(&self.root, &self.paths.home).map_err(SessionError::Io)?;
+            self.refresh_recommendations();
+            return Ok(EventEffect::Applied);
         }
         let index = self.index.as_ref().expect("deltas apply to a scanned volume");
         self.recommendations
@@ -518,6 +522,7 @@ impl Session {
         let pending = PendingDelta {
             request: index.delta_request(&changed),
             last_event_id: self.last_event_id,
+            touches_rule_sources: touches_rule_sources(index, &self.paths.home, &changed),
         };
         let listings = pending.read(&ScanOptions::default())?;
         self.apply_listings(&pending, listings).map(drop)
@@ -575,6 +580,43 @@ impl Session {
             duplicates.groups = remapped;
         }
     }
+}
+
+fn rules_for(root: &Path, home: &Path) -> io::Result<RuleSet> {
+    RuleSet::for_volume(
+        root,
+        &ConfigOverrides::read(home)?.with_screenshot_location(screen_capture_location(home)),
+    )
+}
+
+fn touches_rule_sources(index: &Index, home: &Path, changed: &[ChangedPath]) -> bool {
+    let sources: Vec<NodeId> = ConfigOverrides::source_folders(home)
+        .into_iter()
+        .chain(InstalledSimulatorRuntimes::source_folders())
+        .filter_map(|folder| index.find(&folder))
+        .collect();
+    changed.iter().any(|change| {
+        let changed_node = index.find(&change.path);
+        let parent_node = change.path.parent().and_then(|parent| index.find(parent));
+        let at_source_or_its_child = [changed_node, parent_node]
+            .into_iter()
+            .flatten()
+            .any(|node| sources.contains(&node));
+        let source_inside_rescanned_subtree = change.subtree
+            && changed_node.is_some_and(|rescanned| sources.iter().any(|source| encloses(index, rescanned, *source)));
+        at_source_or_its_child || source_inside_rescanned_subtree
+    })
+}
+
+fn encloses(index: &Index, ancestor: NodeId, node: NodeId) -> bool {
+    let mut current = Some(node);
+    while let Some(member) = current {
+        if member == ancestor {
+            return true;
+        }
+        current = index.parent(member);
+    }
+    false
 }
 
 fn open_clone_journal(path: &Path) -> io::Result<CloneJournal> {

@@ -30,6 +30,15 @@ impl ConfigOverrides {
         })
     }
 
+    pub fn source_folders(home: &Path) -> [PathBuf; 2] {
+        [PNPM_RC, CARGO_CONFIG].map(|file| {
+            home.join(file)
+                .parent()
+                .expect("a config file sits in a folder")
+                .to_path_buf()
+        })
+    }
+
     #[must_use]
     pub fn with_screenshot_location(self, screenshot_location: Option<PathBuf>) -> Self {
         Self {

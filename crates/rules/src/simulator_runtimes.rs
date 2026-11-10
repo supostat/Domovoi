@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use std::process::Command;
 
@@ -26,6 +26,10 @@ pub struct InstalledSimulatorRuntimes {
 impl InstalledSimulatorRuntimes {
     pub fn new(identifiers: BTreeSet<String>) -> Self {
         Self { identifiers }
+    }
+
+    pub fn source_folders() -> [PathBuf; 2] {
+        RUNTIME_DIRECTORIES.map(PathBuf::from)
     }
 
     pub fn discover() -> Self {
@@ -55,7 +59,7 @@ impl SimulatorRuntimes for InstalledSimulatorRuntimes {
     }
 }
 
-fn children(directory: &Path) -> Vec<std::path::PathBuf> {
+fn children(directory: &Path) -> Vec<PathBuf> {
     std::fs::read_dir(directory)
         .map(|entries| entries.filter_map(Result::ok).map(|entry| entry.path()).collect())
         .unwrap_or_default()
