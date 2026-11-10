@@ -24,6 +24,9 @@ pub enum ScenarioStep {
         heavy_nodes: Option<usize>,
     },
     Recommendations,
+    CheckProjects {
+        projects: Vec<String>,
+    },
     DeleteRecommendations {
         level: SafetyBadge,
     },

@@ -87,17 +87,12 @@ impl TrayModel {
                 (row, nodes)
             })
             .unzip();
-        let freed_apart: u64 = sizes.items.iter().map(|size| size.bytes).sum();
         Self {
             rows,
             held_by_snapshots: sizes.together.held_by_snapshots,
             held_by_clones: sizes.together.held_by_clones,
             held_by_hard_links: sizes.together.held_by_hard_links,
-            freed_together: sizes
-                .together
-                .bytes
-                .checked_sub(freed_apart)
-                .expect("items deleted together free at least what each frees alone"),
+            freed_together: sizes.freed_together(),
             measuring: None,
             deleting: None,
             deleted: None,

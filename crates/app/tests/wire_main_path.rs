@@ -1,5 +1,6 @@
 use std::f64::consts::TAU;
 use std::fs::{self, File};
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -59,6 +60,10 @@ const TRASHED: &str = "old.zip";
 const PURGE_TIMEOUT_SECONDS: u64 = 30;
 const DROPPED: &str = "Drops/Keep";
 const PINNED: &str = "Drops/Pinned";
+const JOINT_OWNER: &str = "joint-owner";
+const JOINT_PARTNER: &str = "joint-partner";
+const JOINT_PACKAGE: &str = "node_modules/pkg";
+const SECTOR: u64 = 512;
 
 fn manifest_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
@@ -158,9 +163,55 @@ fn populate(root: &Path) {
     write(&root.join(MUSIC).join("Podcasts/talk.mp3"), &noise(MEGABYTE / 2, 8));
     populate_applications(root);
     populate_cleanup(root);
+    populate_joint_projects(root);
     write(&root.join(DROPPED).join("draft.txt"), b"a draft kept for later\n");
     write(&root.join(PINNED).join("pinned.txt"), b"a pinned note\n");
     run(CHFLAGS, &["uchg"], &root.join(PINNED));
+}
+
+fn populate_joint_projects(root: &Path) {
+    let owner = root.join("Projects").join(JOINT_OWNER);
+    let partner = root.join("Projects").join(JOINT_PARTNER);
+    for project in [&owner, &partner] {
+        write(&project.join("package.json"), b"{\"name\": \"joint\"}\n");
+        fs::create_dir_all(project.join(JOINT_PACKAGE)).expect("the package folder is created");
+    }
+    write(&owner.join(JOINT_PACKAGE).join("own.js"), &noise(MEGABYTE / 2, 17));
+    write(&owner.join(JOINT_PACKAGE).join("shared.js"), &noise(MEGABYTE, 18));
+    write(&owner.join(JOINT_PACKAGE).join("cloned.js"), &noise(MEGABYTE / 2, 19));
+    fs::hard_link(
+        owner.join(JOINT_PACKAGE).join("shared.js"),
+        partner.join(JOINT_PACKAGE).join("shared.js"),
+    )
+    .expect("the projects share a hard link");
+    let cloned = Command::new(CP)
+        .arg("-c")
+        .arg(owner.join(JOINT_PACKAGE).join("cloned.js"))
+        .arg(partner.join(JOINT_PACKAGE).join("cloned.js"))
+        .status()
+        .expect("cp starts");
+    assert!(cloned.success(), "the projects share a clone");
+}
+
+struct JointBytes {
+    owner_alone: u64,
+    together: u64,
+}
+
+impl JointBytes {
+    fn of(root: &Path) -> Self {
+        let allocated = |name: &str| {
+            fs::metadata(root.join("Projects").join(JOINT_OWNER).join(JOINT_PACKAGE).join(name))
+                .expect("the owner's file has metadata")
+                .blocks()
+                * SECTOR
+        };
+        let owner_alone = allocated("own.js");
+        Self {
+            owner_alone,
+            together: owner_alone + allocated("shared.js") + allocated("cloned.js"),
+        }
+    }
 }
 
 fn populate_cleanup(root: &Path) {
@@ -277,6 +328,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
     let volume = ImageVolume::create(VolumeFormat::Apfs, Visibility::Browsable).expect("the image attaches");
     let mount_point = fs::canonicalize(volume.mount_point()).expect("the mount point resolves");
     populate(&mount_point);
+    let joint = JointBytes::of(&mount_point);
     let state = TempTree::new().expect("a temp tree is created");
     let models = state.path().join("models");
     let entry = tiny_entry();
@@ -303,7 +355,7 @@ fn the_bundled_application_walks_the_main_path_on_real_modules() {
         "the main path failed: {}\n{report:#}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_index_and_care(&report, &mount_point);
+    assert_index_and_care(&report, &mount_point, &joint);
     assert_disk_update(&report);
     assert_interface_techniques(&report, &csv);
     assert_scanner_techniques(&report);
@@ -348,6 +400,7 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
                 "card": "projects",
                 "max_tokens_per_step": RANDOM_MODEL_TOKENS_PER_STEP,
             },
+            {"step": "check_projects", "projects": [JOINT_OWNER, JOINT_PARTNER]},
             {"step": "delete_recommendations", "level": "safe"},
             {"step": "delete_recommendations", "level": "recoverable"},
             {"step": "create_file", "path": next_to_deleted, "bytes": FRESH_FILE_BYTES},
@@ -390,7 +443,7 @@ fn scenario(mount_point: &Path, state: &Path, models: &Path, csv: &Path, mirror:
     })
 }
 
-fn assert_index_and_care(report: &Value, mount_point: &Path) {
+fn assert_index_and_care(report: &Value, mount_point: &Path, joint: &JointBytes) {
     assert!(step(report, "scan")["files"].as_u64().is_some_and(|files| files > 0));
     let cached_event = step(report, "reopen_cache")["last_event_id"]
         .as_u64()
@@ -438,6 +491,7 @@ fn assert_index_and_care(report: &Value, mount_point: &Path) {
         "project artifacts leave the cards of their rules: {cards:?}"
     );
     assert_projects(recommendations);
+    assert_joint_projects(report, mount_point, joint);
     assert!(
         recommendations["blocked"]
             .as_array()
@@ -502,6 +556,41 @@ fn assert_projects(recommendations: &Value) {
         assert!(
             project["path"].as_str().is_some_and(|path| path.ends_with(name)),
             "{project:#}"
+        );
+    }
+}
+
+fn assert_joint_projects(report: &Value, mount_point: &Path, joint: &JointBytes) {
+    let checked = step(report, "check_projects");
+    let rows: Vec<(&str, u64, bool)> = checked["rows"]
+        .as_array()
+        .expect("the checked rows are reported")
+        .iter()
+        .map(|row| {
+            (
+                row["name"].as_str().expect("a row has a name"),
+                row["amount"].as_u64().expect("a row has an amount"),
+                row["selected"].as_bool().expect("a row is checked or not"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [(JOINT_OWNER, joint.owner_alone, true), (JOINT_PARTNER, 0, true)],
+        "the partner frees nothing alone and is still checked with the owner: {checked:#}"
+    );
+    for total in ["selected_total", "sheet_estimate", "tray_button", "sheet_measured"] {
+        assert_eq!(
+            checked[total].as_u64(),
+            Some(joint.together),
+            "{total} counts the shared link and clone once: {checked:#}"
+        );
+    }
+    assert_eq!(checked["tray_left"], 0, "the check leaves the tray empty: {checked:#}");
+    for project in [JOINT_OWNER, JOINT_PARTNER] {
+        assert!(
+            !mount_point.join("Projects").join(project).join("node_modules").exists(),
+            "the safe delete takes {project} with the other projects"
         );
     }
 }

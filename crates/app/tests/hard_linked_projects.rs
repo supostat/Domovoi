@@ -1,9 +1,14 @@
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::thread;
+use std::time::{Duration, SystemTime};
 
-use domovoi_app::{CardModel, Provenance, RecommendationsModel, Session, SessionPaths, TrayMeasureJob, TrayModel};
+use domovoi_app::{
+    CardModel, DeleteJob, DeleteOutcome, Provenance, RecommendationsModel, Session, SessionPaths, TrayMeasureJob,
+    TrayModel,
+};
+use domovoi_rules::{DeleteFailure, DeleteRefusal, DeleteReport, DeleteSubject, DenyReason};
 use domovoi_scanner::CancelToken;
 use domovoi_testkit::TempTree;
 
@@ -12,6 +17,7 @@ const FILE_BYTES: usize = 64 * 1024;
 const SECTOR: u64 = 512;
 const UNIQUE: &str = "node_modules/pkg/unique.bin";
 const SHARED: &str = "node_modules/pkg/shared.bin";
+const POLL: Duration = Duration::from_millis(20);
 
 struct Workspace {
     _volume: TempTree,
@@ -186,4 +192,66 @@ fn a_project_made_only_of_the_shared_file_is_checked_together_with_its_partner()
     assert_eq!(model.selected_total(), 0, "alone the project frees nothing");
     check_only(projects(&mut model), &["alpha", "gamma"]);
     assert_eq!(model.selected_total(), unique + shared);
+}
+
+#[test]
+fn deleting_both_projects_reports_the_shared_file_as_freed() {
+    let mut workspace = Workspace::new(&["alpha", "beta"], None);
+    let freed_together = workspace.allocated(&format!("alpha/{UNIQUE}"))
+        + workspace.allocated(&format!("beta/{UNIQUE}"))
+        + workspace.allocated(&format!("alpha/{SHARED}"));
+    let mut model = workspace.model();
+    let card = projects(&mut model);
+    check_only(card, &["alpha", "beta"]);
+    let card = card.clone();
+    workspace.put_in_tray(&card);
+    let sizes = TrayMeasureJob::start(workspace.tray_items())
+        .finish()
+        .expect("the tray is measured")
+        .sizes;
+    let (subjects, refusals) = workspace
+        .session
+        .take_tray_for_delete(&sizes.items)
+        .expect("running programs are checked");
+    let job = DeleteJob::start(subjects);
+    while !job.is_finished() {
+        thread::sleep(POLL);
+    }
+    let outcome = DeleteOutcome::from_report(&job.finish(), &refusals, sizes.freed_together());
+    assert!(outcome.failures.is_empty(), "{outcome:?}");
+    assert_eq!(outcome.freed, freed_together, "the outcome matches the sheet");
+    assert!(!workspace.root.join("alpha/node_modules").exists());
+    assert!(!workspace.root.join("beta/node_modules").exists());
+}
+
+#[test]
+fn an_item_left_behind_keeps_what_the_items_free_only_together_out_of_the_outcome() {
+    let subject = |name: &str, bytes: u64| DeleteSubject {
+        path: PathBuf::from(name),
+        physical: PathBuf::from(name),
+        link_id: 1,
+        measured_bytes: bytes,
+        indexed_files: 1,
+        rule_id: None,
+        duplicate_of: None,
+    };
+    let together = 5;
+    let everything = DeleteReport {
+        deleted: vec![subject("alpha", 10), subject("beta", 20)],
+        freed_bytes: 30,
+        ..DeleteReport::default()
+    };
+    assert_eq!(DeleteOutcome::from_report(&everything, &[], together).freed, 35);
+    let failed = DeleteReport {
+        deleted: vec![subject("alpha", 10)],
+        failed: vec![(subject("beta", 20), DeleteFailure::NoPermission)],
+        freed_bytes: 10,
+        ..DeleteReport::default()
+    };
+    assert_eq!(DeleteOutcome::from_report(&failed, &[], together).freed, 10);
+    let refused = [DeleteRefusal {
+        path: PathBuf::from("gamma"),
+        reason: DenyReason::OwnerRunning,
+    }];
+    assert_eq!(DeleteOutcome::from_report(&everything, &refused, together).freed, 30);
 }

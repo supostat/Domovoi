@@ -209,7 +209,7 @@ fn session_turns_real_rules_and_duplicates_into_screen_models() {
             .is_none(),
         "the deleted folder leaves the index"
     );
-    let outcome = DeleteOutcome::from_report(&report, &refusals);
+    let outcome = DeleteOutcome::from_report(&report, &refusals, sizes.freed_together());
     assert_eq!(outcome.objects, subjects.len());
     assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
     let after = measured.with_deleted(outcome);

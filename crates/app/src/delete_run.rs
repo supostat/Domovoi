@@ -3,20 +3,28 @@ use objc2::rc::Retained;
 use objc2_foundation::NSTimer;
 
 use crate::delete_job::DeleteJob;
+use crate::delete_outcome::DeleteOutcome;
 use crate::delete_status::DeleteStatus;
 
 #[derive(Debug)]
 pub(crate) struct DeleteRun {
     job: Option<DeleteJob>,
     refusals: Vec<DeleteRefusal>,
+    freed_together: u64,
     timer: Retained<NSTimer>,
 }
 
 impl DeleteRun {
-    pub(crate) fn start(job: DeleteJob, refusals: Vec<DeleteRefusal>, timer: Retained<NSTimer>) -> Self {
+    pub(crate) fn start(
+        job: DeleteJob,
+        refusals: Vec<DeleteRefusal>,
+        freed_together: u64,
+        timer: Retained<NSTimer>,
+    ) -> Self {
         Self {
             job: Some(job),
             refusals,
+            freed_together,
             timer,
         }
     }
@@ -35,10 +43,11 @@ impl DeleteRun {
         }
     }
 
-    pub(crate) fn finish(mut self) -> (DeleteReport, Vec<DeleteRefusal>) {
+    pub(crate) fn finish(mut self) -> (DeleteReport, DeleteOutcome) {
         self.timer.invalidate();
         let report = self.job.take().expect("a delete finishes once").finish();
-        (report, std::mem::take(&mut self.refusals))
+        let outcome = DeleteOutcome::from_report(&report, &self.refusals, self.freed_together);
+        (report, outcome)
     }
 
     fn job(&self) -> &DeleteJob {

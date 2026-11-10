@@ -166,6 +166,7 @@ impl EndToEnd {
                 heavy_nodes.unwrap_or(HEAVY_DELTA_NODES),
             ),
             ScenarioStep::Recommendations => Ok(self.recommendations_report()),
+            ScenarioStep::CheckProjects { projects } => self.check_projects(projects),
             ScenarioStep::DeleteRecommendations { level } => self.delete_recommendations(*level),
             ScenarioStep::RemoveApplication { path } => self.remove_application(path),
             ScenarioStep::MarkFromList { paths } => self.mark_from_list(paths),
@@ -392,6 +393,57 @@ impl EndToEnd {
         model
     }
 
+    fn check_projects(&mut self, names: &[String]) -> Result<Value, String> {
+        let mut model = self.recommendations();
+        let card = model
+            .cards
+            .iter_mut()
+            .find(|card| card.provenance == Provenance::Projects)
+            .ok_or("no card of projects")?;
+        for row in &mut card.rows {
+            row.selected = false;
+        }
+        let mut rows = Vec::with_capacity(names.len());
+        for name in names {
+            let position = card
+                .rows
+                .iter()
+                .position(|row| &row.name == name)
+                .ok_or_else(|| format!("{name} has no project row"))?;
+            card.toggle_row(position);
+            let row = &card.rows[position];
+            rows.push(json!({
+                "name": row.name,
+                "amount": row.amount,
+                "selected": row.selected,
+            }));
+        }
+        let targets = card.selected_targets();
+        let selected_total = model.selected_total();
+        for target in &targets {
+            self.session_mut().add_target_to_tray(target);
+        }
+        let estimated = {
+            let session = self.session();
+            let index = session.index().expect("the tray belongs to a scanned volume");
+            TrayModel::estimated(index, session.tray()).total()
+        };
+        let button = self.session().tray_summary().bytes;
+        let (measured, _, _) = self.measured_tray()?;
+        for target in &targets {
+            self.session_mut().remove_from_tray(target.node);
+        }
+        Ok(json!({
+            "step": "check_projects",
+            "rows": rows,
+            "selected_total": selected_total,
+            "sheet_estimate": estimated,
+            "tray_button": button,
+            "sheet_measured": measured.total(),
+            "tray_left": self.session().tray().items().len(),
+        }))
+    }
+
     fn delete_recommendations(&mut self, level: SafetyBadge) -> Result<Value, String> {
         let targets: Vec<_> = self
             .recommendations()
@@ -420,7 +472,7 @@ impl EndToEnd {
         let last = DeleteStatus::from(job.progress());
         let sheet = measured.with_deleting(last);
         let report = job.finish();
-        let outcome = DeleteOutcome::from_report(&report, &refusals);
+        let outcome = DeleteOutcome::from_report(&report, &refusals, sizes.freed_together());
         self.session_mut()
             .settle_delete(&report)
             .map_err(|error| error.to_string())?;
@@ -901,6 +953,7 @@ fn step_name(step: &ScenarioStep) -> &'static str {
         ScenarioStep::CreateFile { .. } => "create_file",
         ScenarioStep::AwaitChange { .. } => "await_change",
         ScenarioStep::Recommendations => "recommendations",
+        ScenarioStep::CheckProjects { .. } => "check_projects",
         ScenarioStep::DeleteRecommendations { .. } => "delete_recommendations",
         ScenarioStep::RemoveApplication { .. } => "remove_application",
         ScenarioStep::MarkFromList { .. } => "mark_from_list",

@@ -48,7 +48,6 @@ use crate::clone_refusal_text::clone_refusal_text;
 use crate::clone_run::CloneRun;
 use crate::csv_export::csv_lines;
 use crate::delete_job::DeleteJob;
-use crate::delete_outcome::DeleteOutcome;
 use crate::delete_run::DeleteRun;
 use crate::delete_status::DeleteStatus;
 use crate::diagram_preference::{remember_mode, remember_small_groups, remembered_mode, remembered_small_groups};
@@ -1259,14 +1258,21 @@ impl ShellController {
                 let index = session.index().expect("the tray belongs to a scanned volume");
                 TrayModel::estimated_sizes(index, session.tray())
             });
-            session.take_tray_for_delete(&sizes.items)
+            session
+                .take_tray_for_delete(&sizes.items)
+                .map(|(subjects, refusals)| (subjects, refusals, sizes.freed_together()))
         };
-        let (subjects, refusals) = match taken {
+        let (subjects, refusals, freed_together) = match taken {
             Ok(taken) => taken,
             Err(error) => return self.inform(&format!("{PROTECTION_UNCHECKED} {error}")),
         };
         let timer = self.repeating(DELETE_TICK, ShellController::delete_tick);
-        self.state.borrow_mut().delete = Some(DeleteRun::start(DeleteJob::start(subjects), refusals, timer));
+        self.state.borrow_mut().delete = Some(DeleteRun::start(
+            DeleteJob::start(subjects),
+            refusals,
+            freed_together,
+            timer,
+        ));
         self.show_deleting(DeleteStatus::default());
     }
 
@@ -1303,8 +1309,7 @@ impl ShellController {
             .delete
             .take()
             .expect("a finished delete is running");
-        let (report, refusals) = run.finish();
-        let outcome = DeleteOutcome::from_report(&report, &refusals);
+        let (report, outcome) = run.finish();
         let settled = self
             .state
             .borrow_mut()

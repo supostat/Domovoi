@@ -19,7 +19,7 @@ pub struct DeleteOutcome {
 }
 
 impl DeleteOutcome {
-    pub fn from_report(report: &DeleteReport, refusals: &[DeleteRefusal]) -> Self {
+    pub fn from_report(report: &DeleteReport, refusals: &[DeleteRefusal], freed_together: u64) -> Self {
         let mut failures: Vec<String> = refusals
             .iter()
             .map(|refusal| format!("{} — {}", tilde(&refusal.path), deny_reason_text(&refusal.reason)))
@@ -42,9 +42,10 @@ impl DeleteOutcome {
                 .iter()
                 .map(|subject| format!("{} — {NOT_STARTED}", tilde(&subject.path))),
         );
+        let freed_with_others = if failures.is_empty() { freed_together } else { 0 };
         Self {
             objects: report.deleted.len(),
-            freed: report.freed_bytes,
+            freed: report.freed_bytes + freed_with_others,
             failures,
         }
     }
